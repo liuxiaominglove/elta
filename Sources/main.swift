@@ -181,7 +181,8 @@ struct KeychainHelper {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-            kSecValueData as String: key.data(using: .utf8)!
+            kSecValueData as String: key.data(using: .utf8)!,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
         return SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess
     }
@@ -234,6 +235,7 @@ final class SettingsManager {
 
     private init() {
         migrateAPIKeysToKeychain()
+        fixupKeychainAccessibility()
     }
 
     // MARK: AI 提供商
@@ -283,6 +285,23 @@ final class SettingsManager {
         }
         defaults.set(true, forKey: migratedKey)
         logi("API Key 已迁移到 Keychain")
+    }
+
+    /// 修复旧版 Keychain 条目缺少 kSecAttrAccessible 导致弹授权窗的问题
+    /// 读取已有 Key → 删除 → 重新保存（带上 kSecAttrAccessibleAfterFirstUnlock）
+    private func fixupKeychainAccessibility() {
+        let fixupKey = "snaptranslate.keychain_accessibility_fixed"
+        if defaults.bool(forKey: fixupKey) { return }
+
+        let allProviders: [AIProvider] = [.deepseek, .openai, .openAICompatible, .ollama, .googleAI]
+        for provider in allProviders {
+            let account = "apikey.\(provider.rawValue)"
+            if let existingKey = KeychainHelper.read(account: account), !existingKey.isEmpty {
+                _ = KeychainHelper.save(key: existingKey, account: account)
+            }
+        }
+        defaults.set(true, forKey: fixupKey)
+        logi("Keychain 访问权限已修复")
     }
 
     // MARK: 自定义配置（OpenAI-Compatible & Ollama）
