@@ -15,6 +15,7 @@ let APP_NAME          = "ELTA"
 let APP_DISPLAY_NAME  = "ELTA"
 let LOG_PATH          = "/tmp/snaptranslate.log"
 let DEFAULT_HOTKEY_KEYCODE: Int = 0x11  // T
+let DEFAULT_SELECTION_HOTKEY_KEYCODE: Int = 0x11  // T（配合 Shift）
 
 // MARK: AI 提供商配置
 enum AIProvider: String, CaseIterable {
@@ -176,6 +177,10 @@ final class SettingsManager {
         static let hotkeyKeyCode    = "snaptranslate.hotkeyKeyCode"
         static let hotkeyModifiers  = "snaptranslate.hotkeyModifiers"
         static let hotkeyDisplay    = "snaptranslate.hotkeyDisplay"
+        // 划词翻译快捷键
+        static let selectionHotkeyKeyCode  = "snaptranslate.selectionHotkeyKeyCode"
+        static let selectionHotkeyModifiers = "snaptranslate.selectionHotkeyModifiers"
+        static let selectionHotkeyDisplay  = "snaptranslate.selectionHotkeyDisplay"
         static let customEndpoint   = "snaptranslate.customEndpoint"
         static let customModel      = "snaptranslate.customModel"
         static let ollamaModel      = "snaptranslate.ollamaModel"
@@ -283,6 +288,20 @@ final class SettingsManager {
     var hotkeyDisplay: String {
         get { defaults.string(forKey: Keys.hotkeyDisplay) ?? "⌘T" }
         set { defaults.set(newValue, forKey: Keys.hotkeyDisplay) }
+    }
+
+    // 划词翻译快捷键
+    var selectionHotkeyKeyCode: Int {
+        get { defaults.integer(forKey: Keys.selectionHotkeyKeyCode) == 0 ? DEFAULT_SELECTION_HOTKEY_KEYCODE : defaults.integer(forKey: Keys.selectionHotkeyKeyCode) }
+        set { defaults.set(newValue, forKey: Keys.selectionHotkeyKeyCode) }
+    }
+    var selectionHotkeyModifiers: Int {
+        get { defaults.integer(forKey: Keys.selectionHotkeyModifiers) == 0 ? Int(cmdKey | shiftKey) : defaults.integer(forKey: Keys.selectionHotkeyModifiers) }
+        set { defaults.set(newValue, forKey: Keys.selectionHotkeyModifiers) }
+    }
+    var selectionHotkeyDisplay: String {
+        get { defaults.string(forKey: Keys.selectionHotkeyDisplay) ?? "⇧⌘T" }
+        set { defaults.set(newValue, forKey: Keys.selectionHotkeyDisplay) }
     }
 
     // MARK: 窗口
@@ -893,6 +912,111 @@ final class TranslationPipeline {
         }
     }
 
+    /// 划词翻译：读取选中文本 → 直接翻译（跳过截图+OCR）
+    func startTextTranslation() {
+        logi("===== 划词翻译流水线开始 =====")
+
+        // 1. 保存当前剪贴板内容
+        let pasteboard = NSPasteboard.general
+        let oldItems = pasteboard.pasteboardItems?.compactMap { $0.string(forType: .string) } ?? []
+
+        // 2. 模拟 Cmd+C 复制选中文本
+        let src = CGEventSource(stateID: .hidSystemState)
+        let cmdDown = CGEvent(keyboardEventSource: src, virtualKey: 0x37, keyDown: true)   // Cmd
+        cmdDown?.flags = .maskCommand
+        let cDown  = CGEvent(keyboardEventSource: src, virtualKey: 0x08, keyDown: true)    // C
+        cDown?.flags = .maskCommand
+        let cUp    = CGEvent(keyboardEventSource: src, virtualKey: 0x08, keyDown: false)
+        cUp?.flags   = .maskCommand
+        let cmdUp  = CGEvent(keyboardEventSource: src, virtualKey: 0x37, keyDown: false)
+
+        cmdDown?.post(tap: .cghidEventTap)
+        usleep(20_000)
+        cDown?.post(tap: .cghidEventTap)
+        usleep(30_000)
+        cUp?.post(tap: .cghidEventTap)
+        usleep(20_000)
+        cmdUp?.post(tap: .cghidEventTap)
+
+        // 3. 等待剪贴板更新
+        usleep(150_000)  // 150ms
+
+        // 4. 读取剪贴板
+        var selectedText: String? = nil
+        let maxRetries = 5
+        for i in 0..<maxRetries {
+            if let newText = pasteboard.string(forType: .string) {
+                // 检查是否是新的内容（不是旧内容也不是ELTA自身的）
+                if !oldItems.contains(newText) && !newText.isEmpty {
+                    selectedText = newText
+                    break
+                }
+            }
+            if i < maxRetries - 1 { usleep(50_000) }
+        }
+
+        // 5. 恢复旧剪贴板（如果可能）
+        if !oldItems.isEmpty {
+            pasteboard.clearContents()
+            pasteboard.writeObjects(oldItems as [NSPasteboardWriting])
+        }
+
+        guard let text = selectedText else {
+            showError("未能获取选中文本。\n请先在任意应用里选中文本，再使用划词翻译。")
+            return
+        }
+
+        logi("划词获取文本: \(text.prefix(100))...")
+        showTextLoading()
+
+        // 6. 直接翻译
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let result = TranslationEngine.shared.translate(text: text) else {
+                self.hideLoading()
+                self.showError("AI 翻译失败。\n选中文本：\n\(text.prefix(200))")
+                return
+            }
+            self.hideLoading()
+            ResultWindowController.shared.show(markdown: result, originalText: text, screenshotRect: .zero)
+            NotificationManager.shared.show(title: APP_DISPLAY_NAME, body: "划词翻译完成，点击查看结果")
+            logi("划词翻译流水线完成")
+        }
+    }
+
+    private func showTextLoading() {
+        DispatchQueue.main.async { [weak self] in self?.showTextLoadingPanel() }
+    }
+
+    private func showTextLoadingPanel() {
+        guard loadingPanel == nil else { return }
+        let w: CGFloat = 300, h: CGFloat = 140
+        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: w, height: h),
+                            styleMask: [.titled, .nonactivatingPanel],
+                            backing: .buffered, defer: false)
+        panel.isFloatingPanel = true; panel.level = .floating
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.title = APP_DISPLAY_NAME
+        panel.titlebarAppearsTransparent = true
+        panel.isMovableByWindowBackground = true
+        panel.center()
+        panel.makeKeyAndOrderFront(nil)
+
+        let v = NSView(frame: NSRect(x: 0, y: 0, width: w, height: h))
+        let spinner = NSProgressIndicator(frame: NSRect(x: (w - 40) / 2, y: 60, width: 40, height: 40))
+        spinner.style = .spinning; spinner.startAnimation(nil); v.addSubview(spinner)
+
+        let label = NSTextField(labelWithString: "正在翻译...")
+        label.frame = NSRect(x: 0, y: 30, width: w, height: 24); label.alignment = .center
+        label.font = .systemFont(ofSize: 14); v.addSubview(label)
+
+        let sub = NSTextField(labelWithString: "划词翻译 → AI 翻译分析")
+        sub.frame = NSRect(x: 0, y: 12, width: w, height: 18); sub.alignment = .center
+        sub.font = .systemFont(ofSize: 11); sub.textColor = .secondaryLabelColor; v.addSubview(sub)
+
+        panel.contentView = v
+        loadingPanel = panel
+    }
+
     private func showLoading() {
         DispatchQueue.main.async { [weak self] in self?.showLoadingPanel() }
     }
@@ -1088,6 +1212,13 @@ final class SettingsWindowController: NSObject {
     private var isRecordingHotkey = false
     private var recordedKeyCode: Int = 0
     private var recordedModifiers: Int = 0
+
+    // 划词翻译快捷键
+    private var selectionHotkeyRecordBtn: NSButton?
+    private var selectionHotkeyStatusLabel: NSTextField?
+    private var isRecordingSelectionHotkey = false
+    private var recordedSelectionKeyCode: Int = 0
+    private var recordedSelectionModifiers: Int = 0
     private var hotkeyMonitor: Any?
 
     // Tab 3: 翻译模板
@@ -1355,18 +1486,18 @@ final class SettingsWindowController: NSObject {
         let w = size.width
         let y0: CGFloat = size.height - 30
 
-        let titleLabel = NSTextField(labelWithString: "截图翻译快捷键")
+        // ---- 截图翻译 ----
+        let titleLabel = NSTextField(labelWithString: "📷 截图翻译快捷键")
         titleLabel.frame = NSRect(x: 20, y: y0, width: 300, height: 22)
         titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         v.addSubview(titleLabel)
 
-        let descLabel = NSTextField(labelWithString: "点击下方按钮，然后按下你想要的组合键来录制快捷键")
+        let descLabel = NSTextField(labelWithString: "框选屏幕区域 → OCR 识别 → AI 翻译")
         descLabel.frame = NSRect(x: 20, y: y0 - 24, width: w - 40, height: 16)
         descLabel.font = .systemFont(ofSize: 11)
         descLabel.textColor = .secondaryLabelColor
         v.addSubview(descLabel)
 
-        // 当前快捷键显示 + 录制按钮
         let currentDisplay = SettingsManager.shared.hotkeyDisplay
         let recordBtn = NSButton(title: "    \(currentDisplay)    ", target: self, action: #selector(startRecordingHotkey))
         recordBtn.frame = NSRect(x: 20, y: y0 - 80, width: 180, height: 42)
@@ -1375,7 +1506,6 @@ final class SettingsWindowController: NSObject {
         v.addSubview(recordBtn)
         hotkeyRecordBtn = recordBtn
 
-        // 状态标签
         let statusLabel = NSTextField(labelWithString: "点击上方按钮开始录制新快捷键")
         statusLabel.frame = NSRect(x: 210, y: y0 - 70, width: w - 230, height: 30)
         statusLabel.font = .systemFont(ofSize: 12)
@@ -1384,14 +1514,44 @@ final class SettingsWindowController: NSObject {
         v.addSubview(statusLabel)
         hotkeyStatusLabel = statusLabel
 
+        // ---- 划词翻译 ----
+        let selY = y0 - 160
+        let sTitle = NSTextField(labelWithString: "📝 划词翻译快捷键")
+        sTitle.frame = NSRect(x: 20, y: selY, width: 300, height: 22)
+        sTitle.font = .systemFont(ofSize: 15, weight: .semibold)
+        v.addSubview(sTitle)
+
+        let sDesc = NSTextField(labelWithString: "先选中文字，再按快捷键 → 直接 AI 翻译（无需截图+OCR）")
+        sDesc.frame = NSRect(x: 20, y: selY - 24, width: w - 40, height: 16)
+        sDesc.font = .systemFont(ofSize: 11)
+        sDesc.textColor = .secondaryLabelColor
+        v.addSubview(sDesc)
+
+        let selDisplay = SettingsManager.shared.selectionHotkeyDisplay
+        let selRecordBtn = NSButton(title: "    \(selDisplay)    ", target: self, action: #selector(startRecordingSelectionHotkey))
+        selRecordBtn.frame = NSRect(x: 20, y: selY - 80, width: 180, height: 42)
+        selRecordBtn.bezelStyle = .rounded
+        selRecordBtn.font = .systemFont(ofSize: 20, weight: .medium)
+        v.addSubview(selRecordBtn)
+        selectionHotkeyRecordBtn = selRecordBtn
+
+        let selStatus = NSTextField(labelWithString: "下载后需右键 → 打开 或执行 xattr 命令解除隔离")
+        selStatus.frame = NSRect(x: 210, y: selY - 70, width: w - 230, height: 30)
+        selStatus.font = .systemFont(ofSize: 12)
+        selStatus.textColor = .secondaryLabelColor
+        selStatus.lineBreakMode = .byWordWrapping
+        v.addSubview(selStatus)
+        selectionHotkeyStatusLabel = selStatus
+
         // 说明
         let infoLabel = NSTextField(labelWithString: """
         💡 提示：
+        • 截图翻译：任意位置按下快捷键 → 框选区域 → 自动翻译
+        • 划词翻译：先选中文字 → 按下快捷键 → 自动翻译（更快捷）
         • 支持组合键：⌘Command、⌥Option、⌃Control、⇧Shift + 任意按键
-        • 推荐使用 ⌘ + 功能键（F1-F12），避免与其他软件冲突
         • 录制完成后点击「保存并应用」立即生效
         """)
-        infoLabel.frame = NSRect(x: 20, y: y0 - 180, width: w - 40, height: 80)
+        infoLabel.frame = NSRect(x: 20, y: selY - 240, width: w - 40, height: 100)
         infoLabel.font = .systemFont(ofSize: 11)
         infoLabel.textColor = .secondaryLabelColor
         infoLabel.lineBreakMode = .byWordWrapping
@@ -1455,6 +1615,62 @@ final class SettingsWindowController: NSObject {
         hotkeyRecordBtn?.title = "    \(display)    "
         hotkeyRecordBtn?.bezelColor = nil
         hotkeyStatusLabel?.stringValue = "录制超时，请重试"
+    }
+
+    // MARK: - 划词翻译快捷键录制
+
+    @objc private func startRecordingSelectionHotkey() {
+        guard !isRecordingSelectionHotkey, !isRecordingHotkey else { return }
+        isRecordingSelectionHotkey = true
+        recordedSelectionKeyCode = 0
+        recordedSelectionModifiers = 0
+
+        selectionHotkeyRecordBtn?.title = "  ... 按下组合键 ...  "
+        selectionHotkeyRecordBtn?.bezelColor = .systemOrange
+        selectionHotkeyStatusLabel?.stringValue = "请按下组合键..."
+
+        hotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, self.isRecordingSelectionHotkey else { return event }
+            self.recordSelectionHotkey(event: event)
+            return nil
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+            guard let self = self, self.isRecordingSelectionHotkey else { return }
+            self.cancelSelectionRecording()
+        }
+    }
+
+    private func recordSelectionHotkey(event: NSEvent) {
+        recordedSelectionKeyCode = Int(event.keyCode)
+        recordedSelectionModifiers = Int(event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue)
+        isRecordingSelectionHotkey = false
+
+        if let monitor = hotkeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            hotkeyMonitor = nil
+        }
+
+        let display = hotkeyDisplayString(keyCode: recordedSelectionKeyCode, modifiers: recordedSelectionModifiers)
+        selectionHotkeyRecordBtn?.title = "    \(display)    "
+        selectionHotkeyRecordBtn?.bezelColor = .systemGreen
+        selectionHotkeyStatusLabel?.stringValue = "✅ 已录制：\(display)\n点击「保存并应用」使快捷键生效"
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.selectionHotkeyRecordBtn?.bezelColor = nil
+        }
+    }
+
+    private func cancelSelectionRecording() {
+        isRecordingSelectionHotkey = false
+        if let monitor = hotkeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            hotkeyMonitor = nil
+        }
+        let display = SettingsManager.shared.selectionHotkeyDisplay
+        selectionHotkeyRecordBtn?.title = "    \(display)    "
+        selectionHotkeyRecordBtn?.bezelColor = nil
+        selectionHotkeyStatusLabel?.stringValue = "录制超时，请重试"
     }
 
     // MARK: - Tab 3: 翻译模板
@@ -1566,9 +1782,18 @@ final class SettingsWindowController: NSObject {
             settings.hotkeyKeyCode = recordedKeyCode
             settings.hotkeyModifiers = recordedModifiers
             settings.hotkeyDisplay = hotkeyDisplayString(keyCode: recordedKeyCode, modifiers: recordedModifiers)
-            DispatchQueue.main.async {
-                (NSApp.delegate as? AppDelegate)?.reregisterHotkey()
-            }
+        }
+
+        // 划词翻译快捷键
+        if recordedSelectionKeyCode != 0 {
+            settings.selectionHotkeyKeyCode = recordedSelectionKeyCode
+            settings.selectionHotkeyModifiers = recordedSelectionModifiers
+            settings.selectionHotkeyDisplay = hotkeyDisplayString(keyCode: recordedSelectionKeyCode, modifiers: recordedSelectionModifiers)
+        }
+
+        // 重新注册所有快捷键
+        DispatchQueue.main.async {
+            (NSApp.delegate as? AppDelegate)?.reregisterHotkey()
         }
 
         // 翻译模板
@@ -1597,12 +1822,23 @@ final class SettingsWindowController: NSObject {
         settings.hotkeyKeyCode = DEFAULT_HOTKEY_KEYCODE
         settings.hotkeyModifiers = Int(cmdKey)
         settings.hotkeyDisplay = "⌘T"
+        settings.selectionHotkeyKeyCode = DEFAULT_SELECTION_HOTKEY_KEYCODE
+        settings.selectionHotkeyModifiers = Int(cmdKey | shiftKey)
+        settings.selectionHotkeyDisplay = "⇧⌘T"
 
         // 更新 UI
         templateTextView?.string = settings.defaultPrompt
         templatePreviewWebView?.loadHTMLString(templatePreviewHTML(), baseURL: nil)
         hotkeyRecordBtn?.title = "    ⌘T    "
         hotkeyStatusLabel?.stringValue = "已恢复默认快捷键 ⌘T"
+        selectionHotkeyRecordBtn?.title = "    ⇧⌘T    "
+        selectionHotkeyStatusLabel?.stringValue = "已恢复默认快捷键 ⇧⌘T"
+
+        // 清除录制的临时值
+        recordedKeyCode = 0
+        recordedModifiers = 0
+        recordedSelectionKeyCode = 0
+        recordedSelectionModifiers = 0
     }
 
     // MARK: - 提供商切换
@@ -1747,6 +1983,7 @@ final class StatusBarController {
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "📷 截图翻译", action: #selector(AppDelegate.screenshotTranslate), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "📝 划词翻译", action: #selector(AppDelegate.selectionTranslate), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "⚙️ 偏好设置...", action: #selector(AppDelegate.openSettings), keyEquivalent: ","))
         menu.addItem(.separator())
@@ -1759,6 +1996,7 @@ final class StatusBarController {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkeyRef: EventHotKeyRef?
+    private var selectionHotkeyRef: EventHotKeyRef?
     private let settings = SettingsManager.shared
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -1788,7 +2026,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             SettingsWindowController.shared.show()
         }
 
-        logi("\(APP_DISPLAY_NAME) 就绪 — Cmd+T 截图翻译 | 点击菜单栏 📖 操作")
+        logi("\(APP_DISPLAY_NAME) 就绪 — Cmd+T 截图翻译 | Shift+Cmd+T 划词翻译 | 点击菜单栏 📖 操作")
     }
 
     /// 点击 Dock 图标时弹出设置窗口（保持 .accessory，不切换策略）
@@ -1804,53 +2042,83 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 重新注册快捷键（用户更改设置后调用）
     func reregisterHotkey() {
         // 先注销旧的
-        if let ref = hotkeyRef {
-            UnregisterEventHotKey(ref)
-            hotkeyRef = nil
-        }
+        if let ref = hotkeyRef { UnregisterEventHotKey(ref); hotkeyRef = nil }
+        if let ref = selectionHotkeyRef { UnregisterEventHotKey(ref); selectionHotkeyRef = nil }
 
-        var hotkeyID = EventHotKeyID()
-        hotkeyID.signature = 0x534E5452  // "SNTR"
-        hotkeyID.id = 1
-
+        // ---- 截图翻译热键（id=1） ----
+        var hotkeyID1 = EventHotKeyID(signature: 0x534E5452, id: 1)  // "SNTR"
         let keyCode = settings.hotkeyKeyCode
         let modifiers = settings.hotkeyModifiers
-
-        let status = RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), hotkeyID,
-                                          GetApplicationEventTarget(), 0, &hotkeyRef)
-        if status != noErr {
-            // 降级：Cmd+F2
-            hotkeyID.id = 2
-            let fallbackStatus = RegisterEventHotKey(0x78, UInt32(cmdKey), hotkeyID,
-                                                      GetApplicationEventTarget(), 0, &hotkeyRef)
-            if fallbackStatus == noErr {
-                settings.hotkeyKeyCode = 0x78
-                settings.hotkeyModifiers = Int(cmdKey)
+        let s1 = RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), hotkeyID1,
+                                      GetApplicationEventTarget(), 0, &hotkeyRef)
+        if s1 != noErr {
+            hotkeyID1.id = 2
+            let fbStatus = RegisterEventHotKey(0x78, UInt32(cmdKey), hotkeyID1,
+                                                GetApplicationEventTarget(), 0, &hotkeyRef)
+            if fbStatus == noErr {
+                settings.hotkeyKeyCode = 0x78; settings.hotkeyModifiers = Int(cmdKey)
                 settings.hotkeyDisplay = "⌘F2"
-                logi("快捷键降级为 Cmd+F2（原设置被占用）")
-            } else {
-                loge("快捷键注册失败 (err=\(fallbackStatus))，请通过菜单栏使用")
-            }
+                logi("截图快捷键降级为 Cmd+F2")
+            } else { loge("截图快捷键注册失败") }
         } else {
-            let display = hotkeyDisplayString(keyCode: keyCode, modifiers: modifiers)
-            settings.hotkeyDisplay = display
-            logi("快捷键已注册: \(display)")
+            settings.hotkeyDisplay = hotkeyDisplayString(keyCode: keyCode, modifiers: modifiers)
+            logi("截图快捷键: \(settings.hotkeyDisplay)")
         }
 
-        // 事件处理器（只安装一次）
+        // ---- 划词翻译热键（id=10） ----
+        var hotkeyID10 = EventHotKeyID(signature: 0x534E5452, id: 10)
+        let selKeyCode = settings.selectionHotkeyKeyCode
+        let selMods = settings.selectionHotkeyModifiers
+        let s10 = RegisterEventHotKey(UInt32(selKeyCode), UInt32(selMods), hotkeyID10,
+                                       GetApplicationEventTarget(), 0, &selectionHotkeyRef)
+        if s10 == noErr {
+            settings.selectionHotkeyDisplay = hotkeyDisplayString(keyCode: selKeyCode, modifiers: selMods)
+            logi("划词快捷键: \(settings.selectionHotkeyDisplay)")
+        } else {
+            // 降级：Cmd+Shift+F2
+            hotkeyID10.id = 11
+            let fb2 = RegisterEventHotKey(0x78, UInt32(cmdKey | shiftKey), hotkeyID10,
+                                           GetApplicationEventTarget(), 0, &selectionHotkeyRef)
+            if fb2 == noErr {
+                settings.selectionHotkeyKeyCode = 0x78
+                settings.selectionHotkeyModifiers = Int(cmdKey | shiftKey)
+                settings.selectionHotkeyDisplay = "⇧⌘F2"
+                logi("划词快捷键降级为 ⇧⌘F2")
+            } else { loge("划词快捷键注册失败") }
+        }
+
+        // 事件处理器（只安装一次，按 id 分发）
         var eventSpec = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
             eventKind: OSType(kEventHotKeyPressed)
         )
         InstallEventHandler(GetApplicationEventTarget(),
-        { (_, _, _) -> OSStatus in
-            DispatchQueue.main.async { TranslationPipeline.shared.start() }
+        { (_, evt, _) -> OSStatus in
+            var hkID = EventHotKeyID()
+            let err = GetEventParameter(evt, EventParamName(kEventParamDirectObject),
+                                        EventParamType(typeEventHotKeyID), nil,
+                                        MemoryLayout<EventHotKeyID>.size, nil, &hkID)
+            if err == noErr {
+                DispatchQueue.main.async {
+                    if hkID.id == 10 || hkID.id == 11 {
+                        // 划词翻译
+                        TranslationPipeline.shared.startTextTranslation()
+                    } else {
+                        // 截图翻译
+                        TranslationPipeline.shared.start()
+                    }
+                }
+            }
             return noErr
         }, 1, &eventSpec, nil, nil)
     }
 
     @objc func screenshotTranslate() {
         TranslationPipeline.shared.start()
+    }
+
+    @objc func selectionTranslate() {
+        TranslationPipeline.shared.startTextTranslation()
     }
 
     @objc func openSettings() {
@@ -1860,6 +2128,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         ScreenshotEngine.shared.cleanup()
         if let ref = hotkeyRef { UnregisterEventHotKey(ref) }
+        if let ref = selectionHotkeyRef { UnregisterEventHotKey(ref) }
         logi("\(APP_DISPLAY_NAME) 已退出")
     }
 }
