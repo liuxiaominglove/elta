@@ -273,7 +273,7 @@ final class SettingsManager {
         let migratedKey = "snaptranslate.keychain_migrated"
         if defaults.bool(forKey: migratedKey) { return }
 
-        let allProviders: [AIProvider] = [.deepseek, .openAI, .custom, .ollama, .googleAI]
+        let allProviders: [AIProvider] = [.deepseek, .openai, .openAICompatible, .ollama, .googleAI]
         for provider in allProviders {
             let key = "snaptranslate.apikey.\(provider.rawValue)"
             if let value = defaults.string(forKey: key), !value.isEmpty {
@@ -990,6 +990,9 @@ final class TranslationPipeline {
     func startTextTranslation() {
         logi("===== 划词翻译流水线开始 =====")
 
+        // 0. 记录触发时的鼠标位置（用于弹窗左右判断）
+        let mouseLocation = NSEvent.mouseLocation
+
         // 1. 保存当前剪贴板内容
         let pasteboard = NSPasteboard.general
         let oldItems = pasteboard.pasteboardItems?.compactMap { $0.string(forType: .string) } ?? []
@@ -1051,7 +1054,9 @@ final class TranslationPipeline {
                 return
             }
             self.hideLoading()
-            ResultWindowController.shared.show(markdown: result, originalText: text, screenshotRect: .zero)
+            // 用鼠标位置构造一个小矩形，让弹窗知道用户在哪一侧屏幕
+            let mouseRect = NSRect(x: mouseLocation.x - 5, y: mouseLocation.y - 5, width: 10, height: 10)
+            ResultWindowController.shared.show(markdown: result, originalText: text, screenshotRect: mouseRect)
             NotificationManager.shared.show(title: APP_DISPLAY_NAME, body: "划词翻译完成，点击查看结果")
             logi("划词翻译流水线完成")
         }
