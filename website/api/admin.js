@@ -15,7 +15,21 @@ module.exports = async (req, res) => {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { password, action, feedbackId, reply } = req.body || {};
+  // Vercel Node function 不会自动解析 JSON body，需要手动解析
+  let body = req.body || '{}';
+  if (Buffer.isBuffer(body)) body = body.toString('utf8');
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch (e) { body = {}; }
+  }
+
+  const { password, action, feedbackId, reply } = body || {};
+
+  if (!ADMIN_PASSWORD) {
+    return res.status(500).json({ error: '服务器未配置 ADMIN_PASSWORD' });
+  }
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return res.status(500).json({ error: '服务器未配置 Supabase 环境变量' });
+  }
 
   if (password !== ADMIN_PASSWORD) {
     return res.status(401).json({ error: '密码错误' });
