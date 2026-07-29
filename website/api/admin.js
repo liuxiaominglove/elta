@@ -94,6 +94,6 @@ module.exports = async (req, res) => {
         return res.status(400).json({ error: '未知操作' });
     }
   } catch (e) {
-    return res.status(500).json({ error: e.message, stack: e.stack });
+    return res.status(500).json({ error: e.message });
   }
 };
