@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>使用文档 — ELTA</title>
-  <meta name="description" content="ELTA 英语精读截图翻译助手 - 安装指南、使用说明与常见问题">
+  <meta name="description" content="ELTA 英语精读翻译助手 - 安装指南、使用说明与常见问题">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
 </head>
@@ -68,8 +68,9 @@
       <ol>
         <li>启动 ELTA 后，点击菜单栏的 📖 图标</li>
         <li>选择 <strong>"偏好设置"</strong></li>
-        <li>在 <strong>API Key</strong> 标签页中，填入你选择的 AI 服务商的 API Key：
+        <li>在 <strong>API Key</strong> 标签页中，填入你选择的 AI 服务商的 API Key（<strong>优先推荐 DeepSeek 服务商</strong>）：
           <ul>
+            <li><strong>DeepSeek</strong>：前往 <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">platform.deepseek.com</a> 获取</li>
             <li><strong>OpenAI</strong>：前往 <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a> 获取</li>
             <li><strong>Google Gemini</strong>：前往 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com</a> 获取</li>
           </ul>
@@ -137,7 +138,18 @@
       <h3>内置模板</h3>
       <div class="doc-note template-note">
         <strong>模板名称：精读翻译</strong>
-        <pre>请将以下英文文本翻译为流畅、准确的中文。保留原文的段落结构和语气风格。专业术语请翻译中文，并在括号内保留英文原文。无需解释翻译过程,直接输出翻译结果。
+        <pre>我会给你一段英文文本。请你按以下结构输出：
+
+## 中文翻译
+（遵循"信达雅"原则，自然流畅的中文翻译）
+
+## 重要词汇
+- **单词** | 词性 | 中文释义
+（列出句中较重要的词汇，跳过高中大纲基础词汇）
+
+## 常用短语与习语
+- 短语/习语：中文释义
+（习语请标注【习语】）
 
 原文：
 {text}</pre>
@@ -156,8 +168,13 @@
         </thead>
         <tbody>
           <tr>
+            <td>DeepSeek</td>
+            <td>deepseek-chat</td>
+            <td><a href="https://platform.deepseek.com" target="_blank" rel="noopener">platform.deepseek.com</a></td>
+          </tr>
+          <tr>
             <td>OpenAI</td>
-            <td>gpt-4o-mini（默认）</td>
+            <td>gpt-4o-mini</td>
             <td><a href="https://platform.openai.com" target="_blank" rel="noopener">platform.openai.com</a></td>
           </tr>
           <tr>
