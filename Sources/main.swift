@@ -1013,53 +1013,51 @@ final class TranslationPipeline {
         let mouseLocation = NSEvent.mouseLocation
 
         // 1. 等待用户释放快捷键按键（Cmd/Shift），避免与模拟的 Cmd+C 冲突
-        usleep(150_000)  // 150ms
+        usleep(300_000)  // 300ms
 
-        // 2. 保存当前剪贴板内容
+        // 2. 保存当前剪贴板内容 & changeCount（必须在 Cmd+C 之前获取）
         let pasteboard = NSPasteboard.general
+        let oldChangeCount = pasteboard.changeCount
         let oldItems = pasteboard.pasteboardItems?.compactMap { $0.string(forType: .string) } ?? []
 
         // 3. 模拟 Cmd+C 复制选中文本
+        // 关键：cmdDown 的 flags 必须为空（不能设 .maskCommand），否则系统认为事件矛盾
         let src = CGEventSource(stateID: .hidSystemState)
-        let cmdDown = CGEvent(keyboardEventSource: src, virtualKey: 0x37, keyDown: true)   // Cmd
-        cmdDown?.flags = .maskCommand
-        let cDown  = CGEvent(keyboardEventSource: src, virtualKey: 0x08, keyDown: true)    // C
+        let cmdDown = CGEvent(keyboardEventSource: src, virtualKey: 0x37, keyDown: true)
+        let cDown   = CGEvent(keyboardEventSource: src, virtualKey: 0x08, keyDown: true)
         cDown?.flags = .maskCommand
-        let cUp    = CGEvent(keyboardEventSource: src, virtualKey: 0x08, keyDown: false)
-        cUp?.flags   = .maskCommand
-        let cmdUp  = CGEvent(keyboardEventSource: src, virtualKey: 0x37, keyDown: false)
+        let cUp     = CGEvent(keyboardEventSource: src, virtualKey: 0x08, keyDown: false)
+        cUp?.flags  = .maskCommand
+        let cmdUp   = CGEvent(keyboardEventSource: src, virtualKey: 0x37, keyDown: false)
 
         cmdDown?.post(tap: .cghidEventTap)
-        usleep(20_000)
-        cDown?.post(tap: .cghidEventTap)
         usleep(30_000)
+        cDown?.post(tap: .cghidEventTap)
+        usleep(40_000)
         cUp?.post(tap: .cghidEventTap)
-        usleep(20_000)
+        usleep(30_000)
         cmdUp?.post(tap: .cghidEventTap)
 
-        // 4. 等待剪贴板更新
-        let oldChangeCount = pasteboard.changeCount
-        usleep(200_000)  // 200ms
-
-        // 5. 读取剪贴板（增加重试，兼容全屏应用延迟）
+        // 4. 读取剪贴板（重试等待目标 App 处理 Cmd+C）
         var selectedText: String? = nil
-        let maxRetries = 10
+        let maxRetries = 15
         for i in 0..<maxRetries {
-            // 用 changeCount 检测剪贴板是否有更新，更可靠
+            usleep(100_000)  // 每次等待 100ms，总计最多 1.5 秒
             if pasteboard.changeCount != oldChangeCount,
                let newText = pasteboard.string(forType: .string),
                !newText.isEmpty {
                 selectedText = newText
+                logi("划词获取成功（重试 \(i + 1) 次）")
                 break
             }
-            if i < maxRetries - 1 { usleep(80_000) }
         }
-        // 如果 changeCount 没变，兜底直接读（部分应用不会触发 changeCount 更新）
+        // 兜底：changeCount 没变但内容确实变了（部分 App 不更新 changeCount）
         if selectedText == nil,
            let newText = pasteboard.string(forType: .string),
            !newText.isEmpty,
            !oldItems.contains(newText) {
             selectedText = newText
+            logi("划词获取成功（兜底读取）")
         }
 
         // 6. 恢复旧剪贴板（如果可能）
