@@ -1,0 +1,17 @@
+# Build 产物
+build/
+
+# macOS
+.DS_Store
+*.app
+/build/*.dmg
+
+# Xcode
+*.xcuserdata
+*.xcworkspace
+xcuserdata/
+
+# 临时文件
+/tmp/
+*.swp
+*.swo

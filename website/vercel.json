@@ -1,0 +1,12 @@
+{
+  "name": "elta",
+  "version": 2,
+  "builds": [
+    { "src": "**/*", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/download/(.*)", "headers": { "cache-control": "public, max-age=3600" }, "dest": "/download/$1" }
+  ],
+  "cleanUrls": false,
+  "trailingSlash": false
+}
