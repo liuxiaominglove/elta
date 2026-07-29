@@ -36,6 +36,10 @@
     .file-upload-icon { font-size: 32px; margin-bottom: 8px; }
     .file-upload-text { font-size: 14px; color: var(--sub); }
     .file-name { font-size: 13px; color: #16a34a; margin-top: 6px; font-weight: 500; }
+    .file-remove {
+      display: inline-block; margin-left: 10px; color: #dc2626; cursor: pointer;
+      font-size: 13px; font-weight: 600; text-decoration: underline;
+    }
 
     .submit-btn {
       width: 100%; padding: 13px; background: var(--accent); color: #fff;
@@ -172,14 +176,48 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let selectedFile = null;
 
+function resetFileInput() {
+  selectedFile = null;
+  const wrap = document.getElementById('fileUploadWrap');
+  wrap.classList.remove('has-file');
+  document.getElementById('fileName').innerHTML = '';
+  document.getElementById('screenshot').value = '';
+}
+
 function handleFileSelect(e) {
   const file = e.target.files[0];
   if (!file) return;
-  if (file.size > 5 * 1024 * 1024) { showError('图片大小不能超过 5MB'); return; }
+  if (file.size > 5 * 1024 * 1024) { showError('图片大小不能超过 5MB'); resetFileInput(); return; }
+  if (!file.type.startsWith('image/')) { showError('请选择图片文件'); resetFileInput(); return; }
   selectedFile = file;
   const wrap = document.getElementById('fileUploadWrap');
   wrap.classList.add('has-file');
-  document.getElementById('fileName').textContent = '已选择：' + file.name;
+  document.getElementById('fileName').innerHTML = '已选择：' + file.name
+    + ' <span class="file-remove" onclick="event.stopPropagation();resetFileInput();updateUploadText();">删除</span>';
+  updateUploadText();
+}
+
+document.getElementById('fileUploadWrap').addEventListener('dragover', function(e) {
+  e.preventDefault(); this.style.background = '#f0f4ff';
+});
+document.getElementById('fileUploadWrap').addEventListener('dragleave', function(e) {
+  e.preventDefault(); this.style.background = '';
+});
+document.getElementById('fileUploadWrap').addEventListener('drop', function(e) {
+  e.preventDefault(); this.style.background = '';
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    document.getElementById('screenshot').files = e.dataTransfer.files;
+    handleFileSelect({ target: { files: [file] } });
+  }
+});
+
+function updateUploadText() {
+  const textEl = document.querySelector('.file-upload-text');
+  if (!textEl) return;
+  textEl.textContent = selectedFile
+    ? '点击更换截图'
+    : '点击上传截图，或拖放图片到此处';
 }
 
 function showError(msg) {
@@ -192,40 +230,57 @@ async function submitFeedback() {
   const email = document.getElementById('email').value.trim();
   const content = document.getElementById('content').value.trim();
   if (!email || !content) { showError('请填写邮箱和反馈内容'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showError('请输入有效的邮箱地址'); return; }
 
   const btn = document.getElementById('submitBtn');
   btn.disabled = true; btn.textContent = '提交中...';
 
+  let screenshotUrl = null;
+
   try {
-    let screenshotUrl = null;
+    // 先上传截图（如果有的话）
     if (selectedFile) {
-      const fileName = Date.now() + '_' + selectedFile.name;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('screenshots')
-        .upload(fileName, selectedFile);
-      if (uploadError) { console.error('上传截图失败:', uploadError.message); }
-      else {
-        const { data: urlData } = supabase.storage.from('screenshots').getPublicUrl(fileName);
-        screenshotUrl = urlData.publicUrl;
+      try {
+        const fileName = Date.now() + '_' + selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('screenshots')
+          .upload(fileName, selectedFile, { upsert: true });
+        if (uploadError) {
+          console.warn('截图上传失败，将仅提交文字反馈:', uploadError.message);
+        } else {
+          const { data: urlData } = supabase.storage.from('screenshots').getPublicUrl(fileName);
+          screenshotUrl = urlData.publicUrl;
+        }
+      } catch (uploadErr) {
+        console.warn('截图上传异常，将仅提交文字反馈:', uploadErr);
       }
     }
 
+    // 提交反馈到数据库
     const { error } = await supabase.from('feedback').insert({
       email, content, screenshot_url: screenshotUrl
     });
 
-    if (error) { showError('提交失败：' + error.message); btn.disabled = false; btn.textContent = '提交反馈'; return; }
+    if (error) {
+      console.error('feedback insert error:', error);
+      showError('提交失败，请稍后重试');
+      btn.disabled = false;
+      btn.textContent = '提交反馈';
+      return;
+    }
 
+    // 成功
     document.getElementById('successMsg').style.display = 'block';
     document.getElementById('email').value = '';
     document.getElementById('content').value = '';
-    selectedFile = null;
-    document.getElementById('fileUploadWrap').classList.remove('has-file');
-    document.getElementById('fileName').textContent = '';
+    resetFileInput();
+    updateUploadText();
     btn.style.display = 'none';
   } catch (e) {
+    console.error('submit error:', e);
     showError('网络错误，请稍后重试');
-    btn.disabled = false; btn.textContent = '提交反馈';
+    btn.disabled = false;
+    btn.textContent = '提交反馈';
   }
 }
 
