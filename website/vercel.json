@@ -7,8 +7,7 @@
   },
   "routes": [
     { "handle": "filesystem" },
-    { "src": "/download/(.*)", "headers": { "cache-control": "public, max-age=3600" }, "dest": "/website/download/$1" },
-    { "src": "/(.*)", "dest": "/website/$1" }
+    { "src": "/download/(.*)", "headers": { "cache-control": "public, max-age=3600" }, "dest": "/download/$1" }
   ],
   "cleanUrls": false,
   "trailingSlash": false
