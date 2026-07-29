@@ -50,8 +50,10 @@
       <ol>
         <li>从<a href="/download/ELTA.dmg">下载页面</a>获取 ELTA.dmg</li>
         <li>双击打开 DMG，将 <strong>ELTA.app</strong> 拖入 <strong>Applications</strong> 文件夹</li>
-        <li>首次打开时，右键点击 ELTA.app → <strong>"打开"</strong>（因为未经过 Apple 公证）</li>
-        <li>如有安全提示，前往 <strong>系统设置 → 隐私与安全性</strong>，点击"仍要打开"</li>
+        <li>首次打开时，可能提示"无法验证"。<strong>macOS 14 及以下</strong>：右键点击 ELTA.app → "打开"</li>
+        <li><strong>macOS 15 (Sequoia) 及以上</strong>：打开终端，输入以下命令后回车：
+          <pre class="code-inline">xattr -cr /Applications/ELTA.app</pre>
+          然后再双击 ELTA 即可正常打开。</li>
       </ol>
 
       <div class="doc-note">
