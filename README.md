@@ -2,6 +2,8 @@
 
 ELTA 是一款专为英语精读设计的 macOS 菜单栏翻译工具。选中屏幕上任意英语文本，一键 OCR 识别 + AI 翻译，菜单栏常驻，随时唤醒。
 
+![ELTA 演示](Resources/demo.gif)
+
 **官网：** [elta-seven.vercel.app](https://elta-seven.vercel.app/)
 
 ## 核心功能
