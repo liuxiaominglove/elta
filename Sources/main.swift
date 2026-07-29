@@ -4,6 +4,7 @@ import WebKit
 import Vision
 import UserNotifications
 import Security
+import ApplicationServices
 
 // ============================================
 // ELTA v5.0 — 英语精读截图翻译助手
@@ -1005,6 +1006,59 @@ final class TranslationPipeline {
         }
     }
 
+    /// 通过 macOS Accessibility API 读取当前聚焦元素中的选中文本
+    /// 不依赖剪贴板，也不需要模拟 Cmd+C，兼容性更好
+    private func getSelectedTextViaAccessibility() -> String? {
+        let system = AXUIElementCreateSystemWide()
+        var focusedElement: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedElement) == .success,
+              let element = focusedElement else {
+            logi("Accessibility：无法获取聚焦元素")
+            return nil
+        }
+
+        // 先尝试 kAXSelectedTextAttribute
+        var selectedValue: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element as! AXUIElement, kAXSelectedTextAttribute as CFString, &selectedValue) == .success,
+           let text = selectedValue as? String, !text.isEmpty {
+            logi("Accessibility：直接获取选中文本 \(text.count) 字符")
+            return text
+        }
+
+        // 兜底：尝试 kAXValueAttribute，再过滤选中的部分
+        var valueRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element as! AXUIElement, kAXValueAttribute as CFString, &valueRef) == .success,
+           let fullText = valueRef as? String, !fullText.isEmpty {
+            // 如果能拿到选中范围，截取选中部分
+            var selectedRangeRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(element as! AXUIElement, kAXSelectedTextRangeAttribute as CFString, &selectedRangeRef) == .success,
+               let rangeValue = selectedRangeRef,
+               CFGetTypeID(rangeValue) == AXValueGetTypeID() {
+                let axValue = rangeValue as! AXValue
+                var range = CFRange(location: 0, length: 0)
+                if AXValueGetValue(axValue, .cfRange, &range) {
+                    let nsRange = NSRange(location: range.location, length: range.length)
+                    if nsRange.location != NSNotFound,
+                       nsRange.location >= 0,
+                       nsRange.location + nsRange.length <= fullText.count {
+                        let start = fullText.index(fullText.startIndex, offsetBy: nsRange.location)
+                        let end = fullText.index(start, offsetBy: nsRange.length)
+                        let selected = String(fullText[start..<end])
+                        if !selected.isEmpty {
+                            logi("Accessibility：按范围截取选中文本 \(selected.count) 字符")
+                            return selected
+                        }
+                    }
+                }
+            }
+            logi("Accessibility：未拿到范围，使用完整文本兜底 \(fullText.count) 字符")
+            return fullText
+        }
+
+        logi("Accessibility：未找到任何文本")
+        return nil
+    }
+
     /// 划词翻译：读取选中文本 → 直接翻译（跳过截图+OCR）
     func startTextTranslation() {
         logi("===== 划词翻译流水线开始 =====")
@@ -1012,15 +1066,49 @@ final class TranslationPipeline {
         // 0. 记录触发时的鼠标位置（用于弹窗左右判断）
         let mouseLocation = NSEvent.mouseLocation
 
-        // 1. 等待用户释放快捷键按键（Cmd/Shift），避免与模拟的 Cmd+C 冲突
+        // 1. 等待用户释放快捷键按键（Cmd/Shift）
         usleep(300_000)  // 300ms
 
-        // 2. 保存当前剪贴板内容 & changeCount（必须在 Cmd+C 之前获取）
+        // 2. 优先使用 Accessibility API 读取选中文本（最可靠）
+        var selectedText: String? = getSelectedTextViaAccessibility()
+
+        // 3. Accessibility 失败时，兜底使用 Cmd+C + 剪贴板
+        if selectedText == nil || selectedText!.isEmpty {
+            logi("Accessibility 未获取到文本，尝试 Cmd+C 兜底")
+            selectedText = getSelectedTextViaCopyPasteboard()
+        }
+
+        guard let text = selectedText, !text.isEmpty else {
+            showError("未能获取选中文本。\n请先在任意应用里选中文本，再使用划词翻译。")
+            return
+        }
+
+        logi("划词获取文本: \(text.prefix(100))...")
+        showTextLoading()
+
+        // 4. 直接翻译
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let result = TranslationEngine.shared.translate(text: text) else {
+                self?.hideLoading()
+                self?.showError("AI 翻译失败。\n选中文本：\n\(text.prefix(200))")
+                return
+            }
+            self?.hideLoading()
+            // 用鼠标位置构造一个小矩形，让弹窗知道用户在哪一侧屏幕
+            let mouseRect = NSRect(x: mouseLocation.x - 5, y: mouseLocation.y - 5, width: 10, height: 10)
+            ResultWindowController.shared.show(markdown: result, originalText: text, screenshotRect: mouseRect)
+            NotificationManager.shared.show(title: APP_DISPLAY_NAME, body: "划词翻译完成，点击查看结果")
+            logi("划词翻译流水线完成")
+        }
+    }
+
+    /// Cmd+C + 剪贴板兜底方案
+    private func getSelectedTextViaCopyPasteboard() -> String? {
         let pasteboard = NSPasteboard.general
         let oldChangeCount = pasteboard.changeCount
         let oldItems = pasteboard.pasteboardItems?.compactMap { $0.string(forType: .string) } ?? []
 
-        // 3. 模拟 Cmd+C 复制选中文本
+        // 模拟 Cmd+C 复制选中文本
         // 关键：cmdDown 的 flags 必须为空（不能设 .maskCommand），否则系统认为事件矛盾
         let src = CGEventSource(stateID: .hidSystemState)
         let cmdDown = CGEvent(keyboardEventSource: src, virtualKey: 0x37, keyDown: true)
@@ -1038,7 +1126,7 @@ final class TranslationPipeline {
         usleep(30_000)
         cmdUp?.post(tap: .cghidEventTap)
 
-        // 4. 读取剪贴板（重试等待目标 App 处理 Cmd+C）
+        // 读取剪贴板（重试等待目标 App 处理 Cmd+C）
         var selectedText: String? = nil
         let maxRetries = 15
         for i in 0..<maxRetries {
@@ -1047,7 +1135,7 @@ final class TranslationPipeline {
                let newText = pasteboard.string(forType: .string),
                !newText.isEmpty {
                 selectedText = newText
-                logi("划词获取成功（重试 \(i + 1) 次）")
+                logi("Cmd+C 获取成功（重试 \(i + 1) 次）")
                 break
             }
         }
@@ -1057,37 +1145,16 @@ final class TranslationPipeline {
            !newText.isEmpty,
            !oldItems.contains(newText) {
             selectedText = newText
-            logi("划词获取成功（兜底读取）")
+            logi("Cmd+C 获取成功（兜底读取）")
         }
 
-        // 6. 恢复旧剪贴板（如果可能）
+        // 恢复旧剪贴板（如果可能）
         if !oldItems.isEmpty {
             pasteboard.clearContents()
             pasteboard.writeObjects(oldItems as [NSPasteboardWriting])
         }
 
-        guard let text = selectedText else {
-            showError("未能获取选中文本。\n请先在任意应用里选中文本，再使用划词翻译。")
-            return
-        }
-
-        logi("划词获取文本: \(text.prefix(100))...")
-        showTextLoading()
-
-        // 7. 直接翻译
-        DispatchQueue.global(qos: .userInitiated).async {
-            guard let result = TranslationEngine.shared.translate(text: text) else {
-                self.hideLoading()
-                self.showError("AI 翻译失败。\n选中文本：\n\(text.prefix(200))")
-                return
-            }
-            self.hideLoading()
-            // 用鼠标位置构造一个小矩形，让弹窗知道用户在哪一侧屏幕
-            let mouseRect = NSRect(x: mouseLocation.x - 5, y: mouseLocation.y - 5, width: 10, height: 10)
-            ResultWindowController.shared.show(markdown: result, originalText: text, screenshotRect: mouseRect)
-            NotificationManager.shared.show(title: APP_DISPLAY_NAME, body: "划词翻译完成，点击查看结果")
-            logi("划词翻译流水线完成")
-        }
+        return selectedText
     }
 
     private func showTextLoading() {
