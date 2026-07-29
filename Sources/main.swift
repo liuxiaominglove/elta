@@ -993,11 +993,14 @@ final class TranslationPipeline {
         // 0. 记录触发时的鼠标位置（用于弹窗左右判断）
         let mouseLocation = NSEvent.mouseLocation
 
-        // 1. 保存当前剪贴板内容
+        // 1. 等待用户释放快捷键按键（Cmd/Shift），避免与模拟的 Cmd+C 冲突
+        usleep(150_000)  // 150ms
+
+        // 2. 保存当前剪贴板内容
         let pasteboard = NSPasteboard.general
         let oldItems = pasteboard.pasteboardItems?.compactMap { $0.string(forType: .string) } ?? []
 
-        // 2. 模拟 Cmd+C 复制选中文本
+        // 3. 模拟 Cmd+C 复制选中文本
         let src = CGEventSource(stateID: .hidSystemState)
         let cmdDown = CGEvent(keyboardEventSource: src, virtualKey: 0x37, keyDown: true)   // Cmd
         cmdDown?.flags = .maskCommand
@@ -1015,24 +1018,32 @@ final class TranslationPipeline {
         usleep(20_000)
         cmdUp?.post(tap: .cghidEventTap)
 
-        // 3. 等待剪贴板更新
-        usleep(150_000)  // 150ms
+        // 4. 等待剪贴板更新
+        let oldChangeCount = pasteboard.changeCount
+        usleep(200_000)  // 200ms
 
-        // 4. 读取剪贴板
+        // 5. 读取剪贴板（增加重试，兼容全屏应用延迟）
         var selectedText: String? = nil
-        let maxRetries = 5
+        let maxRetries = 10
         for i in 0..<maxRetries {
-            if let newText = pasteboard.string(forType: .string) {
-                // 检查是否是新的内容（不是旧内容也不是ELTA自身的）
-                if !oldItems.contains(newText) && !newText.isEmpty {
-                    selectedText = newText
-                    break
-                }
+            // 用 changeCount 检测剪贴板是否有更新，更可靠
+            if pasteboard.changeCount != oldChangeCount,
+               let newText = pasteboard.string(forType: .string),
+               !newText.isEmpty {
+                selectedText = newText
+                break
             }
-            if i < maxRetries - 1 { usleep(50_000) }
+            if i < maxRetries - 1 { usleep(80_000) }
+        }
+        // 如果 changeCount 没变，兜底直接读（部分应用不会触发 changeCount 更新）
+        if selectedText == nil,
+           let newText = pasteboard.string(forType: .string),
+           !newText.isEmpty,
+           !oldItems.contains(newText) {
+            selectedText = newText
         }
 
-        // 5. 恢复旧剪贴板（如果可能）
+        // 6. 恢复旧剪贴板（如果可能）
         if !oldItems.isEmpty {
             pasteboard.clearContents()
             pasteboard.writeObjects(oldItems as [NSPasteboardWriting])
@@ -1046,7 +1057,7 @@ final class TranslationPipeline {
         logi("划词获取文本: \(text.prefix(100))...")
         showTextLoading()
 
-        // 6. 直接翻译
+        // 7. 直接翻译
         DispatchQueue.global(qos: .userInitiated).async {
             guard let result = TranslationEngine.shared.translate(text: text) else {
                 self.hideLoading()
@@ -1139,18 +1150,23 @@ final class TranslationPipeline {
 
     private func showError(_ message: String) {
         DispatchQueue.main.async {
+            // 临时切换激活策略为 regular，确保在全屏 Space 中能获取焦点
+            let currentPolicy = NSApp.activationPolicy()
+            if currentPolicy != .regular { NSApp.setActivationPolicy(.regular) }
+            usleep(80_000)  // 等待系统处理策略切换
+
             let alert = NSAlert()
             alert.messageText = "翻译失败"
             alert.informativeText = message
             alert.alertStyle = .warning
             alert.addButton(withTitle: "确定")
-            // 强制弹窗显示在所有窗口（包括全屏 Space）最前面
-            alert.layout()
             alert.window.level = .screenSaver
             alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             NSApp.activate(ignoringOtherApps: true)
             alert.runModal()
             NSApp.deactivate()
+            // 恢复原来的激活策略
+            if currentPolicy != .regular { NSApp.setActivationPolicy(currentPolicy) }
         }
     }
 }
