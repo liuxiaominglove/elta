@@ -6,9 +6,10 @@
     }
   },
   "routes": [
-    { "handle": "filesystem" },
-    { "src": "/download/(.*)", "headers": { "cache-control": "public, max-age=3600" }, "dest": "/download/$1" }
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/download/(.*)", "headers": { "cache-control": "public, max-age=3600" }, "dest": "/download/$1" },
+    { "handle": "filesystem" }
   ],
-  "cleanUrls": false,
+  "cleanUrls": true,
   "trailingSlash": false
 }

@@ -1,5 +1,7 @@
 # Build 产物
 build/
+*.dmg
+!website/download/.gitkeep
 
 # macOS
 .DS_Store

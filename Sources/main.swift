@@ -3,6 +3,7 @@ import Carbon
 import WebKit
 import Vision
 import UserNotifications
+import Security
 
 // ============================================
 // ELTA v5.0 — 英语精读截图翻译助手
@@ -13,7 +14,7 @@ import UserNotifications
 
 let APP_NAME          = "ELTA"
 let APP_DISPLAY_NAME  = "ELTA"
-let LOG_PATH          = "/tmp/snaptranslate.log"
+let LOG_PATH          = "\(NSHomeDirectory())/Library/Logs/snaptranslate.log"
 let DEFAULT_HOTKEY_KEYCODE: Int = 0x11  // T
 let DEFAULT_SELECTION_HOTKEY_KEYCODE: Int = 0x11  // T（配合 Shift）
 
@@ -164,6 +165,51 @@ let loge = Logger.shared.error
 
 logi("===== \(APP_DISPLAY_NAME) v5.0 启动 =====")
 
+// MARK: - Keychain 安全存储
+
+struct KeychainHelper {
+    static let service = "com.elta.snaptranslate"
+
+    static func save(key: String, account: String) -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(query as CFDictionary) // 先删旧值
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: key.data(using: .utf8)!
+        ]
+        return SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess
+    }
+
+    static func read(account: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func delete(account: String) -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        return SecItemDelete(query as CFDictionary) == errSecSuccess
+    }
+}
+
 // MARK: - 设置管理器
 
 final class SettingsManager {
@@ -186,6 +232,10 @@ final class SettingsManager {
         static let ollamaModel      = "snaptranslate.ollamaModel"
     }
 
+    private init() {
+        migrateAPIKeysToKeychain()
+    }
+
     // MARK: AI 提供商
 
     var apiProvider: AIProvider {
@@ -197,19 +247,42 @@ final class SettingsManager {
         set { defaults.set(newValue.rawValue, forKey: Keys.apiProvider) }
     }
 
-    // MARK: API Keys（统一字典存储，key = provider.rawValue）
+    // MARK: API Keys（Keychain 安全存储）
 
     func apiKey(for provider: AIProvider) -> String? {
-        defaults.string(forKey: "snaptranslate.apikey.\(provider.rawValue)")
+        let account = "apikey.\(provider.rawValue)"
+        return KeychainHelper.read(account: account)
     }
 
     func setApiKey(_ key: String?, for provider: AIProvider) {
-        defaults.set(key, forKey: "snaptranslate.apikey.\(provider.rawValue)")
+        let account = "apikey.\(provider.rawValue)"
+        if let key = key, !key.isEmpty {
+            _ = KeychainHelper.save(key: key, account: account)
+        } else {
+            _ = KeychainHelper.delete(account: account)
+        }
     }
 
     /// 当前激活的 API Key
     var activeApiKey: String? {
         apiKey(for: apiProvider)
+    }
+
+    /// 将旧版 UserDefaults 中的 API Key 迁移到 Keychain
+    private func migrateAPIKeysToKeychain() {
+        let migratedKey = "snaptranslate.keychain_migrated"
+        if defaults.bool(forKey: migratedKey) { return }
+
+        let allProviders: [AIProvider] = [.deepseek, .openAI, .custom, .ollama, .googleAI]
+        for provider in allProviders {
+            let key = "snaptranslate.apikey.\(provider.rawValue)"
+            if let value = defaults.string(forKey: key), !value.isEmpty {
+                _ = KeychainHelper.save(key: value, account: "apikey.\(provider.rawValue)")
+                defaults.removeObject(forKey: key)
+            }
+        }
+        defaults.set(true, forKey: migratedKey)
+        logi("API Key 已迁移到 Keychain")
     }
 
     // MARK: 自定义配置（OpenAI-Compatible & Ollama）
@@ -784,11 +857,12 @@ final class TranslationEngine {
             ]
 
         case .googleAI:
-            let googleEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/\(provider.defaultModel):generateContent?key=\(key)"
+            let googleEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/\(provider.defaultModel):generateContent"
             guard let url = URL(string: googleEndpoint) else { loge("无效 API 地址"); return nil }
             request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(key, forHTTPHeaderField: "x-goog-api-key")
             let fullPrompt = "\(settings.systemPrompt)\n\n请分析以下英文文本：\n\n\(text)"
             body = [
                 "contents": [["parts": [["text": fullPrompt]]]],

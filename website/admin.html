@@ -76,68 +76,76 @@
 <script>
 const API_BASE = '/api/admin';
 let currentTab = 'pending';
-let adminPassword = '';
+let authToken = '';  // 限时 token，不再存明文密码
 
-// 登录
+// 登录：用密码换取 30 分钟有效 token
 async function login() {
   const pwd = document.getElementById('adminPwd').value.trim();
   if (!pwd) return;
+  const errEl = document.getElementById('loginError');
   try {
     const res = await fetch(API_BASE, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pwd, action: 'list' })
+      body: JSON.stringify({ password: pwd, action: 'login' })
     });
-    if (res.status === 401) {
-      document.getElementById('loginError').style.display = 'block';
+    const data = await res.json();
+    if (!res.ok) {
+      errEl.textContent = data.error || '密码错误';
+      errEl.style.display = 'block';
       return;
     }
-    adminPassword = pwd;
-    sessionStorage.setItem('elta_admin_pwd', pwd);
+    authToken = data.token;
+    sessionStorage.setItem('elta_admin_token', authToken);
+    errEl.style.display = 'none';
     document.getElementById('loginWrap').style.display = 'none';
     document.getElementById('mainWrap').style.display = 'block';
     loadList();
   } catch (e) {
-    document.getElementById('loginError').textContent = '网络错误';
-    document.getElementById('loginError').style.display = 'block';
+    errEl.textContent = '网络错误';
+    errEl.style.display = 'block';
   }
 }
 
 function logout() {
-  sessionStorage.removeItem('elta_admin_pwd');
-  adminPassword = '';
+  sessionStorage.removeItem('elta_admin_token');
+  authToken = '';
   document.getElementById('mainWrap').style.display = 'none';
   document.getElementById('loginWrap').style.display = 'block';
 }
 
-// 自动登录
-(function(){const p=sessionStorage.getItem('elta_admin_pwd');if(p){adminPassword=p;checkLogin();}})();
+// 自动登录（用 token 恢复会话）
+(function(){
+  const t = sessionStorage.getItem('elta_admin_token');
+  if (t) { authToken = t; checkLogin(); }
+})();
 
 async function checkLogin() {
   try {
     const res = await fetch(API_BASE, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: adminPassword, action: 'list' })
+      body: JSON.stringify({ token: authToken, action: 'list' })
     });
     if (res.ok) {
       document.getElementById('loginWrap').style.display = 'none';
       document.getElementById('mainWrap').style.display = 'block';
       loadList();
     } else {
-      sessionStorage.removeItem('elta_admin_pwd');
+      sessionStorage.removeItem('elta_admin_token');
     }
   } catch (e) {}
 }
 
-// 调用 API
+// 调用 API（所有请求携带 token）
 async function apiCall(body) {
   const res = await fetch(API_BASE, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password: adminPassword, ...body })
+    body: JSON.stringify({ token: authToken, ...body })
   });
   if (res.status === 401) { alert('登录已过期，请重新登录'); logout(); return null; }
+  if (res.status === 403) { alert('请求被拒绝'); return null; }
   return res.json();
 }
 
