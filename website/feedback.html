@@ -32,7 +32,11 @@
     }
     .file-upload-wrap:hover { border-color: var(--accent); background: #f8faff; }
     .file-upload-wrap.has-file { border-style: solid; border-color: #22c55e; background: #f0fdf4; }
-    .file-upload-wrap input[type="file"] { display: none; }
+    #screenshot {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+      opacity: 0; pointer-events: none;
+    }
     .file-upload-icon { font-size: 32px; margin-bottom: 8px; }
     .file-upload-text { font-size: 14px; color: var(--sub); }
     .file-name { font-size: 13px; color: #16a34a; margin-top: 6px; font-weight: 500; }
@@ -95,7 +99,7 @@
     .feedback-footer .footer-links a:hover { color: var(--accent); }
     .feedback-footer .footer-copy { font-size: 13px; color: var(--muted); }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase.min.js"></script>
 </head>
 <body>
 
@@ -172,7 +176,12 @@
 <script>
 const SUPABASE_URL = 'https://dsawumpwtjaiorsrkfnq.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_B8PUCDNTdsPB7kLSU54sWQ_fNvLbDOO';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+if (!window.supabase || !window.supabase.createClient) {
+  showError('页面初始化失败，请刷新后重试');
+}
+
+const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 let selectedFile = null;
 
@@ -227,6 +236,7 @@ function showError(msg) {
 }
 
 async function submitFeedback() {
+  if (!supabase) { showError('页面初始化失败，请刷新后重试'); return; }
   const email = document.getElementById('email').value.trim();
   const content = document.getElementById('content').value.trim();
   if (!email || !content) { showError('请填写邮箱和反馈内容'); return; }
