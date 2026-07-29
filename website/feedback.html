@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用户反馈 — ELTA</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+  <style>
+    .feedback-section { max-width: 680px; margin: 0 auto; padding: 40px 24px 60px; }
+    .feedback-section h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+    .feedback-section .sub { color: var(--sub); font-size: 15px; margin-bottom: 32px; }
+
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+    .form-group input, .form-group textarea {
+      width: 100%; padding: 10px 14px;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      font-size: 15px; font-family: inherit; background: var(--card);
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus, .form-group textarea:focus {
+      outline: none; border-color: var(--accent);
+    }
+    .form-group textarea { min-height: 140px; resize: vertical; }
+    .form-group .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    .file-upload-wrap {
+      border: 2px dashed var(--border); border-radius: var(--radius);
+      padding: 28px; text-align: center; cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .file-upload-wrap:hover { border-color: var(--accent); background: #f8faff; }
+    .file-upload-wrap.has-file { border-style: solid; border-color: #22c55e; background: #f0fdf4; }
+    .file-upload-wrap input[type="file"] { display: none; }
+    .file-upload-icon { font-size: 32px; margin-bottom: 8px; }
+    .file-upload-text { font-size: 14px; color: var(--sub); }
+    .file-name { font-size: 13px; color: #16a34a; margin-top: 6px; font-weight: 500; }
+
+    .submit-btn {
+      width: 100%; padding: 13px; background: var(--accent); color: #fff;
+      border: none; border-radius: var(--radius); font-size: 16px; font-weight: 600;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .submit-btn:hover { background: var(--accent-h); }
+    .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .success-msg {
+      display: none; text-align: center; padding: 24px;
+      background: #f0fdf4; border-radius: var(--radius); margin-top: 20px;
+    }
+    .success-msg .icon { font-size: 40px; }
+    .success-msg h3 { font-size: 18px; margin: 8px 0 4px; color: #16a34a; }
+    .success-msg p { font-size: 14px; color: var(--sub); }
+
+    .error-msg {
+      display: none; padding: 12px; background: #fef2f2; color: #dc2626;
+      border-radius: var(--radius-sm); margin-bottom: 16px; font-size: 14px;
+    }
+
+    /* ---- 已发布的反馈展示 ---- */
+    .feedback-list { max-width: 680px; margin: 0 auto; padding: 0 24px 60px; }
+    .feedback-list h2 { font-size: 22px; font-weight: 700; margin-bottom: 20px; }
+    .fb-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+    }
+    .fb-card .fb-email { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    .fb-card .fb-content { font-size: 15px; line-height: 1.8; margin-bottom: 10px; }
+    .fb-card .fb-screenshot { margin: 12px 0; }
+    .fb-card .fb-screenshot img { max-width: 100%; border-radius: var(--radius-sm); cursor: pointer; border: 1px solid var(--border); }
+    .fb-card .admin-reply {
+      background: #f0f9ff; border-left: 3px solid var(--accent);
+      border-radius: var(--radius-sm); padding: 12px 16px; margin-top: 12px;
+      font-size: 14px; color: var(--text); line-height: 1.7;
+    }
+    .fb-card .admin-reply strong { color: var(--accent); }
+    .fb-card .fb-date { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    .load-more { text-align: center; margin-top: 20px; display: none; }
+    .load-more button {
+      padding: 8px 24px; background: none; border: 1px solid var(--border);
+      border-radius: var(--radius-sm); font-size: 14px; cursor: pointer; color: var(--sub);
+    }
+    .load-more button:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ---- Footer 加页脚 ---- */
+    .feedback-footer { border-top: 1px solid var(--border); padding: 32px 24px; }
+    .feedback-footer .footer-inner { max-width: 880px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    .feedback-footer .footer-links { display: flex; gap: 20px; }
+    .feedback-footer .footer-links a { font-size: 14px; color: var(--sub); }
+    .feedback-footer .footer-links a:hover { color: var(--accent); }
+    .feedback-footer .footer-copy { font-size: 13px; color: var(--muted); }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">
+      <span class="logo-icon">📖</span> ELTA
+    </a>
+    <div class="nav-links">
+      <a href="/">首页</a>
+      <a href="/docs.html">使用文档</a>
+      <a href="/feedback.html" class="active">反馈</a>
+      <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<section class="feedback-section">
+  <h1>用户反馈</h1>
+  <p class="sub">遇到问题？有好的建议？欢迎提交反馈，我会尽快回复你。</p>
+
+  <div class="error-msg" id="errorMsg"></div>
+
+  <div class="form-group">
+    <label for="email">邮箱地址 *</label>
+    <input type="email" id="email" placeholder="你的邮箱，方便我回复你" required>
+  </div>
+
+  <div class="form-group">
+    <label for="content">反馈内容 *</label>
+    <textarea id="content" placeholder="详细描述你遇到的问题或建议..." required></textarea>
+  </div>
+
+  <div class="form-group">
+    <label>截图（可选）</label>
+    <div class="file-upload-wrap" id="fileUploadWrap" onclick="document.getElementById('screenshot').click()">
+      <div class="file-upload-icon">🖼️</div>
+      <div class="file-upload-text">点击上传截图，或拖放图片到此处</div>
+      <div class="file-name" id="fileName"></div>
+    </div>
+    <input type="file" id="screenshot" accept="image/png,image/jpeg,image/webp" onchange="handleFileSelect(event)">
+    <p class="hint">支持 PNG、JPG、WebP 格式，大小不超过 5MB</p>
+  </div>
+
+  <button class="submit-btn" id="submitBtn" onclick="submitFeedback()">提交反馈</button>
+
+  <div class="success-msg" id="successMsg">
+    <div class="icon">✅</div>
+    <h3>反馈已提交</h3>
+    <p>感谢你的反馈！我会尽快查看并回复。</p>
+  </div>
+</section>
+
+<!-- 已发布的反馈 -->
+<section class="feedback-list" id="feedbackList">
+  <h2>精选反馈</h2>
+  <div id="feedbackCards"></div>
+  <div class="load-more" id="loadMore">
+    <button onclick="loadFeedback()">加载更多</button>
+  </div>
+</section>
+
+<footer class="feedback-footer">
+  <div class="footer-inner">
+    <div class="footer-links">
+      <a href="/">首页</a>
+      <a href="/docs.html">使用文档</a>
+      <a href="/feedback.html">反馈</a>
+    </div>
+    <p class="footer-copy">ELTA v5.1 · 完全免费 · macOS 13.0+</p>
+  </div>
+</footer>
+
+<script>
+const SUPABASE_URL = 'https://dsawumpwtjaiorsrkfnq.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_B8PUCDNTdsPB7kLSU54sWQ_fNvLbDOO';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let selectedFile = null;
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { showError('图片大小不能超过 5MB'); return; }
+  selectedFile = file;
+  const wrap = document.getElementById('fileUploadWrap');
+  wrap.classList.add('has-file');
+  document.getElementById('fileName').textContent = '已选择：' + file.name;
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg; el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+async function submitFeedback() {
+  const email = document.getElementById('email').value.trim();
+  const content = document.getElementById('content').value.trim();
+  if (!email || !content) { showError('请填写邮箱和反馈内容'); return; }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.textContent = '提交中...';
+
+  try {
+    let screenshotUrl = null;
+    if (selectedFile) {
+      const fileName = Date.now() + '_' + selectedFile.name;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('screenshots')
+        .upload(fileName, selectedFile);
+      if (uploadError) { console.error('上传截图失败:', uploadError.message); }
+      else {
+        const { data: urlData } = supabase.storage.from('screenshots').getPublicUrl(fileName);
+        screenshotUrl = urlData.publicUrl;
+      }
+    }
+
+    const { error } = await supabase.from('feedback').insert({
+      email, content, screenshot_url: screenshotUrl
+    });
+
+    if (error) { showError('提交失败：' + error.message); btn.disabled = false; btn.textContent = '提交反馈'; return; }
+
+    document.getElementById('successMsg').style.display = 'block';
+    document.getElementById('email').value = '';
+    document.getElementById('content').value = '';
+    selectedFile = null;
+    document.getElementById('fileUploadWrap').classList.remove('has-file');
+    document.getElementById('fileName').textContent = '';
+    btn.style.display = 'none';
+  } catch (e) {
+    showError('网络错误，请稍后重试');
+    btn.disabled = false; btn.textContent = '提交反馈';
+  }
+}
+
+// 加载已发布的反馈
+let feedbackPage = 0;
+async function loadFeedback() {
+  const from = feedbackPage * 10;
+  const to = from + 9;
+  const { data, error } = await supabase
+    .from('feedback')
+    .select('*')
+    .eq('status', 'approved')
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  if (error || !data || data.length === 0) {
+    document.getElementById('loadMore').style.display = 'none';
+    if (feedbackPage === 0) document.getElementById('feedbackCards').innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px;">暂无反馈</p>';
+    return;
+  }
+
+  if (feedbackPage === 0) document.getElementById('feedbackCards').innerHTML = '';
+  data.forEach(fb => {
+    const card = document.createElement('div');
+    card.className = 'fb-card';
+    const date = new Date(fb.created_at).toLocaleString('zh-CN');
+    card.innerHTML = `
+      <div class="fb-email">${escapeHtml(fb.email)} · ${date}</div>
+      <div class="fb-content">${escapeHtml(fb.content)}</div>
+      ${fb.screenshot_url ? `<div class="fb-screenshot"><img src="${fb.screenshot_url}" alt="截图" onclick="window.open('${fb.screenshot_url}')" /></div>` : ''}
+      ${fb.admin_reply ? `<div class="admin-reply"><strong>开发者回复：</strong>${escapeHtml(fb.admin_reply)}</div>` : ''}
+    `;
+    document.getElementById('feedbackCards').appendChild(card);
+  });
+
+  feedbackPage++;
+  document.getElementById('loadMore').style.display = data.length < 10 ? 'none' : 'block';
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+loadFeedback();
+</script>
+
+</body>
+</html>

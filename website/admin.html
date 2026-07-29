@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>反馈管理 — ELTA</title>
+  <style>
+    :root { --bg: #f8f9fa; --card: #fff; --text: #1a1a2e; --sub: #6b7280; --muted: #9ca3af; --accent: #2563eb; --accent-h: #1d4ed8; --border: #e5e7eb; --radius-sm: 6px; --radius: 12px; }
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.7;}
+    .header{background:var(--card);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;}
+    .header h1{font-size:20px;font-weight:700;}
+    .logout-btn{padding:6px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:none;cursor:pointer;font-size:13px;color:var(--sub);}
+    .container{max-width:960px;margin:0 auto;padding:24px;}
+    .tabs{display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid var(--border);}
+    .tab{padding:10px 24px;cursor:pointer;font-size:14px;font-weight:600;color:var(--sub);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all 0.15s;}
+    .tab:hover{color:var(--accent);}
+    .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+    .tab .count{background:var(--code-bg);padding:1px 8px;border-radius:10px;font-size:12px;margin-left:6px;}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:14px;}
+    .card .meta{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;}
+    .card .email{font-size:14px;font-weight:600;color:var(--accent);}
+    .card .date{font-size:12px;color:var(--muted);}
+    .card .content{font-size:15px;line-height:1.8;margin-bottom:10px;white-space:pre-wrap;}
+    .card .screenshot img{max-width:100%;max-height:300px;border-radius:var(--radius-sm);cursor:pointer;border:1px solid var(--border);margin:8px 0;}
+    .card .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+    .card .actions button{padding:6px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;border:1px solid transparent;}
+    .btn-approve{background:#f0fdf4;color:#16a34a;border-color:#bbf7d0!important;}
+    .btn-approve:hover{background:#dcfce7;}
+    .btn-reject{background:#fef2f2;color:#dc2626;border-color:#fecaca!important;}
+    .btn-reject:hover{background:#fee2e2;}
+    .btn-reply{background:#eff6ff;color:var(--accent);border-color:#bfdbfe!important;}
+    .reply-box{display:none;margin-top:10px;}
+    .reply-box textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;min-height:60px;resize:vertical;}
+    .reply-box .reply-actions{display:flex;gap:8px;margin-top:8px;}
+    .reply-box .reply-actions button{padding:5px 14px;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;}
+    .btn-send-reply{background:var(--accent);color:#fff;border:none;}
+    .btn-cancel-reply{background:none;border:1px solid var(--border);color:var(--sub);}
+    .admin-reply-badge{display:inline-block;background:#f0f9ff;color:var(--accent);padding:2px 10px;border-radius:10px;font-size:12px;margin-left:8px;}
+    .empty{text-align:center;color:var(--muted);padding:40px;}
+
+    /* Login */
+    .login-wrap{max-width:380px;margin:80px auto;text-align:center;}
+    .login-wrap h2{font-size:22px;margin-bottom:20px;}
+    .login-wrap input{width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--radius);font-size:15px;text-align:center;margin-bottom:12px;}
+    .login-wrap button{width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-size:15px;font-weight:600;cursor:pointer;}
+    .login-error{color:#dc2626;font-size:13px;margin-top:8px;display:none;}
+  </style>
+</head>
+<body>
+
+<!-- 登录界面 -->
+<div class="login-wrap" id="loginWrap">
+  <h2>反馈管理后台</h2>
+  <input type="password" id="adminPwd" placeholder="请输入管理员密码" onkeydown="if(event.key==='Enter')login()">
+  <button onclick="login()">登录</button>
+  <p class="login-error" id="loginError">密码错误</p>
+</div>
+
+<!-- 主界面 -->
+<div id="mainWrap" style="display:none;">
+  <div class="header">
+    <h1>反馈管理</h1>
+    <button class="logout-btn" onclick="logout()">退出登录</button>
+  </div>
+  <div class="container">
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('pending')">待审核<span class="count" id="pendingCount">0</span></div>
+      <div class="tab" onclick="switchTab('approved')">已通过<span class="count" id="approvedCount">0</span></div>
+      <div class="tab" onclick="switchTab('rejected')">已拒绝<span class="count" id="rejectedCount">0</span></div>
+    </div>
+    <div id="list"></div>
+  </div>
+</div>
+
+<script>
+const API_BASE = '/api/admin';
+let currentTab = 'pending';
+let adminPassword = '';
+
+// 登录
+async function login() {
+  const pwd = document.getElementById('adminPwd').value.trim();
+  if (!pwd) return;
+  try {
+    const res = await fetch(API_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd, action: 'list' })
+    });
+    if (res.status === 401) {
+      document.getElementById('loginError').style.display = 'block';
+      return;
+    }
+    adminPassword = pwd;
+    sessionStorage.setItem('elta_admin_pwd', pwd);
+    document.getElementById('loginWrap').style.display = 'none';
+    document.getElementById('mainWrap').style.display = 'block';
+    loadList();
+  } catch (e) {
+    document.getElementById('loginError').textContent = '网络错误';
+    document.getElementById('loginError').style.display = 'block';
+  }
+}
+
+function logout() {
+  sessionStorage.removeItem('elta_admin_pwd');
+  adminPassword = '';
+  document.getElementById('mainWrap').style.display = 'none';
+  document.getElementById('loginWrap').style.display = 'block';
+}
+
+// 自动登录
+(function(){const p=sessionStorage.getItem('elta_admin_pwd');if(p){adminPassword=p;checkLogin();}})();
+
+async function checkLogin() {
+  try {
+    const res = await fetch(API_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: adminPassword, action: 'list' })
+    });
+    if (res.ok) {
+      document.getElementById('loginWrap').style.display = 'none';
+      document.getElementById('mainWrap').style.display = 'block';
+      loadList();
+    } else {
+      sessionStorage.removeItem('elta_admin_pwd');
+    }
+  } catch (e) {}
+}
+
+// 调用 API
+async function apiCall(body) {
+  const res = await fetch(API_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: adminPassword, ...body })
+  });
+  if (res.status === 401) { alert('登录已过期，请重新登录'); logout(); return null; }
+  return res.json();
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const tabs = ['pending','approved','rejected'];
+    t.classList.toggle('active', tabs[i] === tab);
+  });
+  loadList();
+}
+
+async function loadList() {
+  const data = await apiCall({ action: 'list' });
+  if (!data) return;
+
+  const pending = data.filter(f => f.status === 'pending');
+  const approved = data.filter(f => f.status === 'approved');
+  const rejected = data.filter(f => f.status === 'rejected');
+  document.getElementById('pendingCount').textContent = pending.length;
+  document.getElementById('approvedCount').textContent = approved.length;
+  document.getElementById('rejectedCount').textContent = rejected.length;
+
+  const items = data.filter(f => f.status === currentTab);
+  const list = document.getElementById('list');
+  if (items.length === 0) {
+    list.innerHTML = `<div class="empty">暂无${currentTab==='pending'?'待审核':currentTab==='approved'?'已通过':'已拒绝'}的反馈</div>`;
+    return;
+  }
+
+  list.innerHTML = items.map(f => {
+    const date = new Date(f.created_at).toLocaleString('zh-CN');
+    return `<div class="card">
+      <div class="meta">
+        <div><span class="email">${esc(f.email)}</span>${f.admin_reply ? '<span class="admin-reply-badge">已回复</span>' : ''}</div>
+        <span class="date">${date}</span>
+      </div>
+      <div class="content">${esc(f.content)}</div>
+      ${f.screenshot_url ? `<div class="screenshot"><img src="${f.screenshot_url}" alt="截图" onclick="window.open('${f.screenshot_url}')" /></div>` : ''}
+      ${f.admin_reply ? `<div style="background:#f0f9ff;padding:10px 14px;border-radius:6px;margin-top:10px;font-size:14px;"><strong>回复：</strong>${esc(f.admin_reply)}</div>` : ''}
+      <div class="actions" id="actions-${f.id}">
+        ${currentTab === 'pending' ? `
+          <button class="btn-approve" onclick="approve(${f.id})">通过</button>
+          <button class="btn-reject" onclick="reject(${f.id})">拒绝</button>
+          <button class="btn-reply" onclick="toggleReply(${f.id})">回复并发布</button>
+        ` : ''}
+        ${currentTab === 'approved' ? `
+          <button class="btn-reply" onclick="toggleReply(${f.id})">追加回复</button>
+        ` : ''}
+        ${currentTab === 'rejected' ? `
+          <button class="btn-approve" onclick="approve(${f.id})">改为通过</button>
+        ` : ''}
+      </div>
+      <div class="reply-box" id="replyBox-${f.id}">
+        <textarea id="replyText-${f.id}" placeholder="输入回复内容...">${f.admin_reply || ''}</textarea>
+        <div class="reply-actions">
+          <button class="btn-send-reply" onclick="sendReply(${f.id})">发送回复</button>
+          <button class="btn-cancel-reply" onclick="toggleReply(${f.id})">取消</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleReply(id) {
+  const box = document.getElementById('replyBox-' + id);
+  box.style.display = box.style.display === 'block' ? 'none' : 'block';
+}
+
+async function approve(id) {
+  await apiCall({ action: 'approve', feedbackId: id });
+  loadList();
+}
+
+async function reject(id) {
+  await apiCall({ action: 'reject', feedbackId: id });
+  loadList();
+}
+
+async function sendReply(id) {
+  const reply = document.getElementById('replyText-' + id).value.trim();
+  if (!reply) return;
+  await apiCall({ action: 'reply', feedbackId: id, reply });
+  document.getElementById('replyBox-' + id).style.display = 'none';
+  loadList();
+}
+
+function esc(s) { const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+</script>
+
+</body>
+</html>
