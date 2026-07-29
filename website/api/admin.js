@@ -3,9 +3,16 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const allowedOrigin = 'https://elta-seven.vercel.app';
+  const origin = req.headers.origin || req.headers.referer || '';
+  if (origin.startsWith(allowedOrigin) || origin.startsWith('http://localhost')) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Vary', 'Origin');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -31,9 +38,53 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: '服务器未配置 Supabase 环境变量' });
   }
 
-  if (password !== ADMIN_PASSWORD) {
-    return res.status(401).json({ error: '密码错误' });
+  // ---------- 登录速率限制 ----------
+  // 5 次失败 / 1 分钟 → 锁定 5 分钟
+  const RATELIMIT_MAX = 5;
+  const RATELIMIT_WINDOW_MS = 60 * 1000;
+  const RATELIMIT_LOCK_MS = 5 * 60 * 1000;
+  const clientIP = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.socket?.remoteAddress || 'unknown';
+
+  // 使用文件系统的 /tmp/ 目录做跨 cold-start 持久化
+  const fs = require('fs');
+  const path = require('path');
+  const rateLimitFile = path.join('/tmp', `elta_ratelimit_${clientIP.replace(/[^a-fA-F0-9:.]/g, '_')}.json`);
+
+  let rateData = { count: 0, lockUntil: 0 };
+  try {
+    const raw = fs.readFileSync(rateLimitFile, 'utf8');
+    rateData = JSON.parse(raw);
+  } catch (_) { /* 文件不存在，使用默认值 */ }
+
+  const now = Date.now();
+
+  // 如果还在锁定期内
+  if (rateData.lockUntil > now) {
+    const remainSec = Math.ceil((rateData.lockUntil - now) / 1000);
+    return res.status(429).json({ error: `登录尝试过于频繁，请在 ${remainSec} 秒后重试` });
   }
+
+  // 窗口已过期，重置计数
+  if (rateData.count > 0 && (now - (rateData._lastAttempt || 0)) > RATELIMIT_WINDOW_MS) {
+    rateData.count = 0;
+  }
+
+  if (password !== ADMIN_PASSWORD) {
+    rateData.count += 1;
+    rateData._lastAttempt = now;
+    if (rateData.count >= RATELIMIT_MAX) {
+      rateData.lockUntil = now + RATELIMIT_LOCK_MS;
+      rateData.count = 0;
+      fs.writeFileSync(rateLimitFile, JSON.stringify(rateData));
+      return res.status(429).json({ error: '登录尝试过于频繁，请 5 分钟后重试' });
+    }
+    fs.writeFileSync(rateLimitFile, JSON.stringify(rateData));
+    const remaining = RATELIMIT_MAX - rateData.count;
+    return res.status(401).json({ error: `密码错误（还可尝试 ${remaining} 次）` });
+  }
+
+  // 登录成功，清除速率记录
+  try { fs.unlinkSync(rateLimitFile); } catch (_) {}
 
   const headers = {
     'Content-Type': 'application/json',
