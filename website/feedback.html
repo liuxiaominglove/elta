@@ -181,7 +181,7 @@ if (!window.supabase || !window.supabase.createClient) {
   showError('页面初始化失败，请刷新后重试');
 }
 
-const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+const eltaSupabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 let selectedFile = null;
 
@@ -236,7 +236,7 @@ function showError(msg) {
 }
 
 async function submitFeedback() {
-  if (!supabase) { showError('页面初始化失败，请刷新后重试'); return; }
+  if (!eltaSupabase) { showError('页面初始化失败，请刷新后重试'); return; }
   const email = document.getElementById('email').value.trim();
   const content = document.getElementById('content').value.trim();
   if (!email || !content) { showError('请填写邮箱和反馈内容'); return; }
@@ -252,13 +252,13 @@ async function submitFeedback() {
     if (selectedFile) {
       try {
         const fileName = Date.now() + '_' + selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { data: uploadData, error: uploadError } = await eltaSupabase.storage
           .from('screenshots')
           .upload(fileName, selectedFile, { upsert: true });
         if (uploadError) {
           console.warn('截图上传失败，将仅提交文字反馈:', uploadError.message);
         } else {
-          const { data: urlData } = supabase.storage.from('screenshots').getPublicUrl(fileName);
+          const { data: urlData } = eltaSupabase.storage.from('screenshots').getPublicUrl(fileName);
           screenshotUrl = urlData.publicUrl;
         }
       } catch (uploadErr) {
@@ -267,7 +267,7 @@ async function submitFeedback() {
     }
 
     // 提交反馈到数据库
-    const { error } = await supabase.from('feedback').insert({
+    const { error } = await eltaSupabase.from('feedback').insert({
       email, content, screenshot_url: screenshotUrl
     });
 
@@ -299,7 +299,7 @@ let feedbackPage = 0;
 async function loadFeedback() {
   const from = feedbackPage * 10;
   const to = from + 9;
-  const { data, error } = await supabase
+  const { data, error } = await eltaSupabase
     .from('feedback')
     .select('*')
     .eq('status', 'approved')
