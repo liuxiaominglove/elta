@@ -50,6 +50,11 @@ ELTA 是一款专为英语精读设计的 macOS 菜单栏翻译工具。选中�
 # 或使用任意静态服务器
 ```
 
+## 反馈与贡献
+
+- 🐛 遇到 Bug 或有功能建议？[提交 Issue](https://github.com/liuxiaominglove/elta/issues)
+- 💻 想贡献代码？查看 [贡献指南](CONTRIBUTING.md)
+
 ## 许可证
 
 [ISC License](LICENSE) — 简短、宽松的开源许可证。
