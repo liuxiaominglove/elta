@@ -318,7 +318,7 @@ async function loadFeedback() {
     card.className = 'fb-card';
     const date = new Date(fb.created_at).toLocaleString('zh-CN');
     card.innerHTML = `
-      <div class="fb-email">${escapeHtml(fb.email)} · ${date}</div>
+      <div class="fb-email">${escapeHtml(maskEmail(fb.email))} · ${date}</div>
       <div class="fb-content">${escapeHtml(fb.content)}</div>
       ${fb.screenshot_url ? `<div class="fb-screenshot"><img src="${fb.screenshot_url}" alt="截图" onclick="window.open('${fb.screenshot_url}')" /></div>` : ''}
       ${fb.admin_reply ? `<div class="admin-reply"><strong>开发者回复：</strong>${escapeHtml(fb.admin_reply)}</div>` : ''}
@@ -328,6 +328,13 @@ async function loadFeedback() {
 
   feedbackPage++;
   document.getElementById('loadMore').style.display = data.length < 10 ? 'none' : 'block';
+}
+
+function maskEmail(email) {
+  if (!email || !email.includes('@')) return '用户';
+  const [name, domain] = email.split('@');
+  if (name.length <= 1) return `*@${domain}`;
+  return `${name[0]}****@${domain}`;
 }
 
 function escapeHtml(text) {
