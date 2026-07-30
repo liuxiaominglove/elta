@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>下载 ELTA — macOS 英语精读翻译助手</title>
+  <meta name="description" content="下载 ELTA 最新版 macOS 翻译助手，支持截图 OCR + AI 翻译 + 划词翻译。">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#2563eb">
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+  </script>
+  <style>
+    .download-hero {
+      text-align: center;
+      padding: 60px 24px 40px;
+      max-width: 620px; margin: 0 auto;
+    }
+    .download-hero h1 {
+      font-size: 32px; font-weight: 800;
+      letter-spacing: -0.5px; margin-bottom: 12px;
+    }
+    .download-hero p {
+      color: var(--sub); font-size: 16px;
+      margin-bottom: 28px;
+    }
+    .download-steps {
+      max-width: 720px; margin: 0 auto;
+      padding: 0 24px 60px;
+    }
+    .step-card {
+      display: flex; gap: 20px; align-items: flex-start;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    .step-card .step-num {
+      flex-shrink: 0;
+      width: 36px; height: 36px;
+      background: var(--accent); color: #fff;
+      border-radius: 50%;
+      font-size: 16px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .step-card h3 {
+      font-size: 17px; font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .step-card p {
+      font-size: 15px; color: var(--sub);
+      line-height: 1.7;
+    }
+    .step-card code {
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    .github-tip {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-top: 8px;
+      font-size: 14px;
+      color: #166534;
+    }
+    .github-tip strong { color: #14532d; }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">
+      <span class="logo-icon">📖</span> ELTA
+    </a>
+    <div class="nav-links">
+      <a href="/">首页</a>
+      <a href="/docs.html">使用文档</a>
+      <a href="/feedback.html">反馈</a>
+      <a href="https://github.com/liuxiaominglove/elta" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header class="download-hero">
+  <h1>下载 ELTA</h1>
+  <p>支持 macOS 13.0+ · Intel / Apple Silicon 通用 · 完全免费</p>
+  <a href="https://github.com/liuxiaominglove/elta/releases/latest" class="btn-primary" target="_blank" rel="noopener">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    前往 GitHub 下载
+  </a>
+</header>
+
+<section class="download-steps">
+  <div class="step-card">
+    <div class="step-num">1</div>
+    <div>
+      <h3>点击上方蓝色按钮，进入 GitHub 下载页</h3>
+      <p>进入页面后，找到页面下方的 <strong>Assets</strong>（资产）区域，点击展开。</p>
+    </div>
+  </div>
+
+  <div class="step-card">
+    <div class="step-num">2</div>
+    <div>
+      <h3>下载 <code>.dmg</code> 文件</h3>
+      <p>在 Assets 列表中，找到名字里带 <code>.dmg</code> 的文件（例如 <code>ELTA-x.x.x.dmg</code>），点击它即可下载。</p>
+      <div class="github-tip">
+        <strong>小提示：</strong>如果 Assets 区域被折叠，点击 <strong>Assets ▼</strong> 即可展开。列表里通常会有源代码文件（<code>Source code</code>），不要点，只点 <code>.dmg</code> 结尾的安装包。
+      </div>
+    </div>
+  </div>
+
+  <div class="step-card">
+    <div class="step-num">3</div>
+    <div>
+      <h3>安装并打开</h3>
+      <p>下载完成后，双击 <code>.dmg</code> 文件，把 <strong>ELTA.app</strong> 拖到 <strong>Applications（应用程序）</strong>文件夹即可。首次打开如果遇到安全提示，请查看<a href="/docs.html#install">安装文档</a>。</p>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-links">
+      <a href="/">首页</a>
+      <a href="/docs.html">使用文档</a>
+      <a href="/LICENSE">ISC 许可证</a>
+      <a href="/privacy.html">隐私政策</a>
+      <a href="https://github.com/liuxiaominglove/elta" target="_blank" rel="noopener">GitHub</a>
+    </div>
+    <p class="footer-copy">ELTA v5.1 · 完全免费 · macOS 13.0+</p>
+  </div>
+</footer>
+
+</body>
+</html>

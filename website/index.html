@@ -7,6 +7,11 @@
   <meta name="description" content="ELTA 是一款 macOS 菜单栏应用，支持屏幕截图 + OCR 文字识别 + AI 智能翻译，专为英语精读场景设计。">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#2563eb">
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+  </script>
 </head>
 <body>
 
@@ -38,11 +43,11 @@
     <span class="badge">📦 仅 4MB</span>
   </div>
 
-  <a href="https://github.com/liuxiaominglove/elta/releases/latest" class="btn-primary">
+  <a href="/download.html" class="btn-primary">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
     下载 macOS 版
   </a>
-  <p class="version-text">最新版本 · Universal Binary · 新增划词翻译 · <a href="https://github.com/liuxiaominglove/elta/releases" style="color:#fff;opacity:0.7;">查看历史版本</a></p>
+  <p class="version-text">最新版本 · Universal Binary · 新增划词翻译 · <a href="https://github.com/liuxiaominglove/elta/releases" target="_blank" rel="noopener" style="color:#fff;opacity:0.7;">查看历史版本</a></p>
 </header>
 
 <!-- ===== 特性 ===== -->
@@ -148,6 +153,7 @@
     <div class="footer-links">
       <a href="/docs.html">使用文档</a>
       <a href="/LICENSE">ISC 许可证</a>
+      <a href="/privacy.html">隐私政策</a>
       <a href="https://github.com/liuxiaominglove/elta" target="_blank" rel="noopener">GitHub</a>
     </div>
     <p class="footer-copy">ELTA · 完全免费 · macOS 13.0+</p>

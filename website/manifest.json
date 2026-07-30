@@ -1,0 +1,19 @@
+{
+  "name": "ELTA — 英语精读翻译助手",
+  "short_name": "ELTA",
+  "description": "macOS 菜单栏应用，支持屏幕截图 + OCR + AI 翻译，专为英语精读设计",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f9fa",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "lang": "zh-CN",
+  "categories": ["productivity", "education", "utilities"]
+}

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>隐私政策 — ELTA</title>
+  <meta name="description" content="ELTA 英语精读翻译助手 - 隐私政策：数据收集、使用与保护说明">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#2563eb">
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+  </script>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">
+      <span class="logo-icon">📖</span> ELTA
+    </a>
+    <div class="nav-links">
+      <a href="/">首页</a>
+      <a href="/docs.html">使用文档</a>
+      <a href="/feedback.html">反馈</a>
+      <a href="https://github.com/liuxiaominglove/elta" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<article class="doc-container">
+  <aside class="doc-sidebar">
+    <nav class="doc-toc">
+      <h4>目录</h4>
+      <a href="#overview">概述</a>
+      <a href="#data-collection">数据收集</a>
+      <a href="#data-usage">数据使用</a>
+      <a href="#permissions">系统权限</a>
+      <a href="#third-party">第三方服务</a>
+      <a href="#storage">数据存储</a>
+      <a href="#rights">用户权利</a>
+      <a href="#changes">政策更新</a>
+      <a href="#contact">联系方式</a>
+    </nav>
+  </aside>
+
+  <main class="doc-main">
+    <h1>隐私政策</h1>
+    <p class="doc-intro">ELTA（以下简称"本软件"）高度重视用户隐私。本隐私政策说明我们如何收集、使用和保护你的信息。</p>
+
+    <section id="overview">
+      <h2>概述</h2>
+      <p>ELTA 是一款<strong>本地运行的 macOS 桌面应用</strong>。核心翻译流程（截图、OCR 文字识别）均在你的设备上完成。<strong>我们不会收集、上传或存储你的屏幕截图、识别文本或翻译内容。</strong></p>
+    </section>
+
+    <section id="data-collection">
+      <h2>数据收集</h2>
+
+      <h3>我们不收集的数据</h3>
+      <ul>
+        <li><strong>屏幕截图</strong> — 截图仅在本地内存中处理，OCR 完成后立即释放</li>
+        <li><strong>OCR 识别文本</strong> — 本地 Vision 引擎处理后，仅用于翻译请求，不作留存</li>
+        <li><strong>翻译结果</strong> — 翻译结果仅在浮动面板中展示，关闭后即消失</li>
+        <li><strong>浏览历史 / 使用习惯</strong> — 本软件<strong>不含任何埋点、分析或追踪代码</strong></li>
+        <li><strong>个人信息</strong> — 不收集设备 ID、Apple ID、邮件地址等任何可识别身份的信息</li>
+      </ul>
+
+      <h3>本地存储的信息</h3>
+      <ul>
+        <li><strong>API Key</strong> — 你配置的 AI 服务商密钥，存储在 macOS <strong>Keychain</strong>（系统级加密钥匙串）中</li>
+        <li><strong>偏好设置</strong> — 快捷键、翻译模板等配置，存储在本地 <strong>UserDefaults</strong> 中</li>
+        <li><strong>运行日志</strong> — 应用运行日志存储在 <code>~/Library/Logs/elta.log</code>，仅在你的设备上，用于排查问题</li>
+      </ul>
+    </section>
+
+    <section id="data-usage">
+      <h2>数据使用</h2>
+      <p>翻译过程中，OCR 识别出的英文文本会<strong>发送到你选择的 AI 服务商</strong>（如 OpenAI、DeepSeek、Google Gemini 等）进行翻译处理。这是翻译功能的必要步骤。除此之外，你的数据不会被发送到任何其他服务器。</p>
+    </section>
+
+    <section id="permissions">
+      <h2>系统权限</h2>
+      <table class="doc-table">
+        <thead>
+          <tr><th>权限</th><th>用途</th><th>必要性</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>屏幕录制</strong></td>
+            <td>截图翻译功能需要截取屏幕画面</td>
+            <td>仅截图翻译功能必需</td>
+          </tr>
+          <tr>
+            <td><strong>辅助功能</strong></td>
+            <td>划词翻译功能需读取你在其他应用中选中的文本</td>
+            <td>仅划词翻译功能必需</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="doc-note">
+        <strong>说明：</strong>屏幕录制权限的系统提示文案包含"录制屏幕和音频"，这是 Apple 的固定描述。<strong>ELTA 不会录制任何音频内容。</strong>
+      </div>
+    </section>
+
+    <section id="third-party">
+      <h2>第三方服务</h2>
+      <h3>AI 翻译服务商</h3>
+      <p>当你使用翻译功能时，英文原文会发送到你选择的 AI 服务商进行处理。各服务商的隐私政策请参见其官方网站：</p>
+      <ul>
+        <li>DeepSeek：<a href="https://platform.deepseek.com/privacy" target="_blank" rel="noopener">platform.deepseek.com/privacy</a></li>
+        <li>OpenAI：<a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener">openai.com/policies/privacy-policy</a></li>
+        <li>Google Gemini：<a href="https://policies.google.com/privacy" target="_blank" rel="noopener">policies.google.com/privacy</a></li>
+        <li>Anthropic：<a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener">anthropic.com/privacy</a></li>
+      </ul>
+      <div class="doc-note">
+        <strong>建议：</strong>请查阅相应 AI 服务商的隐私政策，了解其如何处理你发送的文本数据。本软件不参与第三方如何将数据用于模型训练等用途的决策。
+      </div>
+
+      <h3>反馈系统</h3>
+      <p>官网的反馈功能使用 Supabase 存储你提交的反馈内容。提交反馈时，你需要提供<strong>邮箱地址</strong>以便我们回复。<strong>该邮箱仅用于回复反馈，不会用于其他用途或分享给第三方。</strong>上传的截图存储在 Supabase Storage 中。</p>
+    </section>
+
+    <section id="storage">
+      <h2>数据存储与安全</h2>
+      <ul>
+        <li><strong>API Key</strong> 存储在 macOS Keychain（系统级加密存储）</li>
+        <li><strong>偏好设置</strong> 存储在本地 UserDefaults，不联网</li>
+        <li><strong>日志文件</strong> 仅在本地，不自动上传</li>
+        <li><strong>翻译过程中的数据</strong> 仅在内存中处理，不落地存储</li>
+      </ul>
+    </section>
+
+    <section id="rights">
+      <h2>用户权利</h2>
+      <p>由于本软件几乎不在本地以外存储数据：</p>
+      <ul>
+        <li>你可以随时在偏好设置中<strong>查看、修改或删除</strong>你的 API Key 和配置</li>
+        <li>你可以随时在系统设置中<strong>撤销</strong>屏幕录制和辅助功能权限</li>
+        <li>如需删除反馈系统中提交的内容，请通过下方联系方式告知我们</li>
+      </ul>
+    </section>
+
+    <section id="changes">
+      <h2>政策更新</h2>
+      <p>我们可能会不时更新本隐私政策。更新后的政策将发布在本页面，重大变更会通过应用更新日志或网站公告通知。</p>
+      <p>最后更新日期：2026年7月30日</p>
+    </section>
+
+    <section id="contact">
+      <h2>联系方式</h2>
+      <p>如果你对本隐私政策有任何疑问或建议，请通过以下方式联系我们：</p>
+      <ul>
+        <li>在 <a href="https://github.com/liuxiaominglove/elta/issues" target="_blank" rel="noopener">GitHub Issues</a> 提交问题</li>
+        <li>通过官网 <a href="/feedback.html">反馈页面</a> 发送消息</li>
+      </ul>
+    </section>
+
+  </main>
+</article>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-links">
+      <a href="/">首页</a>
+      <a href="/docs.html">使用文档</a>
+      <a href="/feedback.html">反馈</a>
+      <a href="/privacy.html">隐私政策</a>
+    </div>
+    <p class="footer-copy">ELTA v5.1 · 完全免费 · macOS 13.0+</p>
+  </div>
+</footer>
+
+</body>
+</html>

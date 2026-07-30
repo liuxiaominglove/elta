@@ -2,6 +2,9 @@
 build/
 *.dmg
 
+# 测试产物
+Tests/test_runner
+
 # DMG 安装包由 GitHub Actions 自动构建，不提交到仓库
 website/download/
 

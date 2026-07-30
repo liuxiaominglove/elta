@@ -7,6 +7,11 @@
   <meta name="description" content="ELTA 英语精读翻译助手 - 安装指南、使用说明与常见问题">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#2563eb">
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+  </script>
 </head>
 <body>
 
@@ -50,7 +55,7 @@
 
       <h3>方式一：手动安装（推荐）</h3>
       <ol>
-        <li>从<a href="/download/ELTA(v5.1).dmg">下载页面</a>获取 ELTA(v5.1).dmg</li>
+        <li>前往 <a href="/download.html">下载页面</a>，按提示下载最新版 ELTA.dmg</li>
         <li>双击打开 DMG，将 <strong>ELTA.app</strong> 拖入 <strong>Applications</strong> 文件夹</li>
         <li>首次打开时，可能提示"无法验证"。<strong>macOS 14 及以下</strong>：右键点击 ELTA.app → "打开"</li>
         <li><strong>macOS 15 (Sequoia) 及以上</strong>：打开终端，输入以下命令后回车：
@@ -265,6 +270,7 @@
       <a href="/">首页</a>
       <a href="/docs.html">使用文档</a>
       <a href="/LICENSE">ISC 许可证</a>
+      <a href="/privacy.html">隐私政策</a>
     </div>
     <p class="footer-copy">ELTA v5.1 · 完全免费 · macOS 13.0+</p>
   </div>
