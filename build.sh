@@ -11,7 +11,7 @@ BINARY_NAME="ELTA"
 BUILD_DIR="$PROJECT_DIR/build"
 APP_BUNDLE="$BUILD_DIR/${APP_NAME}.app"
 APP_TARGET="/Applications/${APP_NAME}.app"
-SRC="$PROJECT_DIR/Sources/main.swift"
+SRC_FILES=("$PROJECT_DIR"/Sources/*.swift)
 PLIST="$PROJECT_DIR/Resources/Info.plist"
 ICONS_DIR="$PROJECT_DIR/Resources"
 MIN_TARGET="13.0"   # 与 Info.plist LSMinimumSystemVersion 保持一致
@@ -38,7 +38,7 @@ echo "[2/6] 编译 Swift 源码..."
 echo "   [x86_64] 编译中..."
 swiftc -target x86_64-apple-macosx$MIN_TARGET \
     -o "$BUILD_DIR/$BINARY_NAME.x86_64" \
-    "$SRC" \
+    "${SRC_FILES[@]}" \
     $SWIFT_FLAGS
 echo "   [x86_64] 编译完成"
 
@@ -46,7 +46,7 @@ echo "   [x86_64] 编译完成"
 echo "   [arm64] 交叉编译中..."
 swiftc -target arm64-apple-macosx$MIN_TARGET \
     -o "$BUILD_DIR/$BINARY_NAME.arm64" \
-    "$SRC" \
+    "${SRC_FILES[@]}" \
     $SWIFT_FLAGS
 echo "   [arm64] 编译完成"
 

@@ -1,0 +1,70 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: macos-14
+    permissions:
+      contents: write
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build x86_64
+        run: |
+          swiftc -target x86_64-apple-macosx13.0 \
+            -o build/ELTA.x86_64 \
+            Sources/*.swift \
+            -framework Cocoa -framework Carbon -framework WebKit -framework Vision -framework UserNotifications \
+            -O -whole-module-optimization
+        shell: bash
+      
+      - name: Build arm64
+        run: |
+          swiftc -target arm64-apple-macosx13.0 \
+            -o build/ELTA.arm64 \
+            Sources/*.swift \
+            -framework Cocoa -framework Carbon -framework WebKit -framework Vision -framework UserNotifications \
+            -O -whole-module-optimization
+        shell: bash
+      
+      - name: Create Universal Binary
+        run: |
+          lipo -create build/ELTA.x86_64 build/ELTA.arm64 -output build/ELTA
+          echo "Architectures: $(lipo -archs build/ELTA)"
+          echo "Size: $(du -h build/ELTA | cut -f1)"
+        shell: bash
+      
+      - name: Package .app Bundle
+        run: |
+          mkdir -p build/ELTA.app/Contents/MacOS
+          mkdir -p build/ELTA.app/Contents/Resources
+          cp build/ELTA build/ELTA.app/Contents/MacOS/
+          cp Resources/Info.plist build/ELTA.app/Contents/
+          echo -n "APPL????" > build/ELTA.app/Contents/PkgInfo
+          if [ -f Resources/AppIcon.icns ]; then
+            cp Resources/AppIcon.icns build/ELTA.app/Contents/Resources/
+          fi
+          codesign --force --sign - build/ELTA.app
+        shell: bash
+      
+      - name: Create DMG
+        run: |
+          APP_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
+          hdiutil create -volname "ELTA" -srcfolder build/ELTA.app -ov -format UDZO "build/ELTA(v${APP_VERSION}).dmg"
+          echo "DMG: ELTA(v${APP_VERSION}).dmg"
+          ls -lh build/*.dmg
+        shell: bash
+      
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/ELTA(v*).dmg
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

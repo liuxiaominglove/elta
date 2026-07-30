@@ -1,7 +1,9 @@
 # Build 产物
 build/
 *.dmg
-!website/download/.gitkeep
+
+# DMG 安装包由 GitHub Actions 自动构建，不提交到仓库
+website/download/
 
 # macOS
 .DS_Store
