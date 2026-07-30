@@ -342,18 +342,15 @@ final class SettingsManager {
         （遵循"信达雅"原则，自然流畅的中文翻译）
 
         ## 重要词汇
-        - **单词** | 词性 | 中文释义
+        - **单词** ｜ 词性 ｜ 中文释义
         （列出句中较重要的词汇，跳过高中大纲基础词汇）
 
         ## 常用短语与习语
-        - 短语/习语：中文释义
+        - 短语 / 习语：中文释义
         （习语请标注【习语】）
 
-        ## 第一次核查
+        ## 核查
         核实翻译是否准确、通顺，无遗漏。
-
-        ## 第二次核查
-        交叉核对词汇/短语列表与本段原文，确保无历史对话信息混入。
         """
     }
 
@@ -1530,7 +1527,7 @@ final class HTMLRenderer {
     static func render(markdown: String, originalText: String) -> String {
         var html = markdown
         // MD 标题 → HTML 标题
-        for keyword in ["中文翻译", "重要词汇", "常用短语与习语", "第一次核查", "第二次核查"] {
+        for keyword in ["中文翻译", "重要词汇", "常用短语与习语", "核查"] {
             html = html.replacingOccurrences(of: "## \(keyword)", with: "<h2>\(keyword)</h2>")
         }
         html = html.replacingOccurrences(of: #"\*\*(.+?)\*\*"#, with: "<strong>$1</strong>", options: .regularExpression)
