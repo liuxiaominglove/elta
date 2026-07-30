@@ -1463,6 +1463,28 @@ final class TranslationPipeline {
     }
 }
 
+// MARK: - 可复制的 WebView（修复 .accessory 应用缺少 Edit 菜单导致 Cmd+C/A/V 无效）
+
+final class ResultWebView: WKWebView {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.type == .keyDown else { return super.performKeyEquivalent(with: event) }
+        let f = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard f == .command else { return super.performKeyEquivalent(with: event) }
+
+        let sel: Selector?
+        switch event.charactersIgnoringModifiers?.lowercased() {
+        case "v": sel = #selector(NSText.paste(_:))
+        case "c": sel = #selector(NSText.copy(_:))
+        case "x": sel = #selector(NSText.cut(_:))
+        case "a": sel = #selector(NSText.selectAll(_:))
+        default:  sel = nil
+        }
+        guard let s = sel else { return super.performKeyEquivalent(with: event) }
+        if NSApp.sendAction(s, to: nil, from: self) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
+}
+
 // MARK: - 结果窗口控制器
 
 final class ResultWindowController: NSObject, NSWindowDelegate {
@@ -1470,11 +1492,59 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
 
     private var panel: NSPanel?
     private var webView: WKWebView?
+    private var escEventTap: CFMachPort?
+
+    /// 安装全局 ESC 事件拦截（CGEventTap），翻译弹窗存在期间拦截所有 ESC 按下
+    private func installEscTap() {
+        guard escEventTap == nil else { return }
+        let callback: CGEventTapCallBack = { (proxy, type, event, info) -> Unmanaged<CGEvent>? in
+            guard let info = info else { return Unmanaged.passRetained(event) }
+            let ctrl = Unmanaged<ResultWindowController>.fromOpaque(info).takeUnretainedValue()
+            guard ctrl.panel != nil else {
+                // 弹窗已关闭，不拦截
+                return Unmanaged.passRetained(event)
+            }
+            DispatchQueue.main.async {
+                ctrl.panel?.close()
+            }
+            // 消费掉这次 ESC，不让它传给其他应用
+            return nil
+        }
+        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
+            callback: callback,
+            userInfo: selfPtr
+        ) else {
+            logi("ESC tap: 创建失败（可能缺少 Accessibility 权限）")
+            return
+        }
+        let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        escEventTap = tap
+        logi("ESC tap: 已安装")
+    }
+
+    /// 移除全局 ESC 事件拦截
+    private func removeEscTap() {
+        guard let tap = escEventTap else { return }
+        CGEvent.tapEnable(tap: tap, enable: false)
+        if let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) {
+            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
+        }
+        escEventTap = nil
+        logi("ESC tap: 已移除")
+    }
 
     func show(markdown: String, originalText: String, screenshotRect: NSRect) {
         DispatchQueue.main.async { [weak self] in
-            self?.panel?.close()
-            let frame = self?.computeFrame(avoidRect: screenshotRect) ?? NSRect(x: 0, y: 0, width: 620, height: 700)
+            guard let self = self else { return }
+            self.panel?.close()
+            let frame = self.computeFrame(avoidRect: screenshotRect)
 
             let panel = NSPanel(contentRect: frame,
                                 styleMask: [.titled, .closable, .resizable, .nonactivatingPanel],
@@ -1488,16 +1558,19 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             panel.delegate = self
 
             let config = WKWebViewConfiguration()
-            let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: frame.width, height: frame.height),
-                               configuration: config)
+            let wv = ResultWebView(frame: NSRect(x: 0, y: 0, width: frame.width, height: frame.height),
+                                   configuration: config)
             wv.autoresizingMask = [.width, .height]
             wv.setValue(false, forKey: "drawsBackground")
             wv.loadHTMLString(HTMLRenderer.render(markdown: markdown, originalText: originalText), baseURL: nil)
             panel.contentView = wv
             panel.makeKeyAndOrderFront(nil)
 
-            self?.panel = panel
-            self?.webView = wv
+            self.panel = panel
+            self.webView = wv
+
+            // 安装全局 ESC 拦截，确保无论焦点在哪里都能关闭弹窗
+            self.installEscTap()
         }
     }
 
@@ -1518,6 +1591,13 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             return NSRect(x: x, y: saved.origin.y, width: w, height: saved.height)
         }
         return NSRect(x: x, y: vf.minY, width: w, height: vf.height)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        guard let win = notification.object as? NSWindow, win == panel else { return }
+        removeEscTap()
+        panel = nil
+        webView = nil
     }
 
     func windowDidMove(_ notification: Notification) {
