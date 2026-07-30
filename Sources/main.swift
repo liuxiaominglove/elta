@@ -1613,7 +1613,7 @@ final class SettingsWindowController: NSObject {
     func show() {
         if let w = window { w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
 
-        let ww: CGFloat = 640, hh: CGFloat = 560
+        let ww: CGFloat = 640, hh: CGFloat = 650
         let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: ww, height: hh),
                            styleMask: [.titled, .closable, .miniaturizable],
                            backing: .buffered, defer: false)
@@ -1968,6 +1968,35 @@ final class SettingsWindowController: NSObject {
         v.addSubview(selStatus)
         selectionHotkeyStatusLabel = selStatus
 
+        // ---- ESC 关闭面板 ----
+        let escY = selY - 155
+        let escTitle = NSTextField(labelWithString: "📋 关闭翻译面板")
+        escTitle.frame = NSRect(x: 20, y: escY, width: 300, height: 22)
+        escTitle.font = .systemFont(ofSize: 15, weight: .semibold)
+        v.addSubview(escTitle)
+
+        let escDesc = NSTextField(labelWithString: "翻译浮动面板显示时，按下 ESC 键即可关闭")
+        escDesc.frame = NSRect(x: 20, y: escY - 24, width: w - 40, height: 16)
+        escDesc.font = .systemFont(ofSize: 11)
+        escDesc.textColor = .secondaryLabelColor
+        v.addSubview(escDesc)
+
+        let escKeyBox = NSTextField(labelWithString: "    Esc    ")
+        escKeyBox.frame = NSRect(x: 20, y: escY - 65, width: 80, height: 32)
+        escKeyBox.font = .systemFont(ofSize: 18, weight: .medium)
+        escKeyBox.isBezeled = true
+        escKeyBox.isEditable = false
+        escKeyBox.isSelectable = false
+        escKeyBox.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5)
+        escKeyBox.alignment = .center
+        v.addSubview(escKeyBox)
+
+        let escFixed = NSTextField(labelWithString: "系统内置，不可修改")
+        escFixed.frame = NSRect(x: 112, y: escY - 56, width: 200, height: 20)
+        escFixed.font = .systemFont(ofSize: 12)
+        escFixed.textColor = .tertiaryLabelColor
+        v.addSubview(escFixed)
+
         // 说明
         let infoLabel = NSTextField(labelWithString: """
         💡 提示：
@@ -1977,7 +2006,7 @@ final class SettingsWindowController: NSObject {
         • 红色代表未保存，点击「保存并应用」立即生效
         • 录制时若检测到与系统快捷键冲突，会给出黄色提醒
         """)
-        infoLabel.frame = NSRect(x: 20, y: selY - 240, width: w - 40, height: 100)
+        infoLabel.frame = NSRect(x: 20, y: escY - 140, width: w - 40, height: 100)
         infoLabel.font = .systemFont(ofSize: 11)
         infoLabel.textColor = .secondaryLabelColor
         infoLabel.lineBreakMode = .byWordWrapping
