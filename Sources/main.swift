@@ -1911,7 +1911,7 @@ final class SettingsWindowController: NSObject {
         let w = size.width
         let y0: CGFloat = size.height - 30
 
-        // ---- 截图翻译 ----
+        // ---- 1. 截图翻译 ----
         let titleLabel = NSTextField(labelWithString: "📷 截图翻译快捷键")
         titleLabel.frame = NSRect(x: 20, y: y0, width: 300, height: 22)
         titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -1939,8 +1939,8 @@ final class SettingsWindowController: NSObject {
         v.addSubview(statusLabel)
         hotkeyStatusLabel = statusLabel
 
-        // ---- 划词翻译 ----
-        let selY = y0 - 160
+        // ---- 2. 划词翻译 ----
+        let selY = y0 - 130
         let sTitle = NSTextField(labelWithString: "📝 划词翻译快捷键")
         sTitle.frame = NSRect(x: 20, y: selY, width: 300, height: 22)
         sTitle.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -1960,7 +1960,7 @@ final class SettingsWindowController: NSObject {
         v.addSubview(selRecordBtn)
         selectionHotkeyRecordBtn = selRecordBtn
 
-        let selStatus = NSTextField(labelWithString: "下载后需右键 → 打开 或执行 xattr 命令解除隔离")
+        let selStatus = NSTextField(labelWithString: "点击上方按钮开始录制新快捷键")
         selStatus.frame = NSRect(x: 210, y: selY - 70, width: w - 230, height: 30)
         selStatus.font = .systemFont(ofSize: 12)
         selStatus.textColor = .secondaryLabelColor
@@ -1968,8 +1968,8 @@ final class SettingsWindowController: NSObject {
         v.addSubview(selStatus)
         selectionHotkeyStatusLabel = selStatus
 
-        // ---- ESC 关闭面板 ----
-        let escY = selY - 155
+        // ---- 3. ESC 关闭翻译面板 ----
+        let escY = selY - 130
         let escTitle = NSTextField(labelWithString: "📋 关闭翻译面板")
         escTitle.frame = NSRect(x: 20, y: escY, width: 300, height: 22)
         escTitle.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -1997,16 +1997,17 @@ final class SettingsWindowController: NSObject {
         escFixed.textColor = .tertiaryLabelColor
         v.addSubview(escFixed)
 
-        // 说明
+        // ---- 统一提示 ----
         let infoLabel = NSTextField(labelWithString: """
         💡 提示：
         • 截图翻译：任意位置按下快捷键 → 框选区域 → 自动翻译
         • 划词翻译：先选中文字 → 按下快捷键 → 自动翻译（更快捷）
+        • 关闭面板：翻译浮动面板显示时，按 ESC 键即可关闭
         • 必须组合键：⌘Command、⌥Option、⌃Control、⇧Shift + 任意按键（单个字母无效）
         • 红色代表未保存，点击「保存并应用」立即生效
         • 录制时若检测到与系统快捷键冲突，会给出黄色提醒
         """)
-        infoLabel.frame = NSRect(x: 20, y: escY - 140, width: w - 40, height: 100)
+        infoLabel.frame = NSRect(x: 20, y: escY - 140, width: w - 40, height: 115)
         infoLabel.font = .systemFont(ofSize: 11)
         infoLabel.textColor = .secondaryLabelColor
         infoLabel.lineBreakMode = .byWordWrapping
