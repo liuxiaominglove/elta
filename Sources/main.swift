@@ -1613,7 +1613,7 @@ final class SettingsWindowController: NSObject {
     func show() {
         if let w = window { w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
 
-        let ww: CGFloat = 640, hh: CGFloat = 650
+        let ww: CGFloat = 640, hh: CGFloat = 700
         let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: ww, height: hh),
                            styleMask: [.titled, .closable, .miniaturizable],
                            backing: .buffered, defer: false)
@@ -2007,7 +2007,7 @@ final class SettingsWindowController: NSObject {
         • 红色代表未保存，点击「保存并应用」立即生效
         • 录制时若检测到与系统快捷键冲突，会给出黄色提醒
         """)
-        infoLabel.frame = NSRect(x: 20, y: escY - 150, width: w - 40, height: 100)
+        infoLabel.frame = NSRect(x: 20, y: escY - 190, width: w - 40, height: 100)
         infoLabel.font = .systemFont(ofSize: 11)
         infoLabel.textColor = .secondaryLabelColor
         infoLabel.lineBreakMode = .byWordWrapping
