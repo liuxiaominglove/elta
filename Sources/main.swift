@@ -1501,13 +1501,16 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             guard let info = info else { return Unmanaged.passRetained(event) }
             let ctrl = Unmanaged<ResultWindowController>.fromOpaque(info).takeUnretainedValue()
             guard ctrl.panel != nil else {
-                // 弹窗已关闭，不拦截
+                return Unmanaged.passRetained(event)
+            }
+            // 仅拦截 ESC（keyCode = 53），其他按键正常放行
+            let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+            if keyCode != 53 {
                 return Unmanaged.passRetained(event)
             }
             DispatchQueue.main.async {
                 ctrl.panel?.close()
             }
-            // 消费掉这次 ESC，不让它传给其他应用
             return nil
         }
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
