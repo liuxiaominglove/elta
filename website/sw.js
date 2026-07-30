@@ -1,12 +1,11 @@
 const CACHE = "elta-v2";
 const ASSETS = [
   "/",
-  "/index.html",
-  "/docs.html",
-  "/download.html",
-  "/privacy.html",
-  "/feedback.html",
-  "/LICENSE.html",
+  "/docs",
+  "/download",
+  "/privacy",
+  "/feedback",
+  "/LICENSE",
   "/style.css",
   "/manifest.json"
 ];
