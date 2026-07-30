@@ -34,6 +34,7 @@
       <a href="#shortcuts">快捷键</a>
       <a href="#templates">翻译模板</a>
       <a href="#providers">AI 后端</a>
+      <a href="#permissions">权限说明</a>
       <a href="#faq">常见问题</a>
     </nav>
   </aside>
@@ -188,6 +189,40 @@
       <div class="doc-note">
         <strong>费用说明：</strong>ELTA 本身完全免费。翻译功能需要你自行注册 AI 服务商的 API Key，费用由服务商收取。gpt-4o-mini 的价格约为每 100 万 token 输入 $0.15，日常使用成本极低。
       </div>
+    </section>
+
+    <!-- 权限说明 -->
+    <section id="permissions">
+      <h2>权限说明</h2>
+      <p>ELTA 使用翻译功能时，需要两项 macOS 系统权限。首次按下 <code>Cmd+T</code>（截图翻译）或 <code>⇧⌘T</code>（划词翻译）时，系统会自动依次弹出授权提示。</p>
+
+      <h3>需要哪些权限？为什么？</h3>
+      <table>
+        <thead><tr><th>权限</th><th>用途</th><th>设置路径</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>屏幕录制</strong></td>
+            <td>截图翻译功能需要截取屏幕画面进行 OCR 识别</td>
+            <td>系统设置 → 隐私与安全性 → 屏幕录制</td>
+          </tr>
+          <tr>
+            <td><strong>辅助功能</strong></td>
+            <td>划词翻译功能需要读取你在其他 App 中选中的文本</td>
+            <td>系统设置 → 隐私与安全性 → 辅助功能</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="doc-note">
+        <strong>关于音频提示：</strong>屏幕录制权限的系统提示中会包含"录制屏幕和音频"字样，这是 Apple 的固定文案，<strong>ELTA 不会录制任何音频</strong>，仅用于屏幕截图。
+      </div>
+
+      <h3>Q: 授权后仍提示无权限怎么办？</h3>
+      <ol>
+        <li>完全退出 ELTA（菜单栏图标 → 退出）</li>
+        <li>打开<strong>系统设置 → 隐私与安全性</strong></li>
+        <li>在「辅助功能」和「屏幕录制」中找到 ELTA，先关闭开关，再重新打开</li>
+        <li>重新打开 ELTA 再试一次</li>
+      </ol>
     </section>
 
     <!-- 常见问题 -->

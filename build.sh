@@ -21,7 +21,7 @@ HOST_ARCH=$(uname -m)
 SWIFT_FLAGS="-framework Cocoa -framework Carbon -framework WebKit -framework Vision -framework UserNotifications -O -whole-module-optimization"
 
 echo "=========================================="
-echo " ELTA v5.0 — Universal Build & Package"
+echo " ELTA v$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST") ($(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST")) — Universal Build & Package"
 echo "=========================================="
 echo ""
 

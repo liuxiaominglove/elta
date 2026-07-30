@@ -7,8 +7,9 @@ import Security
 import ApplicationServices
 
 // ============================================
-// ELTA v5.0 — 英语精读截图翻译助手
+// ELTA — 英语精读截图翻译助手
 // 架构：菜单栏应用 → 屏幕快照选区 → OCR → AI 翻译 → 浮动结果面板
+// 版本：编译时从 Info.plist 读取，无需手动同步
 // ============================================
 
 // MARK: - 全局常量
@@ -18,6 +19,15 @@ let APP_DISPLAY_NAME  = "ELTA"
 let LOG_PATH          = "\(NSHomeDirectory())/Library/Logs/snaptranslate.log"
 let DEFAULT_HOTKEY_KEYCODE: Int = 0x11  // T
 let DEFAULT_SELECTION_HOTKEY_KEYCODE: Int = 0x11  // T（配合 Shift）
+
+// 运行时从 Info.plist 读取版本号（每次编译/打包时自动同步）
+let APP_SHORT_VERSION: String = {
+    Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "5.1"
+}()
+let APP_BUILD_VERSION: String = {
+    Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
+}()
+let APP_FULL_VERSION: String = "\(APP_SHORT_VERSION) (\(APP_BUILD_VERSION))"
 
 // MARK: AI 提供商配置
 enum AIProvider: String, CaseIterable {
@@ -164,7 +174,7 @@ final class Logger {
 let logi = Logger.shared.info
 let loge = Logger.shared.error
 
-logi("===== \(APP_DISPLAY_NAME) v5.0 启动 =====")
+logi("===== \(APP_DISPLAY_NAME) \(APP_FULL_VERSION) 启动 =====")
 
 // MARK: - Keychain 安全存储
 
@@ -435,6 +445,92 @@ func hotkeyDisplayString(keyCode: Int, modifiers: Int) -> String {
     return parts.joined()
 }
 
+/// 将 NSEvent 的 Cocoa 修饰键标志转换为 Carbon 修饰键掩码（RegisterEventHotKey 使用）
+func cocoaToCarbonModifiers(_ flags: NSEvent.ModifierFlags) -> Int {
+    var carbon = 0
+    let deviceFlags = flags.intersection(.deviceIndependentFlagsMask)
+    if deviceFlags.contains(.command) { carbon |= Int(cmdKey) }
+    if deviceFlags.contains(.option)  { carbon |= Int(optionKey) }
+    if deviceFlags.contains(.control) { carbon |= Int(controlKey) }
+    if deviceFlags.contains(.shift)   { carbon |= Int(shiftKey) }
+    return carbon
+}
+
+/// 检查快捷键是否包含至少一个修饰键
+func hotkeyHasRequiredModifiers(_ modifiers: Int) -> Bool {
+    (modifiers & Int(cmdKey | optionKey | controlKey | shiftKey)) != 0
+}
+
+/// 检测与 macOS 常见系统快捷键的冲突
+/// 返回冲突提示字符串，无冲突返回 nil
+func checkSystemHotkeyConflict(modifiers: Int, keyCode: Int) -> String? {
+    let cmdOnly  = Int(cmdKey)
+    let cmdShift = Int(cmdKey | shiftKey)
+    let cmdOpt   = Int(cmdKey | optionKey)
+
+    // 通用编辑快捷键（几乎所有 App 都使用）
+    if modifiers == cmdOnly {
+        switch keyCode {
+        case 0x0C: return "⌘Q 退出当前应用（系统强占）"
+        case 0x0D: return "⌘W 关闭窗口"
+        case 0x0E: return "⌘E 搜索/显示"
+        case 0x0F: return "⌘R 刷新/运行"
+        case 0x10: return "⌘Y 历史/重做"
+        case 0x11: return "⌘T 新建标签页"
+        case 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19:
+            return "⌘1-9 切换标签/窗口"
+        case 0x00: return "⌘A 全选"
+        case 0x01: return "⌘S 保存"
+        case 0x02: return "⌘D 收藏/删除"
+        case 0x03: return "⌘F 查找"
+        case 0x05: return "⌘G 查找下一个"
+        case 0x06: return "⌘Z 撤销"
+        case 0x07: return "⌘X 剪切"
+        case 0x08: return "⌘C 复制"
+        case 0x09: return "⌘V 粘贴"
+        case 0x0B: return "⌘B 加粗/隐藏"
+        case 0x21: return "⌘[ 后退"
+        case 0x1E: return "⌘] 前进"
+        case 0x22: return "⌘I 斜体"
+        case 0x23: return "⌘P 打印"
+        case 0x25: return "⌘L 定位/跳转"
+        case 0x26: return "⌘J 下载"
+        case 0x27: return "⌘; 拼写检查"
+        case 0x20: return "⌘U 下划线"
+        case 0x24: return "⌘Return 默认确认"
+        case 0x30: return "⌘Tab 应用切换器（系统强占）"
+        case 0x31: return "⌘Space Spotlight（系统强占）"
+        case 0x32: return "⌘` 同应用窗口切换"
+        case 0x33: return "⌘Delete 删除"
+        default: break
+        }
+    }
+
+    // 截图 / Spotlight / Mission Control 等强占系统快捷键
+    if modifiers == cmdShift {
+        switch keyCode {
+        case 0x14: return "⇧⌘3 全屏截图（系统强占）"
+        case 0x15: return "⇧⌘4 区域截图（系统强占）"
+        case 0x16: return "⇧⌘5 截屏工具（系统强占）"
+        case 0x0D: return "⇧⌘W 关闭全部窗口"
+        case 0x26: return "⇧⌘M 最小化所有"
+        case 0x31: return "⇧⌘Space 切换输入法（系统强占）"
+        default: break
+        }
+    }
+
+    // 其他常见冲突
+    if modifiers == cmdOpt {
+        switch keyCode {
+        case 0x22: return "⌥⌘I 浏览器开发者工具"
+        case 0x24: return "⌥⌘Return 全屏"
+        default: break
+        }
+    }
+
+    return nil
+}
+
 // MARK: - 通知管理器（App Store 兼容：使用 UNUserNotificationCenter）
 
 final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
@@ -486,6 +582,7 @@ final class ScreenshotEngine: NSObject {
     private var isActive = false
     private var safetyTimer: DispatchWorkItem?
     private var screenSnapshot: NSImage?
+    private var fullScreenCGImage: CGImage?  // 首次截图时的原始 CGImage，用于裁切选区（避免拍到遮罩层）
 
     func start(done: @escaping (NSRect, CGImage?) -> Void) {
         guard !isActive else {
@@ -501,8 +598,13 @@ final class ScreenshotEngine: NSObject {
 
         // 1) 先截取当前屏幕画面（100% 精确的"后面有什么"）
         //    这样即使在最严格的全屏 Space 中，也能让用户看到图书文字
-        let bg = captureFullScreen(screen: screen)
+        //    同时保存 CGImage 和 NSImage：CGImage 用于最终裁切（避免拍到遮罩层），NSImage 用于 overlay 背景显示
+        guard let (bg, rawCG) = captureFullScreen(screen: screen) else {
+            logi("全屏截图失败")
+            done(.zero, nil); return
+        }
         screenSnapshot = bg
+        fullScreenCGImage = rawCG
 
         // 2) 推入全局十字光标
         NSCursor.crosshair.push()
@@ -528,7 +630,7 @@ final class ScreenshotEngine: NSObject {
         view.backgroundImage = bg
         // 预渲染背景到 layer → 窗口出现瞬间就能看到背景文字
         view.wantsLayer = true
-        if let bg = bg, let cg = bg.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+        if let cg = bg.cgImage(forProposedRect: nil, context: nil, hints: nil) {
             view.layer?.contents = cg
             view.layer?.contentsGravity = .resizeAspectFill
         }
@@ -563,6 +665,7 @@ final class ScreenshotEngine: NSObject {
         safetyTimer = nil
         isActive = false
         screenSnapshot = nil
+        fullScreenCGImage = nil
         for _ in 0..<3 { NSCursor.crosshair.pop() }
         NSCursor.arrow.push(); NSCursor.arrow.pop()
         panel?.orderOut(nil)
@@ -628,19 +731,28 @@ final class ScreenshotEngine: NSObject {
         return ctx.makeImage() ?? cg
     }
 
-    /// 返回框选区域的高清 CGImage。新方案：先拍全屏（获取真实像素尺寸），再按比例裁剪。
+    /// 返回框选区域的高清 CGImage。使用初始全屏截图裁切（而非重新截图），
+    /// 避免拍到我们自己的遮罩面板。
     private func captureRectCG(rect: NSRect) -> CGImage? {
-        let pos = NSEvent.mouseLocation
-        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(pos) }) ?? NSScreen.main,
-              let did = displayIDForScreen(screen) else { return nil }
+        // 优先使用启动时缓存的原始 CGImage（最初的全屏截图，不含遮罩层）
+        guard let full = fullScreenCGImage else {
+            loge("缺少全屏 CGImage 缓存，回退实时截图")
+            let pos = NSEvent.mouseLocation
+            guard let screen = NSScreen.screens.first(where: { $0.frame.contains(pos) }) ?? NSScreen.main else { return nil }
+            guard let fallback = captureDisplayImage(screen: screen) else { return nil }
+            return cropFromFull(fallback, screen: screen, rect: rect)
+        }
 
-        // 1. 全屏截图（真实像素）
-        guard let full = CGDisplayCaptureFull(did) else { loge("全屏截图失败"); return nil }
+        let pos = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(pos) }) ?? NSScreen.main else { return nil }
+        return cropFromFull(full, screen: screen, rect: rect)
+    }
+
+    private func cropFromFull(_ full: CGImage, screen: NSScreen, rect: NSRect) -> CGImage? {
         let pw = CGFloat(full.width)
         let ph = CGFloat(full.height)
         let sf = screen.frame  // 点坐标
 
-        // 2. 从 CGImage 真实像素尺寸算出 scale（避免外部 API 不一致）
         let scaleX = pw / sf.width
         let scaleY = ph / sf.height
         logi("截图 scale: x=\(String(format: "%.3f", scaleX)) y=\(String(format: "%.3f", scaleY)), full=\(Int(pw))x\(Int(ph)) px, frame=\(sf)")
@@ -660,9 +772,20 @@ final class ScreenshotEngine: NSObject {
         return makeVisionFriendly(cropped)
     }
 
-    private func captureFullScreen(screen: NSScreen) -> NSImage? {
-        guard let did = displayIDForScreen(screen) else { return nil }
-        guard let full = CGDisplayCaptureFull(did) else { loge("全屏截图失败"); return nil }
+    /// 使用 CGWindowListCreateImage 截取屏幕内容，正确反映窗口叠放顺序
+    private func captureDisplayImage(screen: NSScreen) -> CGImage? {
+        let bounds = screen.frame  // 全局坐标系（左下角原点）
+        return CGWindowListCreateImage(bounds,
+                                       .optionOnScreenOnly,
+                                       kCGNullWindowID,
+                                       .bestResolution)
+    }
+
+    private func captureFullScreen(screen: NSScreen) -> (NSImage, CGImage?)? {
+        guard let full = captureDisplayImage(screen: screen) else {
+            loge("全屏截图失败 (CGWindowListCreateImage)")
+            return nil
+        }
         let sf = screen.frame
         let img = NSImage(size: sf.size)  // NSImage 用点坐标
         img.lockFocus()
@@ -670,7 +793,7 @@ final class ScreenshotEngine: NSObject {
             ctx.draw(full, in: CGRect(x: 0, y: 0, width: sf.width, height: sf.height))
         }
         img.unlockFocus()
-        return img
+        return (img, full)  // 返回 NSImage（显示用）+ CGImage（裁切用）
     }
 
     private func displayIDForScreen(_ screen: NSScreen) -> CGDirectDisplayID? {
@@ -957,8 +1080,49 @@ final class TranslationPipeline {
 
     private var loadingPanel: NSPanel?
 
+    /// 划词翻译触发时，记录前台应用的 PID，用于通过 Accessibility API 读取该应用的选中文本
+    var selectionSourcePID: pid_t?
+
+    /// 是否已触发过权限预检（确保两个 TCC 弹窗只在首次操作时出现一次）
+    private static var permissionsPrimed = false
+
+    /// 在首次截图或划词操作时，同时触发两个系统权限弹窗：
+    /// 1. 辅助功能（Accessibility）— 划词翻译需要
+    /// 2. 屏幕录制（Screen Recording）— 截图翻译需要
+    private func primePermissionsIfNeeded() {
+        guard !Self.permissionsPrimed else { return }
+        Self.permissionsPrimed = true
+
+        // 1. 触发辅助功能权限：
+        //    仅调用 AXIsProcessTrusted() 不一定能稳定弹出 TCC 弹窗，
+        //    需要实际尝试一次 Accessibility API 调用以确保系统检测到权限使用
+        logi("Prime: 预触发辅助功能权限")
+        if !AXIsProcessTrusted() {
+            let sys = AXUIElementCreateSystemWide()
+            var ref: CFTypeRef?
+            AXUIElementCopyAttributeValue(sys, kAXFocusedUIElementAttribute as CFString, &ref)
+            logi("Accessibility 权限: 未授权，TCC 弹窗已触发")
+        } else {
+            logi("Accessibility 权限: 已授权")
+        }
+
+        // 2. 触发屏幕录制权限：
+        //    CGWindowListCreateImage 的首次调用会自动弹出 TCC 授权弹窗
+        logi("Prime: 预触发屏幕录制权限")
+        if let mainScreen = NSScreen.main {
+            let _ = CGWindowListCreateImage(mainScreen.frame,
+                                            .optionOnScreenOnly,
+                                            kCGNullWindowID,
+                                            .bestResolution)
+            logi("屏幕录制权限预触发完成")
+        }
+
+        logi("Prime: 两个权限弹窗应已依次出现，请在系统设置中分别授权")
+    }
+
     func start() {
         logi("===== 翻译流水线开始 =====")
+        primePermissionsIfNeeded()
         ScreenshotEngine.shared.start { [weak self] rect, cgImage in
             guard let cgImage = cgImage, rect != .zero else {
                 logi("截图取消或失败"); return
@@ -991,20 +1155,58 @@ final class TranslationPipeline {
         }
     }
 
-    /// 通过 macOS Accessibility API 读取当前聚焦元素中的选中文本
+    /// 通过 macOS Accessibility API 读取指定应用（或系统全局）当前聚焦元素中的选中文本
+    /// - Parameter pid: 目标应用的进程 PID；传 nil 则回退为系统全局聚焦元素（兼容旧逻辑）
     /// 不依赖剪贴板，也不需要模拟 Cmd+C，兼容性更好
-    private func getSelectedTextViaAccessibility() -> String? {
-        let system = AXUIElementCreateSystemWide()
-        var focusedElement: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedElement) == .success,
-              let element = focusedElement else {
-            logi("Accessibility：无法获取聚焦元素")
+    private func getSelectedTextViaAccessibility(pid: pid_t? = nil) -> String? {
+        // 检查辅助功能权限
+        guard AXIsProcessTrusted() else {
+            logi("Accessibility：未获得辅助功能权限，提示用户授权")
+            DispatchQueue.main.async {
+                self.promptAccessibilityPermission()
+            }
             return nil
         }
 
+        // 定位聚焦元素：优先按 PID 定位目标 App，再读取其焦点元素
+        let focusedElement: AXUIElement
+        if let pid = pid, pid != 0 {
+            let app = AXUIElementCreateApplication(pid)
+            var ref: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(app, kAXFocusedUIElementAttribute as CFString, &ref) == .success,
+                  let element = ref else {
+                logi("Accessibility：无法获取 PID=\(pid) 的聚焦元素，回退系统全局")
+                // 回退：使用系统全局
+                let sys = AXUIElementCreateSystemWide()
+                var sysRef: CFTypeRef?
+                guard AXUIElementCopyAttributeValue(sys, kAXFocusedUIElementAttribute as CFString, &sysRef) == .success,
+                      let sysElement = sysRef else {
+                    logi("Accessibility：系统全局也无法获取聚焦元素")
+                    return nil
+                }
+                focusedElement = sysElement as! AXUIElement
+                return extractSelectedText(from: focusedElement)
+            }
+            focusedElement = element as! AXUIElement
+        } else {
+            let system = AXUIElementCreateSystemWide()
+            var focusedRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success,
+                  let element = focusedRef else {
+                logi("Accessibility：无法获取聚焦元素")
+                return nil
+            }
+            focusedElement = element as! AXUIElement
+        }
+
+        return extractSelectedText(from: focusedElement)
+    }
+
+    /// 从指定元素提取选中文本（通用逻辑）
+    private func extractSelectedText(from element: AXUIElement) -> String? {
         // 先尝试 kAXSelectedTextAttribute
         var selectedValue: CFTypeRef?
-        if AXUIElementCopyAttributeValue(element as! AXUIElement, kAXSelectedTextAttribute as CFString, &selectedValue) == .success,
+        if AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute as CFString, &selectedValue) == .success,
            let text = selectedValue as? String, !text.isEmpty {
             logi("Accessibility：直接获取选中文本 \(text.count) 字符")
             return text
@@ -1012,11 +1214,10 @@ final class TranslationPipeline {
 
         // 兜底：尝试 kAXValueAttribute，再过滤选中的部分
         var valueRef: CFTypeRef?
-        if AXUIElementCopyAttributeValue(element as! AXUIElement, kAXValueAttribute as CFString, &valueRef) == .success,
+        if AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &valueRef) == .success,
            let fullText = valueRef as? String, !fullText.isEmpty {
-            // 如果能拿到选中范围，截取选中部分
             var selectedRangeRef: CFTypeRef?
-            if AXUIElementCopyAttributeValue(element as! AXUIElement, kAXSelectedTextRangeAttribute as CFString, &selectedRangeRef) == .success,
+            if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &selectedRangeRef) == .success,
                let rangeValue = selectedRangeRef,
                CFGetTypeID(rangeValue) == AXValueGetTypeID() {
                 let axValue = rangeValue as! AXValue
@@ -1044,9 +1245,28 @@ final class TranslationPipeline {
         return nil
     }
 
+    /// 引导用户前往系统设置开启辅助功能权限
+    /// 引导用户前往系统设置开启辅助功能权限（同一会话仅提示一次）
+    private static var accessibilityPrompted = false
+
+    private func promptAccessibilityPermission() {
+        guard !Self.accessibilityPrompted else { return }
+        Self.accessibilityPrompted = true
+        let alert = NSAlert()
+        alert.messageText = "需要辅助功能权限"
+        alert.informativeText = "为了获取您在任意应用中选中的文本（划词翻译），ELTA 需要【辅助功能】权限。\n\n请前往 系统设置 → 隐私与安全性 → 辅助功能，找到并启用 ELTA。"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "打开系统设置")
+        alert.addButton(withTitle: "稍后")
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        }
+    }
+
     /// 划词翻译：读取选中文本 → 直接翻译（跳过截图+OCR）
     func startTextTranslation() {
         logi("===== 划词翻译流水线开始 =====")
+        primePermissionsIfNeeded()
 
         // 0. 记录触发时的鼠标位置（用于弹窗左右判断）
         let mouseLocation = NSEvent.mouseLocation
@@ -1055,7 +1275,8 @@ final class TranslationPipeline {
         usleep(300_000)  // 300ms
 
         // 2. 优先使用 Accessibility API 读取选中文本（最可靠）
-        var selectedText: String? = getSelectedTextViaAccessibility()
+        //    传入快捷键触发时捕获的前台应用 PID，确保从正确的应用读取焦点元素
+        var selectedText: String? = getSelectedTextViaAccessibility(pid: selectionSourcePID)
 
         // 3. Accessibility 失败时，兜底使用 Cmd+C + 剪贴板
         if selectedText == nil || selectedText!.isEmpty {
@@ -1064,7 +1285,7 @@ final class TranslationPipeline {
         }
 
         guard let text = selectedText, !text.isEmpty else {
-            showError("未能获取选中文本。\n请先在任意应用里选中文本，再使用划词翻译。")
+            showError("未能获取选中文本。\n可能原因：\n1. 未选中文本\n2. 未授予【辅助功能】权限（系统设置 → 隐私与安全性 → 辅助功能）")
             return
         }
 
@@ -1442,6 +1663,14 @@ final class SettingsWindowController: NSObject {
         saveBtn.keyEquivalent = "\r"
         content.addSubview(saveBtn)
 
+        // ---- 版本号（底部居中，极简不干扰 UI） ----
+        let versionLabel = NSTextField(labelWithString: "ELTA \(APP_FULL_VERSION)")
+        versionLabel.frame = NSRect(x: (ww - 160) / 2, y: 0, width: 160, height: 14)
+        versionLabel.alignment = .center
+        versionLabel.font = .systemFont(ofSize: 10, weight: .regular)
+        versionLabel.textColor = .secondaryLabelColor
+        content.addSubview(versionLabel)
+
         win.contentView = content
         win.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -1554,7 +1783,7 @@ final class SettingsWindowController: NSObject {
             let eyeBtn = NSButton(frame: NSRect(x: fieldWid + 4, y: 1, width: 26, height: 24))
             eyeBtn.bezelStyle = .regularSquare
             eyeBtn.isBordered = false
-            eyeBtn.title = "👁"
+            eyeBtn.title = "🔐"
             eyeBtn.toolTip = "显示/隐藏 API Key"
             eyeBtn.font = .systemFont(ofSize: 16)
             eyeBtn.target = self
@@ -1747,8 +1976,9 @@ final class SettingsWindowController: NSObject {
         💡 提示：
         • 截图翻译：任意位置按下快捷键 → 框选区域 → 自动翻译
         • 划词翻译：先选中文字 → 按下快捷键 → 自动翻译（更快捷）
-        • 支持组合键：⌘Command、⌥Option、⌃Control、⇧Shift + 任意按键
-        • 录制完成后点击「保存并应用」立即生效
+        • 必须组合键：⌘Command、⌥Option、⌃Control、⇧Shift + 任意按键（单个字母无效）
+        • 红色代表未保存，点击「保存并应用」立即生效
+        • 录制时若检测到与系统快捷键冲突，会给出黄色提醒
         """)
         infoLabel.frame = NSRect(x: 20, y: selY - 240, width: w - 40, height: 100)
         infoLabel.font = .systemFont(ofSize: 11)
@@ -1784,8 +2014,22 @@ final class SettingsWindowController: NSObject {
     }
 
     private func recordHotkey(event: NSEvent) {
-        recordedKeyCode = Int(event.keyCode)
-        recordedModifiers = Int(event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue)
+        let carbonModifiers = cocoaToCarbonModifiers(event.modifierFlags)
+        let keyCode = Int(event.keyCode)
+
+        // 必须有修饰键（禁止单个字母）
+        guard hotkeyHasRequiredModifiers(carbonModifiers) else {
+            cancelRecording()
+            hotkeyStatusLabel?.stringValue = "❌ 单个字母不能作为快捷键\n请同时按住 ⌘ / ⌥ / ⌃ / ⇧ 之一再按字母"
+            hotkeyRecordBtn?.bezelColor = .systemRed
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                self?.hotkeyRecordBtn?.bezelColor = nil
+            }
+            return
+        }
+
+        recordedKeyCode = keyCode
+        recordedModifiers = carbonModifiers
         isRecordingHotkey = false
 
         if let monitor = hotkeyMonitor {
@@ -1796,7 +2040,12 @@ final class SettingsWindowController: NSObject {
         let display = hotkeyDisplayString(keyCode: recordedKeyCode, modifiers: recordedModifiers)
         hotkeyRecordBtn?.title = "    \(display)    "
         hotkeyRecordBtn?.bezelColor = .systemGreen
-        hotkeyStatusLabel?.stringValue = "✅ 已录制：\(display)\n点击「保存并应用」使快捷键生效"
+        var status = "✅ 已录制：\(display)\n点击「保存并应用」使快捷键生效"
+        if let conflict = checkSystemHotkeyConflict(modifiers: recordedModifiers, keyCode: recordedKeyCode) {
+            status += "\n⚠️ 可能与系统快捷键冲突：\(conflict)"
+            hotkeyRecordBtn?.bezelColor = .systemOrange
+        }
+        hotkeyStatusLabel?.stringValue = status
 
         // 闪烁效果后恢复
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
@@ -1841,8 +2090,22 @@ final class SettingsWindowController: NSObject {
     }
 
     private func recordSelectionHotkey(event: NSEvent) {
-        recordedSelectionKeyCode = Int(event.keyCode)
-        recordedSelectionModifiers = Int(event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue)
+        let carbonModifiers = cocoaToCarbonModifiers(event.modifierFlags)
+        let keyCode = Int(event.keyCode)
+
+        // 必须有修饰键（禁止单个字母）
+        guard hotkeyHasRequiredModifiers(carbonModifiers) else {
+            cancelSelectionRecording()
+            selectionHotkeyStatusLabel?.stringValue = "❌ 单个字母不能作为快捷键\n请同时按住 ⌘ / ⌥ / ⌃ / ⇧ 之一再按字母"
+            selectionHotkeyRecordBtn?.bezelColor = .systemRed
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                self?.selectionHotkeyRecordBtn?.bezelColor = nil
+            }
+            return
+        }
+
+        recordedSelectionKeyCode = keyCode
+        recordedSelectionModifiers = carbonModifiers
         isRecordingSelectionHotkey = false
 
         if let monitor = hotkeyMonitor {
@@ -1853,7 +2116,12 @@ final class SettingsWindowController: NSObject {
         let display = hotkeyDisplayString(keyCode: recordedSelectionKeyCode, modifiers: recordedSelectionModifiers)
         selectionHotkeyRecordBtn?.title = "    \(display)    "
         selectionHotkeyRecordBtn?.bezelColor = .systemGreen
-        selectionHotkeyStatusLabel?.stringValue = "✅ 已录制：\(display)\n点击「保存并应用」使快捷键生效"
+        var status = "✅ 已录制：\(display)\n点击「保存并应用」使快捷键生效"
+        if let conflict = checkSystemHotkeyConflict(modifiers: recordedSelectionModifiers, keyCode: recordedSelectionKeyCode) {
+            status += "\n⚠️ 可能与系统快捷键冲突：\(conflict)"
+            selectionHotkeyRecordBtn?.bezelColor = .systemOrange
+        }
+        selectionHotkeyStatusLabel?.stringValue = status
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
             self?.selectionHotkeyRecordBtn?.bezelColor = nil
@@ -1961,14 +2229,14 @@ final class SettingsWindowController: NSObject {
             apiKeyVisibleField?.stringValue = apiKeyHiddenField?.stringValue ?? ""
             apiKeyVisibleField?.isHidden = false
             apiKeyHiddenField?.isHidden = true
-            apiKeyEyeButton?.title = "🔒"
+            apiKeyEyeButton?.title = "🔓"
             apiKeyVisibleField?.window?.makeFirstResponder(apiKeyVisibleField)
         } else {
             // 切到密文：明文框内容同步到密文框
             apiKeyHiddenField?.stringValue = apiKeyVisibleField?.stringValue ?? ""
             apiKeyHiddenField?.isHidden = false
             apiKeyVisibleField?.isHidden = true
-            apiKeyEyeButton?.title = "👁"
+            apiKeyEyeButton?.title = "🔐"
             apiKeyHiddenField?.window?.makeFirstResponder(apiKeyHiddenField)
         }
     }
@@ -2328,9 +2596,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                         EventParamType(typeEventHotKeyID), nil,
                                         MemoryLayout<EventHotKeyID>.size, nil, &hkID)
             if err == noErr {
+                // 在快捷键事件上下文中立即捕获前台应用的 PID，
+                // 避免 dispatch async 之后焦点已转移到自身导致读取失败
+                let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
                 DispatchQueue.main.async {
                     if hkID.id == 10 || hkID.id == 11 {
                         // 划词翻译
+                        TranslationPipeline.shared.selectionSourcePID = frontPID
                         TranslationPipeline.shared.startTextTranslation()
                     } else {
                         // 截图翻译
