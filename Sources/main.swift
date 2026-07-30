@@ -1080,41 +1080,46 @@ final class TranslationPipeline {
     /// 划词翻译触发时，记录前台应用的 PID，用于通过 Accessibility API 读取该应用的选中文本
     var selectionSourcePID: pid_t?
 
-    /// 是否已触发过权限预检（确保两个 TCC 弹窗只在首次操作时出现一次）
-    private static var permissionsPrimed = false
+    /// 是否已触发过屏幕录制权限预检（TCC 弹窗只出现一次）
+    private static var screenCapturePrimed = false
+    /// 是否已触发过辅助功能权限预检（TCC 弹窗只出现一次）
+    private static var accessibilityPrimed = false
 
     /// 在首次截图或划词操作时，同时触发两个系统权限弹窗：
     /// 1. 辅助功能（Accessibility）— 划词翻译需要
     /// 2. 屏幕录制（Screen Recording）— 截图翻译需要
+    /// 两者均使用非阻塞 API，确保无论用户先按哪个快捷键，两次 TCC 弹窗都会出现
     private func primePermissionsIfNeeded() {
-        guard !Self.permissionsPrimed else { return }
-        Self.permissionsPrimed = true
-
-        // 1. 触发辅助功能权限：
-        //    仅调用 AXIsProcessTrusted() 不一定能稳定弹出 TCC 弹窗，
-        //    需要实际尝试一次 Accessibility API 调用以确保系统检测到权限使用
-        logi("Prime: 预触发辅助功能权限")
-        if !AXIsProcessTrusted() {
-            let sys = AXUIElementCreateSystemWide()
-            var ref: CFTypeRef?
-            AXUIElementCopyAttributeValue(sys, kAXFocusedUIElementAttribute as CFString, &ref)
-            logi("Accessibility 权限: 未授权，TCC 弹窗已触发")
-        } else {
-            logi("Accessibility 权限: 已授权")
+        // 1. 屏幕录制权限（截图翻译需要）— 使用非阻塞 API 避免卡住后续的 Accessibility 弹窗
+        if !Self.screenCapturePrimed {
+            Self.screenCapturePrimed = true
+            logi("Prime: 预触发屏幕录制权限")
+            if !CGPreflightScreenCaptureAccess() {
+                CGRequestScreenCaptureAccess()
+                logi("屏幕录制权限: 未授权，TCC 弹窗已触发")
+            } else {
+                logi("屏幕录制权限: 已授权")
+            }
         }
 
-        // 2. 触发屏幕录制权限：
-        //    CGWindowListCreateImage 的首次调用会自动弹出 TCC 授权弹窗
-        logi("Prime: 预触发屏幕录制权限")
-        if let mainScreen = NSScreen.main {
-            let _ = CGWindowListCreateImage(mainScreen.frame,
-                                            .optionOnScreenOnly,
-                                            kCGNullWindowID,
-                                            .bestResolution)
-            logi("屏幕录制权限预触发完成")
+        // 2. 辅助功能权限（划词翻译需要）— AXUIElement 调用是非阻塞的，不会互相干扰
+        if !Self.accessibilityPrimed {
+            Self.accessibilityPrimed = true
+            logi("Prime: 预触发辅助功能权限")
+            if !AXIsProcessTrusted() {
+                let sys = AXUIElementCreateSystemWide()
+                var ref: CFTypeRef?
+                AXUIElementCopyAttributeValue(sys, kAXFocusedUIElementAttribute as CFString, &ref)
+                logi("Accessibility 权限: 未授权，TCC 弹窗已触发")
+            } else {
+                logi("Accessibility 权限: 已授权")
+            }
         }
 
-        logi("Prime: 两个权限弹窗应已依次出现，请在系统设置中分别授权")
+        if !Self.screenCapturePrimed || !Self.accessibilityPrimed {
+            // 仍可能有一项未触发（首次调用时两者都会设为 true，所以这个分支实际只在异常情况进入）
+            logi("Prime: 权限弹窗已触发，请在系统设置中授权")
+        }
     }
 
     func start() {
