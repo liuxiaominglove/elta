@@ -1714,7 +1714,7 @@ final class SettingsWindowController: NSObject {
         // --- 动态卡片区域（根据选中提供商显示对应配置） ---
         let cardScroll = NSScrollView(frame: NSRect(x: 16, y: 10, width: w - 32, height: y - 10))
         cardScroll.hasVerticalScroller = true
-        cardScroll.autohidesScrollers = true
+        cardScroll.autohidesScrollers = false
         cardScroll.borderType = .noBorder
         cardScroll.drawsBackground = false
         v.addSubview(cardScroll)
@@ -1723,6 +1723,7 @@ final class SettingsWindowController: NSObject {
         let cardView = buildProviderCard(width: w - 36, provider: currentProvider)
         cardScroll.documentView = cardView
         self.providerCardView = cardView
+        scrollProviderCardToTop(scrollView: cardScroll)
 
         return v
     }
@@ -1912,6 +1913,15 @@ final class SettingsWindowController: NSObject {
         v.frame = NSRect(x: 0, y: 0, width: w, height: requiredHeight)
 
         return v
+    }
+
+    /// 将 AI 提供商配置卡片滚动到顶部，确保 API Key 输入区域默认可见
+    private func scrollProviderCardToTop(scrollView: NSScrollView) {
+        guard let documentView = scrollView.documentView else { return }
+        let clipView = scrollView.contentView
+        let targetY = documentView.frame.height - clipView.bounds.height
+        clipView.scroll(to: NSPoint(x: 0, y: max(0, targetY)))
+        scrollView.reflectScrolledClipView(clipView)
     }
 
     // MARK: - Tab 2: 快捷键
@@ -2409,6 +2419,7 @@ final class SettingsWindowController: NSObject {
         let newCard = buildProviderCard(width: cardWidth, provider: newProvider)
         scrollView.documentView = newCard
         self.providerCardView = newCard
+        scrollProviderCardToTop(scrollView: scrollView)
     }
 
     @objc private func testAPIKey() {
