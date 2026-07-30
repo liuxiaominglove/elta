@@ -1940,7 +1940,7 @@ final class SettingsWindowController: NSObject {
         hotkeyStatusLabel = statusLabel
 
         // ---- 2. 划词翻译 ----
-        let selY = y0 - 130
+        let selY = y0 - 150
         let sTitle = NSTextField(labelWithString: "📝 划词翻译快捷键")
         sTitle.frame = NSRect(x: 20, y: selY, width: 300, height: 22)
         sTitle.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -1969,7 +1969,7 @@ final class SettingsWindowController: NSObject {
         selectionHotkeyStatusLabel = selStatus
 
         // ---- 3. ESC 关闭翻译面板 ----
-        let escY = selY - 130
+        let escY = selY - 150
         let escTitle = NSTextField(labelWithString: "📋 关闭翻译面板")
         escTitle.frame = NSRect(x: 20, y: escY, width: 300, height: 22)
         escTitle.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -2007,7 +2007,7 @@ final class SettingsWindowController: NSObject {
         • 红色代表未保存，点击「保存并应用」立即生效
         • 录制时若检测到与系统快捷键冲突，会给出黄色提醒
         """)
-        infoLabel.frame = NSRect(x: 20, y: escY - 140, width: w - 40, height: 115)
+        infoLabel.frame = NSRect(x: 20, y: escY - 150, width: w - 40, height: 100)
         infoLabel.font = .systemFont(ofSize: 11)
         infoLabel.textColor = .secondaryLabelColor
         infoLabel.lineBreakMode = .byWordWrapping
