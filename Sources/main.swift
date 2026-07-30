@@ -16,7 +16,7 @@ import ApplicationServices
 
 let APP_NAME          = "ELTA"
 let APP_DISPLAY_NAME  = "ELTA"
-let LOG_PATH          = "\(NSHomeDirectory())/Library/Logs/snaptranslate.log"
+let LOG_PATH          = "\(NSHomeDirectory())/Library/Logs/elta.log"
 let DEFAULT_HOTKEY_KEYCODE: Int = 0x11  // T
 let DEFAULT_SELECTION_HOTKEY_KEYCODE: Int = 0x11  // T（配合 Shift）
 
@@ -48,6 +48,19 @@ enum AIProvider: String, CaseIterable {
         case .googleAI:          return "Google AI（Gemini）"
         case .ollama:            return "Ollama（本地 API）"
         case .qwen:              return "千问（阿里云 · 国内）"
+        }
+    }
+
+    /// 简短名称，用于翻译结果页脚
+    var shortName: String {
+        switch self {
+        case .deepseek:          return "DeepSeek"
+        case .openai:            return "OpenAI"
+        case .anthropic:         return "Anthropic"
+        case .openAICompatible:  return "OpenAI-Compatible"
+        case .googleAI:          return "Google AI"
+        case .ollama:            return "Ollama"
+        case .qwen:              return "千问"
         }
     }
 
@@ -1651,7 +1664,7 @@ final class HTMLRenderer {
         </head><body>
         <div class="original-box"><strong>📝 原文：</strong><br>\(escaped)</div>
         \(html)
-        <div class="footer">Powered by DeepSeek AI · ELTA — 截图即译，精读利器</div>
+        <div class="footer">Powered by \(SettingsManager.shared.apiProvider.shortName) AI · ELTA — 截图即译，精读利器</div>
         </body></html>
         """
     }
@@ -2532,7 +2545,12 @@ final class SettingsWindowController: NSObject {
 
         let endpoint = provider.endpoint
         var body: [String: Any] = [:]
-        var req = URLRequest(url: URL(string: endpoint)!)
+        guard let baseURL = URL(string: endpoint) else {
+            testStatusLabel?.stringValue = "❌ API 地址无效，请检查设置"
+            testStatusLabel?.textColor = .systemRed
+            return
+        }
+        var req = URLRequest(url: baseURL)
         req.httpMethod = "POST"
         req.timeoutInterval = 15
 
@@ -2550,7 +2568,12 @@ final class SettingsWindowController: NSObject {
         case .googleAI:
             // Google Gemini uses API key as query param
             let googleEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=\(key)"
-            req = URLRequest(url: URL(string: googleEndpoint)!)
+            guard let googleURL = URL(string: googleEndpoint) else {
+                testStatusLabel?.stringValue = "❌ API 地址无效，请检查设置"
+                testStatusLabel?.textColor = .systemRed
+                return
+            }
+            req = URLRequest(url: googleURL)
             req.httpMethod = "POST"
             req.timeoutInterval = 15
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
