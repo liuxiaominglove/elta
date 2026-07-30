@@ -235,8 +235,7 @@ final class SettingsManager {
     }
 
     private init() {
-        migrateAPIKeysToKeychain()
-        fixupKeychainAccessibility()
+        migrateAPIKeysFromKeychain()
     }
 
     // MARK: AI 提供商
@@ -250,19 +249,22 @@ final class SettingsManager {
         set { defaults.set(newValue.rawValue, forKey: Keys.apiProvider) }
     }
 
-    // MARK: API Keys（Keychain 安全存储）
+    // MARK: API Keys（UserDefaults 存储，无感无弹窗）
+
+    private static func apiKeyUDKey(for provider: AIProvider) -> String {
+        "snaptranslate.apikey.\(provider.rawValue)"
+    }
 
     func apiKey(for provider: AIProvider) -> String? {
-        let account = "apikey.\(provider.rawValue)"
-        return KeychainHelper.read(account: account)
+        let v = defaults.string(forKey: Self.apiKeyUDKey(for: provider))
+        return (v?.isEmpty == false) ? v : nil
     }
 
     func setApiKey(_ key: String?, for provider: AIProvider) {
-        let account = "apikey.\(provider.rawValue)"
         if let key = key, !key.isEmpty {
-            _ = KeychainHelper.save(key: key, account: account)
+            defaults.set(key, forKey: Self.apiKeyUDKey(for: provider))
         } else {
-            _ = KeychainHelper.delete(account: account)
+            defaults.removeObject(forKey: Self.apiKeyUDKey(for: provider))
         }
     }
 
@@ -271,38 +273,21 @@ final class SettingsManager {
         apiKey(for: apiProvider)
     }
 
-    /// 将旧版 UserDefaults 中的 API Key 迁移到 Keychain
-    private func migrateAPIKeysToKeychain() {
-        let migratedKey = "snaptranslate.keychain_migrated"
-        if defaults.bool(forKey: migratedKey) { return }
-
-        let allProviders: [AIProvider] = [.deepseek, .openai, .openAICompatible, .ollama, .googleAI]
-        for provider in allProviders {
-            let key = "snaptranslate.apikey.\(provider.rawValue)"
-            if let value = defaults.string(forKey: key), !value.isEmpty {
-                _ = KeychainHelper.save(key: value, account: "apikey.\(provider.rawValue)")
-                defaults.removeObject(forKey: key)
-            }
-        }
-        defaults.set(true, forKey: migratedKey)
-        logi("API Key 已迁移到 Keychain")
-    }
-
-    /// 修复旧版 Keychain 条目缺少 kSecAttrAccessible 导致弹授权窗的问题
-    /// 读取已有 Key → 删除 → 重新保存（带上 kSecAttrAccessibleAfterFirstUnlock）
-    private func fixupKeychainAccessibility() {
-        let fixupKey = "snaptranslate.keychain_accessibility_fixed"
-        if defaults.bool(forKey: fixupKey) { return }
+    /// 将之前误存到 Keychain 的 API Key 迁移回 UserDefaults（不再弹授权窗）
+    private func migrateAPIKeysFromKeychain() {
+        let migratedBack = "snaptranslate.keychain_unmigrated"
+        if defaults.bool(forKey: migratedBack) { return }
 
         let allProviders: [AIProvider] = [.deepseek, .openai, .openAICompatible, .ollama, .googleAI]
         for provider in allProviders {
             let account = "apikey.\(provider.rawValue)"
-            if let existingKey = KeychainHelper.read(account: account), !existingKey.isEmpty {
-                _ = KeychainHelper.save(key: existingKey, account: account)
+            if let value = KeychainHelper.read(account: account), !value.isEmpty {
+                defaults.set(value, forKey: Self.apiKeyUDKey(for: provider))
+                _ = KeychainHelper.delete(account: account)
+                logi("反向迁移：\(provider.displayName) Key 从 Keychain → UserDefaults")
             }
         }
-        defaults.set(true, forKey: fixupKey)
-        logi("Keychain 访问权限已修复")
+        defaults.set(true, forKey: migratedBack)
     }
 
     // MARK: 自定义配置（OpenAI-Compatible & Ollama）
@@ -1376,7 +1361,10 @@ final class SettingsWindowController: NSObject {
 
     // Tab 1: 通用 — API 提供商 & Key
     private var providerPopup: NSPopUpButton?
-    private var apiKeyField: NSTextField?
+    private var apiKeyVisibleField: PasteTextField?   // 明文输入
+    private var apiKeyHiddenField: NSSecureTextField?  // 密文（默认显示）
+    private var apiKeyEyeButton: NSButton?
+    private var apiKeyVisible: Bool = false             // 当前是否明文
     private var customEndpointField: NSTextField?
     private var customModelField: NSTextField?
     private var providerDescLabel: NSTextField?
@@ -1537,15 +1525,47 @@ final class SettingsWindowController: NSObject {
             self.providerDescLabel = apiDesc
             y -= 20
 
-            let keyField = PasteTextField(frame: NSRect(x: 4, y: y, width: w - 8, height: 26))
-            keyField.placeholderString = (provider == .anthropic) ? "sk-ant-..." : "sk-..."
-            keyField.stringValue = settings.apiKey(for: provider) ?? ""
-            keyField.isBordered = true
-            keyField.bezelStyle = .roundedBezel
-            keyField.isEditable = true
-            keyField.isSelectable = true
-            v.addSubview(keyField)
-            apiKeyField = keyField
+            // API Key 输入行：密文字段 + 明文字段（叠放） + 小眼睛切换按钮
+            let keyRow = NSView(frame: NSRect(x: 4, y: y, width: w - 8, height: 26))
+            let fieldWid = w - 8 - 32  // 为眼睛按钮留 32pt
+
+            // 明文输入框（PasteTextField，支持 Cmd+V）
+            let visibleField = PasteTextField(frame: NSRect(x: 0, y: 0, width: fieldWid, height: 26))
+            visibleField.placeholderString = (provider == .anthropic) ? "sk-ant-..." : "sk-..."
+            visibleField.stringValue = settings.apiKey(for: provider) ?? ""
+            visibleField.isBordered = true
+            visibleField.bezelStyle = .roundedBezel
+            visibleField.isEditable = true
+            visibleField.isSelectable = true
+            visibleField.isHidden = true  // 默认隐藏（密文模式）
+            keyRow.addSubview(visibleField)
+
+            // 密文输入框（NSSecureTextField，默认显示）
+            let hiddenField = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: fieldWid, height: 26))
+            hiddenField.placeholderString = (provider == .anthropic) ? "sk-ant-..." : "sk-..."
+            hiddenField.stringValue = settings.apiKey(for: provider) ?? ""
+            hiddenField.isBordered = true
+            hiddenField.bezelStyle = .roundedBezel
+            hiddenField.isEditable = true
+            hiddenField.isSelectable = true
+            keyRow.addSubview(hiddenField)
+
+            // 小眼睛按钮
+            let eyeBtn = NSButton(frame: NSRect(x: fieldWid + 4, y: 1, width: 26, height: 24))
+            eyeBtn.bezelStyle = .regularSquare
+            eyeBtn.isBordered = false
+            eyeBtn.title = "👁"
+            eyeBtn.toolTip = "显示/隐藏 API Key"
+            eyeBtn.font = .systemFont(ofSize: 16)
+            eyeBtn.target = self
+            eyeBtn.action = #selector(toggleApiKeyVisibility(_:))
+            keyRow.addSubview(eyeBtn)
+
+            v.addSubview(keyRow)
+            apiKeyVisibleField = visibleField
+            apiKeyHiddenField = hiddenField
+            apiKeyEyeButton = eyeBtn
+            apiKeyVisible = false
             y -= 36
 
             let testBtn = NSButton(title: "测试连接", target: self, action: #selector(testAPIKey))
@@ -1933,13 +1953,43 @@ final class SettingsWindowController: NSObject {
 
     // MARK: - Actions
 
+    /// 切换 API Key 输入框的显隐（明文 ↔ 密文）
+    @objc private func toggleApiKeyVisibility(_ sender: NSButton) {
+        apiKeyVisible.toggle()
+        if apiKeyVisible {
+            // 切到明文：密文框内容同步到明文框
+            apiKeyVisibleField?.stringValue = apiKeyHiddenField?.stringValue ?? ""
+            apiKeyVisibleField?.isHidden = false
+            apiKeyHiddenField?.isHidden = true
+            apiKeyEyeButton?.title = "🔒"
+            apiKeyVisibleField?.window?.makeFirstResponder(apiKeyVisibleField)
+        } else {
+            // 切到密文：明文框内容同步到密文框
+            apiKeyHiddenField?.stringValue = apiKeyVisibleField?.stringValue ?? ""
+            apiKeyHiddenField?.isHidden = false
+            apiKeyVisibleField?.isHidden = true
+            apiKeyEyeButton?.title = "👁"
+            apiKeyHiddenField?.window?.makeFirstResponder(apiKeyHiddenField)
+        }
+    }
+
+    /// 获取当前显示的 API Key 文本（无论明文/密文模式）
+    private var activeApiKeyFieldValue: String {
+        if apiKeyVisible {
+            return apiKeyVisibleField?.stringValue ?? ""
+        } else {
+            return apiKeyHiddenField?.stringValue ?? ""
+        }
+    }
+
     @objc private func saveAllSettings() {
         let settings = SettingsManager.shared
 
         // API Key — 保存当前提供商的 Key
-        if let keyStr = apiKeyField?.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), !keyStr.isEmpty {
+        let keyStr = activeApiKeyFieldValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !keyStr.isEmpty {
             settings.setApiKey(keyStr, for: settings.apiProvider)
-        } else if let keyStr = apiKeyField?.stringValue, keyStr.isEmpty {
+        } else {
             // 清空 Key
             settings.setApiKey(nil, for: settings.apiProvider)
         }
@@ -2028,7 +2078,8 @@ final class SettingsWindowController: NSObject {
         let settings = SettingsManager.shared
 
         // 保存当前 Key 到当前提供商
-        if let currentKey = apiKeyField?.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), !currentKey.isEmpty {
+        let currentKey = activeApiKeyFieldValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !currentKey.isEmpty {
             settings.setApiKey(currentKey, for: settings.apiProvider)
         }
 
@@ -2059,8 +2110,7 @@ final class SettingsWindowController: NSObject {
     @objc private func testAPIKey() {
         let settings = SettingsManager.shared
         let provider = settings.apiProvider
-        guard let keyField = apiKeyField else { return }
-        let key = keyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = activeApiKeyFieldValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
             let a = NSAlert(); a.messageText = "提示"; a.informativeText = "请先输入 API Key。"
             a.alertStyle = .informational; a.addButton(withTitle: "确定")
