@@ -1620,6 +1620,8 @@ final class SettingsWindowController: NSObject {
         win.title = "\(APP_DISPLAY_NAME) 偏好设置"
         win.center()
         win.isReleasedWhenClosed = false
+        win.level = .floating
+        win.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
         let content = NSView(frame: NSRect(x: 0, y: 0, width: ww, height: hh))
 
@@ -1671,6 +1673,9 @@ final class SettingsWindowController: NSObject {
         win.contentView = content
         win.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        // 避免 API Key 输入框默认成为 first responder 并自动选中全部文本，
+        // 防止通用剪贴板（Handoff）意外把 Key 同步到其他设备。
+        win.makeFirstResponder(content)
         self.window = win
     }
 
@@ -2567,6 +2572,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             logi("首次运行，API Key 未配置")
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            NSApp.activate(ignoringOtherApps: true)
             SettingsWindowController.shared.show()
         }
 
