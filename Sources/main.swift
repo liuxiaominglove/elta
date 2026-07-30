@@ -1721,7 +1721,6 @@ final class SettingsWindowController: NSObject {
 
         providerCardHeight = y - 10
         let cardView = buildProviderCard(width: w - 36, provider: currentProvider)
-        cardView.frame = NSRect(x: 0, y: 0, width: w - 36, height: providerCardHeight)
         cardScroll.documentView = cardView
         self.providerCardView = cardView
 
@@ -1731,9 +1730,9 @@ final class SettingsWindowController: NSObject {
     /// 根据提供商构建动态配置卡片
     private func buildProviderCard(width w: CGFloat, provider: AIProvider) -> NSView {
         let settings = SettingsManager.shared
-        let cardHeight: CGFloat = 300
-        let v = NSView(frame: NSRect(x: 0, y: 0, width: w, height: cardHeight))
-        var y: CGFloat = cardHeight - 16
+        let workingHeight: CGFloat = 800
+        let v = NSView(frame: NSRect(x: 0, y: 0, width: w, height: workingHeight))
+        var y: CGFloat = workingHeight - 16
 
         // --- API Key 区域 ---
         if provider.needsAPIKey {
@@ -1895,11 +1894,22 @@ final class SettingsWindowController: NSObject {
         💡 提示：Key 仅保存在本地，不会上传到任何第三方服务器。
         切换提供商后需点击底部「保存并应用」才能生效。
         """)
-        infoLabel.frame = NSRect(x: 4, y: max(y - 50, 4), width: w - 8, height: 50)
+        let infoTop = max(y - 50, 20)
+        infoLabel.frame = NSRect(x: 4, y: infoTop, width: w - 8, height: 50)
         infoLabel.font = .systemFont(ofSize: 10)
         infoLabel.textColor = .secondaryLabelColor
         infoLabel.lineBreakMode = .byWordWrapping
         v.addSubview(infoLabel)
+
+        // 根据实际内容动态调整卡片高度，并整体下移内容，避免提示文字与列表重叠
+        let requiredHeight = infoTop + 50 + 16
+        let offset = workingHeight - requiredHeight
+        for subview in v.subviews {
+            var frame = subview.frame
+            frame.origin.y -= offset
+            subview.frame = frame
+        }
+        v.frame = NSRect(x: 0, y: 0, width: w, height: requiredHeight)
 
         return v
     }
@@ -2397,7 +2407,6 @@ final class SettingsWindowController: NSObject {
         guard let scrollView = providerCardView?.superview as? NSScrollView else { return }
         let cardWidth = scrollView.contentSize.width
         let newCard = buildProviderCard(width: cardWidth, provider: newProvider)
-        newCard.frame = NSRect(x: 0, y: 0, width: cardWidth, height: 300)
         scrollView.documentView = newCard
         self.providerCardView = newCard
     }
