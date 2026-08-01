@@ -103,7 +103,8 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
                                    configuration: config)
             wv.autoresizingMask = [.width, .height]
             wv.setValue(false, forKey: "drawsBackground")
-            wv.loadHTMLString(HTMLRenderer.render(markdown: markdown, originalText: originalText), baseURL: nil)
+            let isDark = NSApp.effectiveAppearance.name == .darkAqua
+            wv.loadHTMLString(HTMLRenderer.render(markdown: markdown, originalText: originalText, isDark: isDark), baseURL: nil)
             panel.contentView = wv
             panel.makeKeyAndOrderFront(nil)
 
@@ -112,6 +113,15 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
 
             // 安装全局 ESC 拦截，确保无论焦点在哪里都能关闭弹窗
             self.installEscTap()
+        }
+    }
+
+    func closeExistingPanel() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.panel?.close()
+            self.panel = nil
+            self.webView = nil
         }
     }
 
@@ -150,7 +160,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
 // MARK: - HTML 渲染器
 
 final class HTMLRenderer {
-    static func render(markdown: String, originalText: String) -> String {
+    static func render(markdown: String, originalText: String, isDark: Bool) -> String {
         var html = markdown
         // MD 标题 → HTML 标题
         for keyword in ["中文翻译", "重要词汇", "常用短语与习语", "核查"] {
@@ -170,23 +180,35 @@ final class HTMLRenderer {
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\n", with: "<br>")
 
+        let themeClass = isDark ? "dark" : "light"
         return """
         <!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
         <style>
             :root{color-scheme:light dark}*{box-sizing:border-box;margin:0;padding:0}
-            body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.7;color:#1d1d1f;padding:20px 24px;background:#fff}
-            @media(prefers-color-scheme:dark){body{color:#e5e5e7;background:#1c1c1e}.original-box{background:#1c1c1e;border-color:#3a3a3c;color:#e5e5e7}h2{color:#fff;border-bottom-color:#0a84ff}code{background:#3a3a3c;color:#ff9f0a}.footer{border-top-color:#3a3a3c}strong{color:#5eafff}}
-            .original-box{background:#e8f0fe;border:1px solid #b8d4fe;border-radius:10px;padding:14px 18px;margin-bottom:18px;font-size:15px;color:#1a3a6b;font-style:italic}
+            body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.7;padding:20px 24px}
+            body.light{color:#1d1d1f;background:#fff}
+            body.dark{color:#e5e5e7;background:#1c1c1e}
+            .original-box{border:1px solid;border-radius:10px;padding:14px 18px;margin-bottom:18px;font-size:15px;font-style:italic}
+            body.light .original-box{background:#e8f0fe;border-color:#b8d4fe;color:#1a3a6b}
+            body.dark .original-box{background:#1c1c1e;border-color:#3a3a3c;color:#e5e5e7}
             h2{font-size:17px;font-weight:600;margin:20px 0 12px;padding-bottom:8px;border-bottom:2px solid #0071e3}
-            code{background:#f0f0f2;padding:2px 6px;border-radius:4px;font-family:"SF Mono",Menlo,monospace;font-size:13px;color:#9b4d1c}
-            strong{color:#0071e3}
-            blockquote{background:#f9f9fb;border-left:4px solid #0071e3;padding:10px 16px;margin:8px 0 12px;border-radius:0 8px 8px 0;color:#3a3a3c;font-size:15px}
-            @media(prefers-color-scheme:dark){blockquote{background:#2c2c2e;border-left-color:#0a84ff;color:#c0c0c5}}
-            table{width:100%;border-collapse:collapse;margin:10px 0 16px;font-size:13px}th{background:#f5f5f7;padding:10px 12px;text-align:left;font-weight:600}td{padding:8px 12px;border-bottom:1px solid #e5e5e7;vertical-align:top}
-            @media(prefers-color-scheme:dark){th{background:#2c2c2e;color:#fff}td{border-color:#3a3a3c;color:#e5e5e7}}
-            p{margin:6px 0}ul,ol{margin:8px 0;padding-left:20px}li{margin:4px 0}.footer{margin-top:20px;padding-top:12px;border-top:1px solid #e5e5e7;font-size:11px;color:#86868b;text-align:center}
+            body.dark h2{color:#fff;border-bottom-color:#0a84ff}
+            code{padding:2px 6px;border-radius:4px;font-family:"SF Mono",Menlo,monospace;font-size:13px}
+            body.light code{background:#f0f0f2;color:#9b4d1c}
+            body.dark code{background:#3a3a3c;color:#ff9f0a}
+            body.light strong{color:#0071e3}
+            body.dark strong{color:#5eafff}
+            blockquote{border-left:4px solid;padding:10px 16px;margin:8px 0 12px;border-radius:0 8px 8px 0;font-size:15px}
+            body.light blockquote{background:#f9f9fb;border-left-color:#0071e3;color:#3a3a3c}
+            body.dark blockquote{background:#2c2c2e;border-left-color:#0a84ff;color:#c0c0c5}
+            table{width:100%;border-collapse:collapse;margin:10px 0 16px;font-size:13px}th{padding:10px 12px;text-align:left;font-weight:600}td{padding:8px 12px;border-bottom:1px solid;vertical-align:top}
+            body.light th{background:#f5f5f7;color:#1d1d1f}body.light td{border-color:#e5e5e7;color:#1d1d1f}
+            body.dark th{background:#2c2c2e;color:#fff}body.dark td{border-color:#3a3a3c;color:#e5e5e7}
+            p{margin:6px 0}ul,ol{margin:8px 0;padding-left:20px}li{margin:4px 0}.footer{margin-top:20px;padding-top:12px;border-top:1px solid;font-size:11px;text-align:center}
+            body.light .footer{border-top-color:#e5e5e7;color:#86868b}
+            body.dark .footer{border-top-color:#3a3a3c;color:#8e8e93}
         </style>
-        </head><body>
+        </head><body class="\(themeClass)">
         <div class="original-box"><strong>📝 原文：</strong><br>\(escaped)</div>
         \(html)
         <div class="footer">Powered by \(SettingsManager.shared.apiProvider.shortName) AI · ELTA — 截图即译，精读利器</div>

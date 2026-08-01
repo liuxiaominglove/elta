@@ -55,6 +55,8 @@ final class TranslationPipeline {
 
     func start() {
         logi("===== 翻译流水线开始 =====")
+        // 关闭已有的翻译弹窗，避免截图或划词时冲突
+        ResultWindowController.shared.closeExistingPanel()
         primePermissionsIfNeeded()
         ScreenshotEngine.shared.start { [weak self] rect, cgImage in
             guard let cgImage = cgImage, rect != .zero else {
@@ -199,6 +201,8 @@ final class TranslationPipeline {
     /// 划词翻译：读取选中文本 → 直接翻译（跳过截图+OCR）
     func startTextTranslation() {
         logi("===== 划词翻译流水线开始 =====")
+        // 关闭已有的翻译弹窗，避免连续划词/截图时冲突
+        ResultWindowController.shared.closeExistingPanel()
         primePermissionsIfNeeded()
 
         // 0. 记录触发时的鼠标位置（用于弹窗左右判断）

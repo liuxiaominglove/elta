@@ -57,11 +57,22 @@ jobs:
           codesign --force --sign - build/ELTA.app
         shell: bash
       
+      - name: Install create-dmg
+        run: npm install -g create-dmg
+        shell: bash
+
       - name: Create DMG
         run: |
           APP_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
-          hdiutil create -volname "ELTA" -srcfolder build/ELTA.app -ov -format UDZO "build/ELTA(v${APP_VERSION}).dmg"
-          echo "DMG: ELTA(v${APP_VERSION}).dmg"
+          # 生成带拖拽式安装界面的 DMG（包含 Applications 快捷方式）
+          create-dmg --overwrite build/ELTA.app build/ || true
+          # create-dmg 默认输出 "ELTA <version>.dmg"，重命名为统一格式
+          GENERATED="build/ELTA ${APP_VERSION}.dmg"
+          TARGET="build/ELTA(v${APP_VERSION}).dmg"
+          if [ -f "$GENERATED" ]; then
+            mv "$GENERATED" "$TARGET"
+          fi
+          echo "DMG: $TARGET"
           ls -lh build/*.dmg
         shell: bash
       
