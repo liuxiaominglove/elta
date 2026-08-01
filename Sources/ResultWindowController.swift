@@ -175,7 +175,7 @@ final class HTMLRenderer {
         <style>
             :root{color-scheme:light dark}*{box-sizing:border-box;margin:0;padding:0}
             body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.7;color:#1d1d1f;padding:20px 24px;background:#fff}
-            @media(prefers-color-scheme:dark){body{color:#e5e5e7;background:#1c1c1e}.original-box{background:#1e3a5f;border-color:#2d5aa0;color:#abd5ff}h2{color:#fff;border-bottom-color:#0a84ff}code{background:#3a3a3c;color:#ff9f0a}.footer{border-top-color:#3a3a3c}strong{color:#5eafff}}
+            @media(prefers-color-scheme:dark){body{color:#e5e5e7;background:#1c1c1e}.original-box{background:#1c1c1e;border-color:#3a3a3c;color:#e5e5e7}h2{color:#fff;border-bottom-color:#0a84ff}code{background:#3a3a3c;color:#ff9f0a}.footer{border-top-color:#3a3a3c}strong{color:#5eafff}}
             .original-box{background:#e8f0fe;border:1px solid #b8d4fe;border-radius:10px;padding:14px 18px;margin-bottom:18px;font-size:15px;color:#1a3a6b;font-style:italic}
             h2{font-size:17px;font-weight:600;margin:20px 0 12px;padding-bottom:8px;border-bottom:2px solid #0071e3}
             code{background:#f0f0f2;padding:2px 6px;border-radius:4px;font-family:"SF Mono",Menlo,monospace;font-size:13px;color:#9b4d1c}
