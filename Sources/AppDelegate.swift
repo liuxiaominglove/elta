@@ -113,10 +113,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // 在快捷键事件上下文中立即捕获前台应用的 PID，
                 // 避免 dispatch async 之后焦点已转移到自身导致读取失败
                 let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+                // 如果当前前台应用是 ELTA 自己（比如旧弹窗在最前），
+                // 传 nil 给划词翻译，让它回退到系统全局聚焦元素读取文本。
+                let ownPID = pid_t(ProcessInfo.processInfo.processIdentifier)
+                let effectivePID: pid_t? = (frontPID == ownPID) ? nil : frontPID
                 DispatchQueue.main.async {
                     if hkID.id == 10 || hkID.id == 11 {
                         // 划词翻译
-                        TranslationPipeline.shared.selectionSourcePID = frontPID
+                        TranslationPipeline.shared.selectionSourcePID = effectivePID
                         TranslationPipeline.shared.startTextTranslation()
                     } else {
                         // 截图翻译

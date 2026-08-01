@@ -201,8 +201,6 @@ final class TranslationPipeline {
     /// 划词翻译：读取选中文本 → 直接翻译（跳过截图+OCR）
     func startTextTranslation() {
         logi("===== 划词翻译流水线开始 =====")
-        // 关闭已有的翻译弹窗，避免连续划词/截图时冲突
-        ResultWindowController.shared.closeExistingPanel()
         primePermissionsIfNeeded()
 
         // 0. 记录触发时的鼠标位置（用于弹窗左右判断）
@@ -212,8 +210,15 @@ final class TranslationPipeline {
         usleep(300_000)  // 300ms
 
         // 2. 优先使用 Accessibility API 读取选中文本（最可靠）
-        //    传入快捷键触发时捕获的前台应用 PID，确保从正确的应用读取焦点元素
-        var selectedText: String? = getSelectedTextViaAccessibility(pid: selectionSourcePID)
+        //    过滤掉 ELTA 自己的 PID：当旧弹窗在前台时，frontmost 可能是 ELTA 自己，
+        //    此时应回退到系统全局聚焦元素，避免从弹窗里读取空文本。
+        let effectivePID: pid_t?
+        if let pid = selectionSourcePID, pid != pid_t(ProcessInfo.processInfo.processIdentifier) {
+            effectivePID = pid
+        } else {
+            effectivePID = nil
+        }
+        var selectedText: String? = getSelectedTextViaAccessibility(pid: effectivePID)
 
         // 3. Accessibility 失败时，兜底使用 Cmd+C + 剪贴板
         if selectedText == nil || selectedText!.isEmpty {
@@ -225,6 +230,9 @@ final class TranslationPipeline {
             showError("未能获取选中文本。\n可能原因：\n1. 未选中文本\n2. 未授予【辅助功能】权限（系统设置 → 隐私与安全性 → 辅助功能）")
             return
         }
+
+        // 4. 成功获取到文本后再关闭旧弹窗，避免关闭弹窗导致焦点丢失而读不到文本
+        ResultWindowController.shared.closeExistingPanel()
 
         logi("划词获取文本: \(text.prefix(100))...")
         showTextLoading()
