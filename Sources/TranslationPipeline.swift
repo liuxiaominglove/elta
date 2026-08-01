@@ -400,8 +400,8 @@ final class TranslationPipeline {
             alert.alertStyle = .informational
             alert.addButton(withTitle: "确定")
             // 确保弹窗在所有空间（含全屏）的顶层显示
-            alert.window.level = .popUpMenu
-            alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .moveToActiveSpace]
+            alert.window.level = .floating
+            alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             NSApp.activate(ignoringOtherApps: true)
             alert.runModal()
             NSApp.deactivate()
@@ -421,8 +421,8 @@ final class TranslationPipeline {
             alert.alertStyle = .warning
             alert.addButton(withTitle: "确定")
             // 确保弹窗在所有空间（含全屏）的顶层显示
-            alert.window.level = .popUpMenu
-            alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .moveToActiveSpace]
+            alert.window.level = .floating
+            alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             NSApp.activate(ignoringOtherApps: true)
             alert.runModal()
             NSApp.deactivate()
