@@ -55,8 +55,11 @@ final class TranslationPipeline {
 
     func start() {
         logi("===== 翻译流水线开始 =====")
-        // 关闭已有的翻译弹窗，避免截图或划词时冲突
-        ResultWindowController.shared.closeExistingPanel()
+        // 检查是否已有翻译弹窗
+        guard !ResultWindowController.shared.isPanelVisible else {
+            showAlert("请先关闭上一个翻译弹窗", "关闭后即可开始新翻译。\n按 ESC 或点击弹窗左上角关闭按钮即可。")
+            return
+        }
         primePermissionsIfNeeded()
         ScreenshotEngine.shared.start { [weak self] rect, cgImage in
             guard let cgImage = cgImage, rect != .zero else {
@@ -201,6 +204,11 @@ final class TranslationPipeline {
     /// 划词翻译：读取选中文本 → 直接翻译（跳过截图+OCR）
     func startTextTranslation() {
         logi("===== 划词翻译流水线开始 =====")
+        // 检查是否已有翻译弹窗
+        guard !ResultWindowController.shared.isPanelVisible else {
+            showAlert("请先关闭上一个翻译弹窗", "关闭后即可开始新翻译。\n按 ESC 或点击弹窗左上角关闭按钮即可。")
+            return
+        }
         primePermissionsIfNeeded()
 
         // 0. 记录触发时的鼠标位置（用于弹窗左右判断）
@@ -230,9 +238,6 @@ final class TranslationPipeline {
             showError("未能获取选中文本。\n可能原因：\n1. 未选中文本\n2. 未授予【辅助功能】权限（系统设置 → 隐私与安全性 → 辅助功能）")
             return
         }
-
-        // 4. 成功获取到文本后再关闭旧弹窗，避免关闭弹窗导致焦点丢失而读不到文本
-        ResultWindowController.shared.closeExistingPanel()
 
         logi("划词获取文本: \(text.prefix(100))...")
         showTextLoading()
@@ -383,20 +388,41 @@ final class TranslationPipeline {
         loadingPanel = panel
     }
 
+    private func showAlert(_ title: String, _ message: String) {
+        DispatchQueue.main.async {
+            // 临时切换激活策略为 regular，确保在全屏 Space 中能获取焦点
+            let currentPolicy = NSApp.activationPolicy()
+            if currentPolicy != .regular { NSApp.setActivationPolicy(.regular) }
+
+            let alert = NSAlert()
+            alert.messageText = title
+            alert.informativeText = message
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "确定")
+            // 确保弹窗在所有空间（含全屏）的顶层显示
+            alert.window.level = .popUpMenu
+            alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .moveToActiveSpace]
+            NSApp.activate(ignoringOtherApps: true)
+            alert.runModal()
+            NSApp.deactivate()
+            if currentPolicy != .regular { NSApp.setActivationPolicy(currentPolicy) }
+        }
+    }
+
     private func showError(_ message: String) {
         DispatchQueue.main.async {
             // 临时切换激活策略为 regular，确保在全屏 Space 中能获取焦点
             let currentPolicy = NSApp.activationPolicy()
             if currentPolicy != .regular { NSApp.setActivationPolicy(.regular) }
-            usleep(80_000)  // 等待系统处理策略切换
 
             let alert = NSAlert()
             alert.messageText = "翻译失败"
             alert.informativeText = message
             alert.alertStyle = .warning
             alert.addButton(withTitle: "确定")
-            alert.window.level = .screenSaver
-            alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            // 确保弹窗在所有空间（含全屏）的顶层显示
+            alert.window.level = .popUpMenu
+            alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .moveToActiveSpace]
             NSApp.activate(ignoringOtherApps: true)
             alert.runModal()
             NSApp.deactivate()

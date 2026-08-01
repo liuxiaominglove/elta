@@ -29,6 +29,10 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
     static let shared = ResultWindowController()
 
     private var panel: NSPanel?
+
+    /// 供外部查询：当前是否有翻译结果弹窗正在显示
+    var isPanelVisible: Bool { panel != nil }
+
     private var webView: WKWebView?
     private var escEventTap: CFMachPort?
 
