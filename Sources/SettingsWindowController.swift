@@ -42,6 +42,13 @@ final class SettingsWindowController: NSObject {
     private var recordedSelectionModifiers: Int = 0
     private var hotkeyMonitor: Any?
 
+    // 关闭翻译面板快捷键
+    private var closePanelHotkeyRecordBtn: NSButton?
+    private var closePanelHotkeyStatusLabel: NSTextField?
+    private var isRecordingClosePanelHotkey = false
+    private var recordedClosePanelKeyCode: Int = 0
+    private var recordedClosePanelModifiers: Int = 0
+
     // Tab 3: 翻译模板
     private var templateTextView: NSTextView?
     private var templatePreviewWebView: WKWebView?
@@ -429,46 +436,46 @@ final class SettingsWindowController: NSObject {
         v.addSubview(selStatus)
         selectionHotkeyStatusLabel = selStatus
 
-        // ---- 3. ESC 关闭翻译面板 ----
+        // ---- 3. 关闭翻译面板 ----
         let escY = selY - 150
         let escTitle = NSTextField(labelWithString: "📋 关闭翻译面板")
         escTitle.frame = NSRect(x: 20, y: escY, width: 300, height: 22)
         escTitle.font = .systemFont(ofSize: 15, weight: .semibold)
         v.addSubview(escTitle)
 
-        let escDesc = NSTextField(labelWithString: "翻译浮动面板显示时，按下 ESC 键即可关闭")
+        let escDesc = NSTextField(labelWithString: "翻译浮动面板显示时，按下自定义快捷键即可关闭")
         escDesc.frame = NSRect(x: 20, y: escY - 24, width: w - 40, height: 16)
         escDesc.font = .systemFont(ofSize: 11)
         escDesc.textColor = .secondaryLabelColor
         v.addSubview(escDesc)
 
-        let escKeyBox = NSTextField(labelWithString: "    Esc    ")
-        escKeyBox.frame = NSRect(x: 20, y: escY - 65, width: 80, height: 32)
-        escKeyBox.font = .systemFont(ofSize: 18, weight: .medium)
-        escKeyBox.isBezeled = true
-        escKeyBox.isEditable = false
-        escKeyBox.isSelectable = false
-        escKeyBox.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5)
-        escKeyBox.alignment = .center
-        v.addSubview(escKeyBox)
+        let closePanelBtn = NSButton(title: "  \(SettingsManager.shared.closePanelHotkeyDisplay)  ", target: self, action: #selector(startRecordingClosePanelHotkey))
+        closePanelBtn.frame = NSRect(x: 20, y: escY - 65, width: 180, height: 32)
+        closePanelBtn.font = .systemFont(ofSize: 18, weight: .medium)
+        closePanelBtn.bezelStyle = .rounded
+        v.addSubview(closePanelBtn)
+        closePanelHotkeyRecordBtn = closePanelBtn
 
-        let escFixed = NSTextField(labelWithString: "系统内置，不可修改")
-        escFixed.frame = NSRect(x: 112, y: escY - 56, width: 200, height: 20)
-        escFixed.font = .systemFont(ofSize: 12)
-        escFixed.textColor = .tertiaryLabelColor
-        v.addSubview(escFixed)
+        let escStatus = NSTextField(labelWithString: "点击上方按钮开始录制新快捷键")
+        escStatus.frame = NSRect(x: 210, y: escY - 60, width: w - 230, height: 30)
+        escStatus.font = .systemFont(ofSize: 12)
+        escStatus.textColor = .secondaryLabelColor
+        escStatus.lineBreakMode = .byWordWrapping
+        v.addSubview(escStatus)
+        closePanelHotkeyStatusLabel = escStatus
 
         // ---- 统一提示 ----
         let infoLabel = NSTextField(labelWithString: """
         💡 提示：
         • 截图翻译：任意位置按下快捷键 → 框选区域 → 自动翻译
         • 划词翻译：先选中文字 → 按下快捷键 → 自动翻译（更快捷）
-        • 关闭面板：翻译浮动面板显示时，按 ESC 键即可关闭
-        • 必须组合键：⌘Command、⌥Option、⌃Control、⇧Shift + 任意按键（单个字母无效）
+        • 关闭面板：翻译浮动面板显示时，按下自定义快捷键即可关闭
+        • 默认组合键：⌃Control、⇧Shift + 任意按键（单个字母无效）
+        • 关闭面板允许单独按 ESC，也可以设置为 Control/Shift/Command + 任意键
         • 红色代表未保存，点击「保存并应用」立即生效
         • 录制时若检测到与系统快捷键冲突，会给出黄色提醒
         """)
-        infoLabel.frame = NSRect(x: 20, y: escY - 190, width: w - 40, height: 100)
+        infoLabel.frame = NSRect(x: 20, y: escY - 210, width: w - 40, height: 120)
         infoLabel.font = .systemFont(ofSize: 11)
         infoLabel.textColor = .secondaryLabelColor
         infoLabel.lineBreakMode = .byWordWrapping
@@ -628,6 +635,81 @@ final class SettingsWindowController: NSObject {
         selectionHotkeyStatusLabel?.stringValue = "录制超时，请重试"
     }
 
+    // MARK: - 关闭翻译面板快捷键录制
+
+    @objc private func startRecordingClosePanelHotkey() {
+        guard !isRecordingClosePanelHotkey, !isRecordingHotkey, !isRecordingSelectionHotkey else { return }
+        isRecordingClosePanelHotkey = true
+        recordedClosePanelKeyCode = 0
+        recordedClosePanelModifiers = 0
+
+        closePanelHotkeyRecordBtn?.title = "  ... 按下快捷键 ...  "
+        closePanelHotkeyRecordBtn?.bezelColor = .systemOrange
+        closePanelHotkeyStatusLabel?.stringValue = "请按下快捷键（允许单独按 ESC）..."
+
+        hotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, self.isRecordingClosePanelHotkey else { return event }
+            self.recordClosePanelHotkey(event: event)
+            return nil
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+            guard let self = self, self.isRecordingClosePanelHotkey else { return }
+            self.cancelClosePanelRecording()
+        }
+    }
+
+    private func recordClosePanelHotkey(event: NSEvent) {
+        let carbonModifiers = cocoaToCarbonModifiers(event.modifierFlags)
+        let keyCode = Int(event.keyCode)
+
+        // 关闭面板允许单独 ESC；其他按键仍必须带修饰键
+        guard keyCode == 0x35 || hotkeyHasRequiredModifiers(carbonModifiers) else {
+            cancelClosePanelRecording()
+            closePanelHotkeyStatusLabel?.stringValue = "❌ 单个字母不能作为快捷键\n请同时按住 ⌘ / ⌥ / ⌃ / ⇧ 之一，或直接按 ESC"
+            closePanelHotkeyRecordBtn?.bezelColor = .systemRed
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                self?.closePanelHotkeyRecordBtn?.bezelColor = nil
+            }
+            return
+        }
+
+        recordedClosePanelKeyCode = keyCode
+        recordedClosePanelModifiers = carbonModifiers
+        isRecordingClosePanelHotkey = false
+
+        if let monitor = hotkeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            hotkeyMonitor = nil
+        }
+
+        let display = hotkeyDisplayString(keyCode: recordedClosePanelKeyCode, modifiers: recordedClosePanelModifiers)
+        closePanelHotkeyRecordBtn?.title = "    \(display)    "
+        closePanelHotkeyRecordBtn?.bezelColor = .systemGreen
+        var status = "✅ 已录制：\(display)\n点击「保存并应用」使快捷键生效"
+        if let conflict = checkSystemHotkeyConflict(modifiers: recordedClosePanelModifiers, keyCode: recordedClosePanelKeyCode) {
+            status += "\n⚠️ 可能与系统快捷键冲突：\(conflict)"
+            closePanelHotkeyRecordBtn?.bezelColor = .systemOrange
+        }
+        closePanelHotkeyStatusLabel?.stringValue = status
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.closePanelHotkeyRecordBtn?.bezelColor = nil
+        }
+    }
+
+    private func cancelClosePanelRecording() {
+        isRecordingClosePanelHotkey = false
+        if let monitor = hotkeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            hotkeyMonitor = nil
+        }
+        let display = SettingsManager.shared.closePanelHotkeyDisplay
+        closePanelHotkeyRecordBtn?.title = "    \(display)    "
+        closePanelHotkeyRecordBtn?.bezelColor = nil
+        closePanelHotkeyStatusLabel?.stringValue = "录制超时，请重试"
+    }
+
     // MARK: - Tab 3: 翻译模板
 
     private func buildTemplateTab(size: NSSize) -> NSView {
@@ -776,6 +858,13 @@ final class SettingsWindowController: NSObject {
             settings.selectionHotkeyDisplay = hotkeyDisplayString(keyCode: recordedSelectionKeyCode, modifiers: recordedSelectionModifiers)
         }
 
+        // 关闭翻译面板快捷键
+        if recordedClosePanelKeyCode != 0 {
+            settings.closePanelHotkeyKeyCode = recordedClosePanelKeyCode
+            settings.closePanelHotkeyModifiers = recordedClosePanelModifiers
+            settings.closePanelHotkeyDisplay = hotkeyDisplayString(keyCode: recordedClosePanelKeyCode, modifiers: recordedClosePanelModifiers)
+        }
+
         // 重新注册所有快捷键
         DispatchQueue.main.async {
             (NSApp.delegate as? AppDelegate)?.reregisterHotkey()
@@ -805,25 +894,32 @@ final class SettingsWindowController: NSObject {
         let settings = SettingsManager.shared
         settings.systemPrompt = settings.defaultPrompt
         settings.hotkeyKeyCode = DEFAULT_HOTKEY_KEYCODE
-        settings.hotkeyModifiers = Int(cmdKey)
-        settings.hotkeyDisplay = "⌘T"
+        settings.hotkeyModifiers = Int(controlKey)
+        settings.hotkeyDisplay = "⌃T"
         settings.selectionHotkeyKeyCode = DEFAULT_SELECTION_HOTKEY_KEYCODE
-        settings.selectionHotkeyModifiers = Int(cmdKey | shiftKey)
-        settings.selectionHotkeyDisplay = "⇧⌘T"
+        settings.selectionHotkeyModifiers = Int(controlKey | shiftKey)
+        settings.selectionHotkeyDisplay = "⇧⌃T"
+        settings.closePanelHotkeyKeyCode = 0x35
+        settings.closePanelHotkeyModifiers = 0
+        settings.closePanelHotkeyDisplay = "Esc"
 
         // 更新 UI
         templateTextView?.string = settings.defaultPrompt
         templatePreviewWebView?.loadHTMLString(templatePreviewHTML(), baseURL: nil)
-        hotkeyRecordBtn?.title = "    ⌘T    "
-        hotkeyStatusLabel?.stringValue = "已恢复默认快捷键 ⌘T"
-        selectionHotkeyRecordBtn?.title = "    ⇧⌘T    "
-        selectionHotkeyStatusLabel?.stringValue = "已恢复默认快捷键 ⇧⌘T"
+        hotkeyRecordBtn?.title = "    ⌃T    "
+        hotkeyStatusLabel?.stringValue = "已恢复默认快捷键 ⌃T"
+        selectionHotkeyRecordBtn?.title = "    ⇧⌃T    "
+        selectionHotkeyStatusLabel?.stringValue = "已恢复默认快捷键 ⇧⌃T"
+        closePanelHotkeyRecordBtn?.title = "    Esc    "
+        closePanelHotkeyStatusLabel?.stringValue = "已恢复默认快捷键 Esc"
 
         // 清除录制的临时值
         recordedKeyCode = 0
         recordedModifiers = 0
         recordedSelectionKeyCode = 0
         recordedSelectionModifiers = 0
+        recordedClosePanelKeyCode = 0
+        recordedClosePanelModifiers = 0
     }
 
     // MARK: - 提供商切换

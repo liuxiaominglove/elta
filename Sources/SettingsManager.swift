@@ -20,6 +20,10 @@ final class SettingsManager {
         static let selectionHotkeyKeyCode  = "snaptranslate.selectionHotkeyKeyCode"
         static let selectionHotkeyModifiers = "snaptranslate.selectionHotkeyModifiers"
         static let selectionHotkeyDisplay  = "snaptranslate.selectionHotkeyDisplay"
+        // 关闭翻译面板快捷键
+        static let closePanelHotkeyKeyCode   = "snaptranslate.closePanelHotkeyKeyCode"
+        static let closePanelHotkeyModifiers = "snaptranslate.closePanelHotkeyModifiers"
+        static let closePanelHotkeyDisplay   = "snaptranslate.closePanelHotkeyDisplay"
         static let customEndpoint   = "snaptranslate.customEndpoint"
         static let customModel      = "snaptranslate.customModel"
         static let ollamaModel      = "snaptranslate.ollamaModel"
@@ -168,6 +172,20 @@ final class SettingsManager {
     var selectionHotkeyDisplay: String {
         get { defaults.string(forKey: Keys.selectionHotkeyDisplay) ?? "⇧⌃T" }
         set { defaults.set(newValue, forKey: Keys.selectionHotkeyDisplay) }
+    }
+
+    // 关闭翻译面板快捷键（默认 ESC，keyCode 0x35，无修饰键）
+    var closePanelHotkeyKeyCode: Int {
+        get { defaults.integer(forKey: Keys.closePanelHotkeyKeyCode) == 0 ? 0x35 : defaults.integer(forKey: Keys.closePanelHotkeyKeyCode) }
+        set { defaults.set(newValue, forKey: Keys.closePanelHotkeyKeyCode) }
+    }
+    var closePanelHotkeyModifiers: Int {
+        get { defaults.integer(forKey: Keys.closePanelHotkeyModifiers) }
+        set { defaults.set(newValue, forKey: Keys.closePanelHotkeyModifiers) }
+    }
+    var closePanelHotkeyDisplay: String {
+        get { defaults.string(forKey: Keys.closePanelHotkeyDisplay) ?? "Esc" }
+        set { defaults.set(newValue, forKey: Keys.closePanelHotkeyDisplay) }
     }
 
     // MARK: 窗口

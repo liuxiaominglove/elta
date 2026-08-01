@@ -1,5 +1,6 @@
 import Cocoa
 import WebKit
+import Carbon
 
 // MARK: - 可复制的 WebView（修复 .accessory 应用缺少 Edit 菜单导致 Cmd+C/A/V 无效）
 
@@ -36,7 +37,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
     private var webView: WKWebView?
     private var escEventTap: CFMachPort?
 
-    /// 安装全局 ESC 事件拦截（CGEventTap），翻译弹窗存在期间拦截所有 ESC 按下
+    /// 安装全局关闭面板事件拦截（CGEventTap），翻译弹窗存在期间拦截用户自定义的关闭快捷键
     private func installEscTap() {
         guard escEventTap == nil else { return }
         let callback: CGEventTapCallBack = { (proxy, type, event, info) -> Unmanaged<CGEvent>? in
@@ -45,11 +46,27 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             guard ctrl.panel != nil else {
                 return Unmanaged.passRetained(event)
             }
-            // 仅拦截 ESC（keyCode = 53），其他按键正常放行
+            let settings = SettingsManager.shared
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-            if keyCode != 53 {
+            let expectedKeyCode = Int64(settings.closePanelHotkeyKeyCode)
+            if keyCode != expectedKeyCode {
                 return Unmanaged.passRetained(event)
             }
+
+            let expectedModifiers = settings.closePanelHotkeyModifiers
+            // ESC 默认无修饰键，直接匹配；组合键需要比较 modifiers
+            if expectedModifiers != 0 {
+                let flags = event.flags
+                var actualModifiers = 0
+                if flags.contains(.maskCommand) { actualModifiers |= Int(cmdKey) }
+                if flags.contains(.maskShift) { actualModifiers |= Int(shiftKey) }
+                if flags.contains(.maskControl) { actualModifiers |= Int(controlKey) }
+                if flags.contains(.maskAlternate) { actualModifiers |= Int(optionKey) }
+                if actualModifiers != expectedModifiers {
+                    return Unmanaged.passRetained(event)
+                }
+            }
+
             DispatchQueue.main.async {
                 ctrl.panel?.close()
             }
