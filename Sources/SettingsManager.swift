@@ -145,14 +145,14 @@ final class SettingsManager {
     var hotkeyModifiers: Int {
         get {
             let v = defaults.integer(forKey: Keys.hotkeyModifiers)
-            return v == 0 ? Int(cmdKey) : v
+            return v == 0 ? Int(controlKey) : v
         }
         set { defaults.set(newValue, forKey: Keys.hotkeyModifiers) }
     }
 
-    /// 快捷键的可读描述（如 "⌘T"）
+    /// 快捷键的可读描述（如 "⌃T"）
     var hotkeyDisplay: String {
-        get { defaults.string(forKey: Keys.hotkeyDisplay) ?? "⌘T" }
+        get { defaults.string(forKey: Keys.hotkeyDisplay) ?? "⌃T" }
         set { defaults.set(newValue, forKey: Keys.hotkeyDisplay) }
     }
 
@@ -162,11 +162,11 @@ final class SettingsManager {
         set { defaults.set(newValue, forKey: Keys.selectionHotkeyKeyCode) }
     }
     var selectionHotkeyModifiers: Int {
-        get { defaults.integer(forKey: Keys.selectionHotkeyModifiers) == 0 ? Int(cmdKey | shiftKey) : defaults.integer(forKey: Keys.selectionHotkeyModifiers) }
+        get { defaults.integer(forKey: Keys.selectionHotkeyModifiers) == 0 ? Int(controlKey | shiftKey) : defaults.integer(forKey: Keys.selectionHotkeyModifiers) }
         set { defaults.set(newValue, forKey: Keys.selectionHotkeyModifiers) }
     }
     var selectionHotkeyDisplay: String {
-        get { defaults.string(forKey: Keys.selectionHotkeyDisplay) ?? "⇧⌘T" }
+        get { defaults.string(forKey: Keys.selectionHotkeyDisplay) ?? "⇧⌃T" }
         set { defaults.set(newValue, forKey: Keys.selectionHotkeyDisplay) }
     }
 

@@ -64,12 +64,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                       GetApplicationEventTarget(), 0, &hotkeyRef)
         if s1 != noErr {
             hotkeyID1.id = 2
-            let fbStatus = RegisterEventHotKey(0x78, UInt32(cmdKey), hotkeyID1,
+            let fbStatus = RegisterEventHotKey(0x78, UInt32(controlKey), hotkeyID1,
                                                 GetApplicationEventTarget(), 0, &hotkeyRef)
             if fbStatus == noErr {
-                settings.hotkeyKeyCode = 0x78; settings.hotkeyModifiers = Int(cmdKey)
-                settings.hotkeyDisplay = "⌘F2"
-                logi("截图快捷键降级为 Cmd+F2")
+                settings.hotkeyKeyCode = 0x78; settings.hotkeyModifiers = Int(controlKey)
+                settings.hotkeyDisplay = "⌃F2"
+                logi("截图快捷键降级为 Ctrl+F2")
             } else { loge("截图快捷键注册失败") }
         } else {
             settings.hotkeyDisplay = hotkeyDisplayString(keyCode: keyCode, modifiers: modifiers)
@@ -86,15 +86,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settings.selectionHotkeyDisplay = hotkeyDisplayString(keyCode: selKeyCode, modifiers: selMods)
             logi("划词快捷键: \(settings.selectionHotkeyDisplay)")
         } else {
-            // 降级：Cmd+Shift+F2
+            // 降级：Ctrl+Shift+F2
             hotkeyID10.id = 11
-            let fb2 = RegisterEventHotKey(0x78, UInt32(cmdKey | shiftKey), hotkeyID10,
+            let fb2 = RegisterEventHotKey(0x78, UInt32(controlKey | shiftKey), hotkeyID10,
                                            GetApplicationEventTarget(), 0, &selectionHotkeyRef)
             if fb2 == noErr {
                 settings.selectionHotkeyKeyCode = 0x78
-                settings.selectionHotkeyModifiers = Int(cmdKey | shiftKey)
-                settings.selectionHotkeyDisplay = "⇧⌘F2"
-                logi("划词快捷键降级为 ⇧⌘F2")
+                settings.selectionHotkeyModifiers = Int(controlKey | shiftKey)
+                settings.selectionHotkeyDisplay = "⇧⌃F2"
+                logi("划词快捷键降级为 ⇧⌃F2")
             } else { loge("划词快捷键注册失败") }
         }
 
