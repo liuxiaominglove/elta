@@ -69,13 +69,18 @@ final class TranslationPipeline {
             self?.showLoading()
 
             DispatchQueue.global(qos: .userInitiated).async {
-                // OCR（直接传原始 CGImage，不做 NSImage 包装）
-                logi("[Step 2] OCR 识别...")
-                guard let text = OCREngine.shared.recognize(cgImage: cgImage) else {
+                // OCR（含坐标，用于表格检测与还原）
+                logi("[Step 2] OCR 识别（含坐标）...")
+                guard let blocks = OCREngine.shared.recognizeWithPositions(cgImage: cgImage), !blocks.isEmpty else {
                     self?.hideLoading()
                     self?.showError("OCR 未能识别到文字。\n请确认框选区域包含清晰文字，且文字不过小/模糊。")
                     return
                 }
+
+                // 表格检测：OCR 坐标 → Markdown 表格（或纯文本）
+                let text = TableExtractor.process(blocks: blocks)
+                let isTable = text.contains("| -")
+                logi("表格检测: \(isTable ? "是表格" : "纯文本"), \(blocks.count) 块文本")
 
                 // 翻译
                 logi("[Step 3] AI 翻译...")
@@ -242,9 +247,15 @@ final class TranslationPipeline {
         logi("划词获取文本: \(text.prefix(100))...")
         showTextLoading()
 
-        // 4. 直接翻译
+        // 4. 表格检测：Tab 分隔符（Excel/Sheets）→ Markdown 表格
+        let processedText = TableExtractor.detectAndConvertTabSeparated(text)
+        if processedText != text {
+            logi("划词翻译: 检测到 Tab 分隔，已转为 Markdown 表格")
+        }
+
+        // 5. 直接翻译
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let result = TranslationEngine.shared.translate(text: text) else {
+            guard let result = TranslationEngine.shared.translate(text: processedText) else {
                 self?.hideLoading()
                 self?.showError("AI 翻译失败。\n选中文本：\n\(text.prefix(200))")
                 return

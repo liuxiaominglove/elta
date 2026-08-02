@@ -189,6 +189,10 @@ final class HTMLRenderer {
         }
         html = html.replacingOccurrences(of: #"\*\*(.+?)\*\*"#, with: "<strong>$1</strong>", options: .regularExpression)
         html = html.replacingOccurrences(of: "`([^`]+)`", with: "<code>$1</code>", options: .regularExpression)
+
+        // MD 表格 → HTML 表格（在换行处理前，因为表格是多行的）
+        html = Self.convertMarkdownTables(in: html)
+
         html = html.replacingOccurrences(of: "\n\n", with: "</p><p>")
         html = html.replacingOccurrences(of: "\n", with: "<br>")
         html = "<p>" + html + "</p>"
@@ -235,5 +239,100 @@ final class HTMLRenderer {
         <div class="footer">Powered by \(SettingsManager.shared.apiProvider.shortName) AI · ELTA — 截图即译，精读利器</div>
         </body></html>
         """
+    }
+
+    // MARK: - Markdown 表格 → HTML 表格
+
+    /// 在文本中检测 Markdown 表格块并转为 HTML <table>
+    private static func convertMarkdownTables(in html: String) -> String {
+        let lines = html.components(separatedBy: "\n")
+        var result: [String] = []
+        var i = 0
+
+        while i < lines.count {
+            // 检测表格起始：当前行是 |...| 格式，且下一行是分隔线
+            if isTableHeaderCandidate(lines[i]) &&
+                i + 1 < lines.count && isTableSeparatorLine(lines[i + 1]) {
+                var tableLines: [String] = []
+                while i < lines.count && isTableLine(lines[i]) {
+                    tableLines.append(lines[i])
+                    i += 1
+                }
+                if tableLines.count >= 2 {
+                    result.append(renderHTMLTable(from: tableLines))
+                } else {
+                    result.append(contentsOf: tableLines)
+                }
+            } else {
+                result.append(lines[i])
+                i += 1
+            }
+        }
+
+        return result.joined(separator: "\n")
+    }
+
+    /// 是否可能是表头行（以 | 开头和结尾）
+    private static func isTableHeaderCandidate(_ line: String) -> Bool {
+        isTableLine(line)
+    }
+
+    /// 是否为表格行（以 | 开头且以 | 结尾）
+    private static func isTableLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed.hasPrefix("|") && trimmed.hasSuffix("|")
+    }
+
+    /// 是否为表格分隔行（|:---|:---:| 等）
+    private static func isTableSeparatorLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard isTableLine(trimmed) else { return false }
+        let cells = trimmed.components(separatedBy: "|").filter { !$0.isEmpty }
+        guard !cells.isEmpty else { return false }
+        return cells.allSatisfy { cell in
+            let stripped = cell.trimmingCharacters(in: .whitespaces)
+            return !stripped.isEmpty && stripped.allSatisfy { $0 == "-" || $0 == ":" }
+        }
+    }
+
+    /// 解析单行表格为单元格数组
+    private static func parseTableCells(_ line: String) -> [String] {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        var cells = trimmed.components(separatedBy: "|")
+        // 去除首尾空串（| 在收尾时产生）
+        if cells.first?.trimmingCharacters(in: .whitespaces).isEmpty ?? false { cells.removeFirst() }
+        if cells.last?.trimmingCharacters(in: .whitespaces).isEmpty ?? false { cells.removeLast() }
+        return cells.map { $0.trimmingCharacters(in: .whitespaces) }
+    }
+
+    /// 将 Markdown 表格行数组转换为 HTML <table>
+    private static func renderHTMLTable(from lines: [String]) -> String {
+        guard lines.count >= 2 else { return lines.first ?? "" }
+
+        let headerCells = parseTableCells(lines[0])
+        let colCount = headerCells.count
+        var tableHTML = "<table>"
+
+        // 表头
+        tableHTML += "<thead><tr>"
+        for cell in headerCells {
+            tableHTML += "<th>\(cell)</th>"
+        }
+        tableHTML += "</tr></thead>"
+
+        // 数据行（跳过第二行分隔线）
+        tableHTML += "<tbody>"
+        for rowIdx in 2..<lines.count {
+            let cells = parseTableCells(lines[rowIdx])
+            tableHTML += "<tr>"
+            for c in 0..<colCount {
+                let content = c < cells.count ? cells[c] : ""
+                tableHTML += "<td>\(content)</td>"
+            }
+            tableHTML += "</tr>"
+        }
+        tableHTML += "</tbody></table>"
+
+        return tableHTML
     }
 }
