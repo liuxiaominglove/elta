@@ -16,65 +16,53 @@ final class TableExtractor {
 
     /// 输入 OCR 识别到的所有文本块（含坐标），检测是否为表格，是则输出 Markdown 表格，否则输出纯文本
     static func process(blocks: [OCRBlock]) -> String {
-        guard blocks.count >= 2 else {
-            return blocks.first?.text ?? ""
+        guard blocks.count >= 4 else {
+            return flatText(from: blocks)
         }
 
-        // ---- 1. 按 Y 排序，分组为行 ----
-        let sorted = blocks.sorted { $0.boundingBox.minY < $1.boundingBox.minY }
+        // 1. 用「间隙聚类」分别找出所有列中心和行中心
+        //    这样即使某个单元格内部有换行（多行文本），也会被归到同一个网格单元格里
+        let columns = detectColumns(from: blocks)
+        let rows = detectRows(from: blocks)
 
-        // 用中位行高作为行间距判断阈值
-        let heights = sorted.map { $0.boundingBox.height }
-        let medianHeight = median(heights) ?? 14  // 默认 14pt
-
-        var rows: [[OCRBlock]] = []
-        var currentRow: [OCRBlock] = [sorted[0]]
-        var lastRowMaxY = sorted[0].boundingBox.maxY
-
-        for block in sorted.dropFirst() {
-            let gap = block.boundingBox.minY - lastRowMaxY
-            if gap > medianHeight * 0.6 {
-                // 垂直间距超过 0.6 倍行高 → 新行
-                rows.append(currentRow)
-                currentRow = [block]
-            } else {
-                // 同一行（同一行内可能有多列）
-                currentRow.append(block)
-            }
-            lastRowMaxY = max(lastRowMaxY, block.boundingBox.maxY)
-        }
-        rows.append(currentRow)
-
-        // ---- 2. 每行内部按 X 排序 ----
-        let sortedRows = rows.map { $0.sorted { $0.boundingBox.minX < $1.boundingBox.minX } }
-
-        // ---- 3. 判断是否为表格 ----
-        let colCounts = sortedRows.map { $0.count }
-        let maxCols = colCounts.max() ?? 1
-        guard maxCols >= 2, sortedRows.count >= 2 else {
-            // 单列或单行 → 纯文本
-            return sorted.map { $0.text }.joined(separator: "\n")
+        guard columns.count >= 2, rows.count >= 2 else {
+            logi("表格检测: 列数=\(columns.count), 行数=\(rows.count), 不足2×2，回退纯文本")
+            return flatText(from: blocks)
         }
 
-        // 列数要一致（允许 ±1 的误差，因为某些单元格可能为空或者合并）
-        let consistentColumns = colCounts.allSatisfy { $0 == maxCols || $0 == maxCols - 1 }
-        guard consistentColumns else {
-            return sorted.map { $0.text }.joined(separator: "\n")
+        // 2. 把每个文字块投进最近的 (行, 列) 单元格
+        //    一个单元格可能包含多个块（多行单元格），按 Y 坐标排序后合并
+        var cells: [[[(text: String, y: CGFloat)]]] = Array(
+            repeating: Array(repeating: [], count: columns.count),
+            count: rows.count
+        )
+
+        for block in blocks {
+            let r = nearestClusterIndex(value: block.boundingBox.midY, clusters: rows)
+            let c = nearestClusterIndex(value: block.boundingBox.midX, clusters: columns)
+            guard r >= 0, r < rows.count, c >= 0, c < columns.count else { continue }
+            cells[r][c].append((block.text, block.boundingBox.midY))
         }
 
-        // ---- 4. 构建表格网格 ----
+        // 3. 合并单元格内多行文本，生成网格
         var grid: [[String]] = []
-        for row in sortedRows {
-            var cells = Array(repeating: "", count: maxCols)
-            for (i, block) in row.enumerated() {
-                if i < maxCols {
-                    cells[i] = block.text
-                }
+        for r in 0..<rows.count {
+            var row: [String] = []
+            for c in 0..<columns.count {
+                let parts = cells[r][c].sorted { $0.y < $1.y }
+                row.append(parts.map { $0.text }.joined(separator: " "))
             }
-            grid.append(cells)
+            grid.append(row)
         }
 
-        // ---- 5. 输出 Markdown 表格 ----
+        // 4. 验证：至少要有 2 行，每行在 ≥2 个不同列里有内容
+        let validRows = grid.filter { row in row.filter { !$0.isEmpty }.count >= 2 }.count
+        guard validRows >= 2 else {
+            logi("表格检测: 有效多列行不足(\(validRows))，回退纯文本")
+            return flatText(from: blocks)
+        }
+
+        logi("表格检测: 成功还原 \(rows.count) 行 × \(columns.count) 列表格")
         return formatMarkdownTable(grid: grid)
     }
 
@@ -109,7 +97,89 @@ final class TableExtractor {
         return md.joined(separator: "\n")
     }
 
+    // MARK: - 行列检测（间隙聚类）
+
+    /// 通过 X 中心坐标的大间隙来检测列
+    private static func detectColumns(from blocks: [OCRBlock]) -> [(center: CGFloat, min: CGFloat, max: CGFloat)] {
+        let centers = blocks.map { $0.boundingBox.midX }.sorted()
+        return clusterByGaps(centers: centers, gapMultiplier: 2.0, minGap: 24)
+    }
+
+    /// 通过 Y 中心坐标的大间隙来检测行
+    private static func detectRows(from blocks: [OCRBlock]) -> [(center: CGFloat, min: CGFloat, max: CGFloat)] {
+        let centers = blocks.map { $0.boundingBox.midY }.sorted()
+        return clusterByGaps(centers: centers, gapMultiplier: 2.5, minGap: 14)
+    }
+
+    /// 通用间隙聚类：把坐标按大间隙切分成若干簇
+    /// - Parameters:
+    ///   - centers: 已排序的坐标数组
+    ///   - gapMultiplier: 判定为边界的间隙是「中位间隙」的几倍
+    ///   - minGap: 最小边界阈值，防止单列/单行被过度拆分
+    private static func clusterByGaps(
+        centers: [CGFloat],
+        gapMultiplier: CGFloat,
+        minGap: CGFloat
+    ) -> [(center: CGFloat, min: CGFloat, max: CGFloat)] {
+        guard !centers.isEmpty else { return [] }
+        guard centers.count >= 2 else {
+            let avg = centers.reduce(0, +) / CGFloat(centers.count)
+            return [(avg, centers.first!, centers.last!)]
+        }
+
+        // 计算相邻坐标之间的间隙
+        var gaps: [CGFloat] = []
+        for i in 1..<centers.count {
+            gaps.append(centers[i] - centers[i - 1])
+        }
+
+        // 用中位间隙的倍数作为边界阈值
+        let medianGap = median(gaps) ?? minGap
+        let boundaryThreshold = max(medianGap * gapMultiplier, minGap)
+
+        var clusters: [(center: CGFloat, min: CGFloat, max: CGFloat)] = []
+        var currentStart = 0
+
+        for i in 0..<gaps.count {
+            if gaps[i] > boundaryThreshold {
+                let clusterCenters = Array(centers[currentStart...i])
+                let avg = clusterCenters.reduce(0, +) / CGFloat(clusterCenters.count)
+                clusters.append((avg, clusterCenters.first!, clusterCenters.last!))
+                currentStart = i + 1
+            }
+        }
+
+        // 最后一个簇
+        let clusterCenters = Array(centers[currentStart..<centers.count])
+        let avg = clusterCenters.reduce(0, +) / CGFloat(clusterCenters.count)
+        clusters.append((avg, clusterCenters.first!, clusterCenters.last!))
+
+        return clusters
+    }
+
+    /// 找到距离 value 最近的簇
+    private static func nearestClusterIndex(
+        value: CGFloat,
+        clusters: [(center: CGFloat, min: CGFloat, max: CGFloat)]
+    ) -> Int {
+        var bestIdx = 0
+        var bestDist = abs(value - clusters[0].center)
+        for (i, cluster) in clusters.enumerated().dropFirst() {
+            let dist = abs(value - cluster.center)
+            if dist < bestDist {
+                bestDist = dist
+                bestIdx = i
+            }
+        }
+        return bestIdx
+    }
+
     // MARK: - 内部工具
+
+    private static func flatText(from blocks: [OCRBlock]) -> String {
+        let sorted = blocks.sorted { $0.boundingBox.minY < $1.boundingBox.minY }
+        return sorted.map { $0.text }.joined(separator: "\n")
+    }
 
     private static func median(_ values: [CGFloat]) -> CGFloat? {
         guard !values.isEmpty else { return nil }
