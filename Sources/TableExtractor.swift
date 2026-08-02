@@ -20,31 +20,42 @@ final class TableExtractor {
             return flatText(from: blocks)
         }
 
-        // 1. 用「间隙聚类」分别找出所有列中心和行中心
-        //    这样即使某个单元格内部有换行（多行文本），也会被归到同一个网格单元格里
+        // 1. 列检测：基于水平方向重叠聚类（而不是 X 中心距离）
+        //    这样同一列里不同宽度/对齐的文字不会被拆成多列
         let columns = detectColumns(from: blocks)
-        let rows = detectRows(from: blocks)
-
-        guard columns.count >= 2, rows.count >= 2 else {
-            logi("表格检测: 列数=\(columns.count), 行数=\(rows.count), 不足2×2，回退纯文本")
+        guard columns.count >= 2 else {
+            logi("表格检测: 只识别到 \(columns.count) 列，回退纯文本")
             return flatText(from: blocks)
         }
 
-        // 2. 把每个文字块投进最近的 (行, 列) 单元格
-        //    一个单元格可能包含多个块（多行单元格），按 Y 坐标排序后合并
+        // 2. 把每个文字块分配到一个主列
+        let colAssignments = blocks.map { block -> Int in
+            bestColumn(for: block, columns: columns)
+        }
+
+        // 3. 行检测：
+        //    - 先按列把块聚成「单元格」（处理多行单元格）
+        //    - 再把所有单元格的 Y 中心跨列聚类，得到全局行
+        let rows = detectRows(from: blocks, columns: columns, colAssignments: colAssignments)
+        guard rows.count >= 2 else {
+            logi("表格检测: 只识别到 \(rows.count) 行，回退纯文本")
+            return flatText(from: blocks)
+        }
+
+        // 4. 把每个块分配进网格单元格
         var cells: [[[(text: String, y: CGFloat)]]] = Array(
             repeating: Array(repeating: [], count: columns.count),
             count: rows.count
         )
 
-        for block in blocks {
+        for (i, block) in blocks.enumerated() {
+            let c = colAssignments[i]
             let r = nearestClusterIndex(value: block.boundingBox.midY, clusters: rows)
-            let c = nearestClusterIndex(value: block.boundingBox.midX, clusters: columns)
             guard r >= 0, r < rows.count, c >= 0, c < columns.count else { continue }
             cells[r][c].append((block.text, block.boundingBox.midY))
         }
 
-        // 3. 合并单元格内多行文本，生成网格
+        // 5. 合并单元格内多行文本，生成网格
         var grid: [[String]] = []
         for r in 0..<rows.count {
             var row: [String] = []
@@ -55,7 +66,7 @@ final class TableExtractor {
             grid.append(row)
         }
 
-        // 4. 验证：至少要有 2 行，每行在 ≥2 个不同列里有内容
+        // 6. 验证：至少 2 行，每行在 ≥2 个不同列里有内容
         let validRows = grid.filter { row in row.filter { !$0.isEmpty }.count >= 2 }.count
         guard validRows >= 2 else {
             logi("表格检测: 有效多列行不足(\(validRows))，回退纯文本")
@@ -97,25 +108,118 @@ final class TableExtractor {
         return md.joined(separator: "\n")
     }
 
-    // MARK: - 行列检测（间隙聚类）
+    // MARK: - 列检测（基于水平重叠）
 
-    /// 通过 X 中心坐标的大间隙来检测列
     private static func detectColumns(from blocks: [OCRBlock]) -> [(center: CGFloat, min: CGFloat, max: CGFloat)] {
-        let centers = blocks.map { $0.boundingBox.midX }.sorted()
-        return clusterByGaps(centers: centers, gapMultiplier: 2.0, minGap: 24)
+        // 按 minX 排序，然后用「水平重叠」做传递聚类
+        let sorted = blocks.sorted { $0.boundingBox.minX < $1.boundingBox.minX }
+        var clusters: [[OCRBlock]] = []
+
+        for block in sorted {
+            var assigned = false
+            for (i, cluster) in clusters.enumerated() {
+                // 只要和簇中任意一个块水平重叠 ≥30%，就算同一列
+                if cluster.contains(where: { horizontalOverlapRatio($0.boundingBox, block.boundingBox) >= 0.3 }) {
+                    clusters[i].append(block)
+                    assigned = true
+                    break
+                }
+            }
+            if !assigned {
+                clusters.append([block])
+            }
+        }
+
+        // 计算每列的包围范围，并按中心 X 排序
+        return clusters.map { cluster -> (center: CGFloat, min: CGFloat, max: CGFloat) in
+            let minX = cluster.map { $0.boundingBox.minX }.min() ?? 0
+            let maxX = cluster.map { $0.boundingBox.maxX }.max() ?? 0
+            return ((minX + maxX) / 2, minX, maxX)
+        }.sorted { $0.center < $1.center }
     }
 
-    /// 通过 Y 中心坐标的大间隙来检测行
-    private static func detectRows(from blocks: [OCRBlock]) -> [(center: CGFloat, min: CGFloat, max: CGFloat)] {
-        let centers = blocks.map { $0.boundingBox.midY }.sorted()
-        return clusterByGaps(centers: centers, gapMultiplier: 2.5, minGap: 14)
+    /// 把块分配到水平重叠最多的列
+    private static func bestColumn(for block: OCRBlock, columns: [(center: CGFloat, min: CGFloat, max: CGFloat)]) -> Int {
+        var bestIdx = 0
+        var bestOverlap: CGFloat = -1
+        for (i, col) in columns.enumerated() {
+            let colRect = CGRect(x: col.min, y: 0, width: col.max - col.min, height: CGFloat.greatestFiniteMagnitude)
+            let overlap = horizontalOverlapRatio(block.boundingBox, colRect)
+            if overlap > bestOverlap {
+                bestOverlap = overlap
+                bestIdx = i
+            }
+        }
+        return bestIdx
+    }
+
+    // MARK: - 行检测（列内先聚单元格，再跨列对齐）
+
+    private static func detectRows(
+        from blocks: [OCRBlock],
+        columns: [(center: CGFloat, min: CGFloat, max: CGFloat)],
+        colAssignments: [Int]
+    ) -> [(center: CGFloat, min: CGFloat, max: CGFloat)] {
+        var cellCenters: [CGFloat] = []
+
+        for c in 0..<columns.count {
+            let colBlocks = blocks.enumerated()
+                .filter { colAssignments[$0.offset] == c }
+                .map { $0.element }
+                .sorted { $0.boundingBox.minY < $1.boundingBox.minY }
+
+            // 在单列内部把块聚成单元格（处理多行单元格）
+            let cells = clusterBlocksIntoCells(blocks: colBlocks)
+            for cell in cells {
+                let minY = cell.map { $0.boundingBox.minY }.min() ?? 0
+                let maxY = cell.map { $0.boundingBox.maxY }.max() ?? 0
+                cellCenters.append((minY + maxY) / 2)
+            }
+        }
+
+        guard cellCenters.count >= 2 else { return [] }
+
+        // 跨列聚类单元格中心 → 全局行
+        return clusterByGaps(centers: cellCenters.sorted(), gapMultiplier: 1.5, minGap: 20)
+    }
+
+    /// 单列内部：把垂直距离近的块合并成一个单元格（处理单元格内换行）
+    private static func clusterBlocksIntoCells(blocks: [OCRBlock]) -> [[OCRBlock]] {
+        guard !blocks.isEmpty else { return [] }
+        guard blocks.count >= 2 else { return [blocks] }
+
+        // 计算中位高度，作为「行内换行」vs「行间」的参考
+        let heights = blocks.map { $0.boundingBox.height }
+        let medHeight = median(heights) ?? 14
+
+        var cells: [[OCRBlock]] = []
+        var current: [OCRBlock] = [blocks[0]]
+
+        for block in blocks.dropFirst() {
+            let gap = block.boundingBox.minY - (current.last?.boundingBox.maxY ?? 0)
+            // 间隙小于 0.9 倍中位高度 → 同一单元格内换行
+            if gap <= medHeight * 0.9 {
+                current.append(block)
+            } else {
+                cells.append(current)
+                current = [block]
+            }
+        }
+        cells.append(current)
+        return cells
+    }
+
+    // MARK: - 通用工具
+
+    /// 两个矩形在 X 轴上的重叠比例（以较窄者的宽度为基准）
+    private static func horizontalOverlapRatio(_ a: CGRect, _ b: CGRect) -> CGFloat {
+        let overlap = min(a.maxX, b.maxX) - max(a.minX, b.minX)
+        let minWidth = min(a.width, b.width)
+        guard minWidth > 0 else { return 0 }
+        return max(0, overlap / minWidth)
     }
 
     /// 通用间隙聚类：把坐标按大间隙切分成若干簇
-    /// - Parameters:
-    ///   - centers: 已排序的坐标数组
-    ///   - gapMultiplier: 判定为边界的间隙是「中位间隙」的几倍
-    ///   - minGap: 最小边界阈值，防止单列/单行被过度拆分
     private static func clusterByGaps(
         centers: [CGFloat],
         gapMultiplier: CGFloat,
@@ -127,13 +231,11 @@ final class TableExtractor {
             return [(avg, centers.first!, centers.last!)]
         }
 
-        // 计算相邻坐标之间的间隙
         var gaps: [CGFloat] = []
         for i in 1..<centers.count {
             gaps.append(centers[i] - centers[i - 1])
         }
 
-        // 用中位间隙的倍数作为边界阈值
         let medianGap = median(gaps) ?? minGap
         let boundaryThreshold = max(medianGap * gapMultiplier, minGap)
 
@@ -149,7 +251,6 @@ final class TableExtractor {
             }
         }
 
-        // 最后一个簇
         let clusterCenters = Array(centers[currentStart..<centers.count])
         let avg = clusterCenters.reduce(0, +) / CGFloat(clusterCenters.count)
         clusters.append((avg, clusterCenters.first!, clusterCenters.last!))
@@ -157,7 +258,6 @@ final class TableExtractor {
         return clusters
     }
 
-    /// 找到距离 value 最近的簇
     private static func nearestClusterIndex(
         value: CGFloat,
         clusters: [(center: CGFloat, min: CGFloat, max: CGFloat)]
@@ -173,8 +273,6 @@ final class TableExtractor {
         }
         return bestIdx
     }
-
-    // MARK: - 内部工具
 
     private static func flatText(from blocks: [OCRBlock]) -> String {
         let sorted = blocks.sorted { $0.boundingBox.minY < $1.boundingBox.minY }
@@ -198,11 +296,9 @@ final class TableExtractor {
 
         var lines: [String] = []
 
-        // 表头行（第一行）
         let header = grid[0].map { escapeMarkdownTableCell($0) }
         lines.append("| " + header.joined(separator: " | ") + " |")
 
-        // 分隔线
         var sepCells: [String] = []
         for c in 0..<colCount {
             let maxLen = max(grid.map { $0.count > c ? ($0[c]).count : 0 }.max() ?? 3, header[c].count, 3)
@@ -210,7 +306,6 @@ final class TableExtractor {
         }
         lines.append("|" + sepCells.joined(separator: "|") + "|")
 
-        // 数据行
         for row in grid.dropFirst() {
             let cells = (0..<colCount).map { c in
                 c < row.count ? escapeMarkdownTableCell(row[c]) : ""
@@ -221,7 +316,6 @@ final class TableExtractor {
         return lines.joined(separator: "\n")
     }
 
-    /// 转义单元格内可能破坏 Markdown 表格语法的特殊字符
     private static func escapeMarkdownTableCell(_ text: String) -> String {
         text.replacingOccurrences(of: "|", with: "\\|")
             .replacingOccurrences(of: "\n", with: " ")
