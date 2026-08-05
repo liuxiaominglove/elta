@@ -1,8 +1,6 @@
 import Carbon
 import Foundation
 
-import Foundation
-
 // MARK: - 设置管理器
 
 final class SettingsManager {
@@ -30,7 +28,7 @@ final class SettingsManager {
     }
 
     private init() {
-        migrateAPIKeysFromKeychain()
+        migrateAPIKeysToKeychain()
     }
 
     // MARK: AI 提供商
@@ -44,22 +42,26 @@ final class SettingsManager {
         set { defaults.set(newValue.rawValue, forKey: Keys.apiProvider) }
     }
 
-    // MARK: API Keys（UserDefaults 存储，无感无弹窗）
+    // MARK: API Keys（Keychain 安全存储）
 
     private static func apiKeyUDKey(for provider: AIProvider) -> String {
         "snaptranslate.apikey.\(provider.rawValue)"
     }
 
     func apiKey(for provider: AIProvider) -> String? {
-        let v = defaults.string(forKey: Self.apiKeyUDKey(for: provider))
-        return (v?.isEmpty == false) ? v : nil
+        let result = KeychainHelper.read(account: Self.apiKeyUDKey(for: provider))
+        logi("Keychain 读取: provider=\(provider.rawValue), hit=\(result != nil)")
+        return result
     }
 
     func setApiKey(_ key: String?, for provider: AIProvider) {
+        let account = Self.apiKeyUDKey(for: provider)
         if let key = key, !key.isEmpty {
-            defaults.set(key, forKey: Self.apiKeyUDKey(for: provider))
+            logi("Keychain 写入: provider=\(provider.rawValue), len=\(key.count)")
+            _ = KeychainHelper.save(key: key, account: account)
         } else {
-            defaults.removeObject(forKey: Self.apiKeyUDKey(for: provider))
+            logi("Keychain 删除: provider=\(provider.rawValue)")
+            _ = KeychainHelper.delete(account: account)
         }
     }
 
@@ -68,21 +70,20 @@ final class SettingsManager {
         apiKey(for: apiProvider)
     }
 
-    /// 将之前误存到 Keychain 的 API Key 迁移回 UserDefaults（不再弹授权窗）
-    private func migrateAPIKeysFromKeychain() {
-        let migratedBack = "snaptranslate.keychain_unmigrated"
-        if defaults.bool(forKey: migratedBack) { return }
+    /// 一次性迁移：将之前误存到 UserDefaults 的 API Key 迁移到 Keychain 安全存储
+    private func migrateAPIKeysToKeychain() {
+        let migrated = "snaptranslate.keychain_migrated_v2"
+        if defaults.bool(forKey: migrated) { return }
 
-        let allProviders: [AIProvider] = [.deepseek, .openai, .openAICompatible, .ollama, .googleAI]
-        for provider in allProviders {
-            let account = "apikey.\(provider.rawValue)"
-            if let value = KeychainHelper.read(account: account), !value.isEmpty {
-                defaults.set(value, forKey: Self.apiKeyUDKey(for: provider))
-                _ = KeychainHelper.delete(account: account)
-                logi("反向迁移：\(provider.displayName) Key 从 Keychain → UserDefaults")
+        for provider in AIProvider.allCases {
+            let udKey = Self.apiKeyUDKey(for: provider)
+            if let value = defaults.string(forKey: udKey), !value.isEmpty {
+                _ = KeychainHelper.save(key: value, account: udKey)
+                defaults.removeObject(forKey: udKey)
+                logi("迁移：\(provider.displayName) Key 从 UserDefaults → Keychain")
             }
         }
-        defaults.set(true, forKey: migratedBack)
+        defaults.set(true, forKey: migrated)
     }
 
     // MARK: 自定义配置（OpenAI-Compatible & Ollama）

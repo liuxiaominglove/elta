@@ -2,9 +2,6 @@ import Cocoa
 import Carbon
 import WebKit
 
-import Cocoa
-import Carbon
-
 // MARK: - 偏好设置窗口
 
 final class SettingsWindowController: NSObject {
@@ -48,13 +45,15 @@ final class SettingsWindowController: NSObject {
     private var isRecordingClosePanelHotkey = false
     private var recordedClosePanelKeyCode: Int = 0
     private var recordedClosePanelModifiers: Int = 0
+    private var selectionHotkeyMonitor: Any?
+    private var closePanelHotkeyMonitor: Any?
 
     // Tab 3: 翻译模板
     private var templateTextView: NSTextView?
     private var templatePreviewWebView: WKWebView?
 
     func show() {
-        if let w = window { w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
+        if let w = window { w.close(); window = nil }
 
         let ww: CGFloat = 640, hh: CGFloat = 700
         let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: ww, height: hh),
@@ -572,7 +571,7 @@ final class SettingsWindowController: NSObject {
         selectionHotkeyRecordBtn?.bezelColor = .systemOrange
         selectionHotkeyStatusLabel?.stringValue = "请按下组合键..."
 
-        hotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        selectionHotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self, self.isRecordingSelectionHotkey else { return event }
             self.recordSelectionHotkey(event: event)
             return nil
@@ -603,9 +602,9 @@ final class SettingsWindowController: NSObject {
         recordedSelectionModifiers = carbonModifiers
         isRecordingSelectionHotkey = false
 
-        if let monitor = hotkeyMonitor {
+        if let monitor = selectionHotkeyMonitor {
             NSEvent.removeMonitor(monitor)
-            hotkeyMonitor = nil
+            selectionHotkeyMonitor = nil
         }
 
         let display = hotkeyDisplayString(keyCode: recordedSelectionKeyCode, modifiers: recordedSelectionModifiers)
@@ -625,9 +624,9 @@ final class SettingsWindowController: NSObject {
 
     private func cancelSelectionRecording() {
         isRecordingSelectionHotkey = false
-        if let monitor = hotkeyMonitor {
+        if let monitor = selectionHotkeyMonitor {
             NSEvent.removeMonitor(monitor)
-            hotkeyMonitor = nil
+            selectionHotkeyMonitor = nil
         }
         let display = SettingsManager.shared.selectionHotkeyDisplay
         selectionHotkeyRecordBtn?.title = "    \(display)    "
@@ -647,7 +646,7 @@ final class SettingsWindowController: NSObject {
         closePanelHotkeyRecordBtn?.bezelColor = .systemOrange
         closePanelHotkeyStatusLabel?.stringValue = "请按下快捷键（允许单独按 ESC）..."
 
-        hotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        closePanelHotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self, self.isRecordingClosePanelHotkey else { return event }
             self.recordClosePanelHotkey(event: event)
             return nil
@@ -678,9 +677,9 @@ final class SettingsWindowController: NSObject {
         recordedClosePanelModifiers = carbonModifiers
         isRecordingClosePanelHotkey = false
 
-        if let monitor = hotkeyMonitor {
+        if let monitor = closePanelHotkeyMonitor {
             NSEvent.removeMonitor(monitor)
-            hotkeyMonitor = nil
+            closePanelHotkeyMonitor = nil
         }
 
         let display = hotkeyDisplayString(keyCode: recordedClosePanelKeyCode, modifiers: recordedClosePanelModifiers)
@@ -700,9 +699,9 @@ final class SettingsWindowController: NSObject {
 
     private func cancelClosePanelRecording() {
         isRecordingClosePanelHotkey = false
-        if let monitor = hotkeyMonitor {
+        if let monitor = closePanelHotkeyMonitor {
             NSEvent.removeMonitor(monitor)
-            hotkeyMonitor = nil
+            closePanelHotkeyMonitor = nil
         }
         let display = SettingsManager.shared.closePanelHotkeyDisplay
         closePanelHotkeyRecordBtn?.title = "    \(display)    "
@@ -825,6 +824,7 @@ final class SettingsWindowController: NSObject {
 
         // API Key — 保存当前提供商的 Key
         let keyStr = activeApiKeyFieldValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        logi("保存设置: provider=\(settings.apiProvider.rawValue), keyLen=\(keyStr.count)")
         if !keyStr.isEmpty {
             settings.setApiKey(keyStr, for: settings.apiProvider)
         } else {
@@ -988,7 +988,7 @@ final class SettingsWindowController: NSObject {
         // 不同提供商的请求格式和认证方式
         switch provider {
         case .anthropic:
-            req.setValue("x-api-key", forHTTPHeaderField: "x-api-key")
+            req.setValue(key, forHTTPHeaderField: "x-api-key")
             req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             body = [
@@ -997,9 +997,8 @@ final class SettingsWindowController: NSObject {
                 "messages": [["role": "user", "content": "回复OK"]]
             ]
         case .googleAI:
-            // Google Gemini uses API key as query param
-            let googleEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=\(key)"
-            guard let googleURL = URL(string: googleEndpoint) else {
+            let baseEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+            guard let googleURL = URL(string: baseEndpoint) else {
                 testStatusLabel?.stringValue = "❌ API 地址无效，请检查设置"
                 testStatusLabel?.textColor = .systemRed
                 return
@@ -1007,6 +1006,7 @@ final class SettingsWindowController: NSObject {
             req = URLRequest(url: googleURL)
             req.httpMethod = "POST"
             req.timeoutInterval = 15
+            req.setValue(key, forHTTPHeaderField: "x-goog-api-key")
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             body = [
                 "contents": [["parts": [["text": "回复OK"]]]],

@@ -1,8 +1,6 @@
 import Cocoa
 import Foundation
 
-import Foundation
-
 // MARK: - 翻译引擎（多 AI 提供商支持）
 
 final class TranslationEngine {

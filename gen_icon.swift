@@ -4,7 +4,7 @@ import Foundation
 // MARK: - ELTA 图标生成器
 // 从源 PNG 生成 macOS AppIcon.icns
 
-let projectDir = URL(fileURLWithPath: "/Users/liuxiaoming/CodeBuddy/20260726144648/EnglishTranslator")
+let projectDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
 let sourcePNG = projectDir.appendingPathComponent("generated-images/ELTA_icon_rounded_v3.png")
 let outputDir = projectDir.appendingPathComponent("Resources")
 let iconsetDir = outputDir.appendingPathComponent("AppIcon.iconset")

@@ -61,13 +61,13 @@ func runSettingsManagerTests() {
         try assertTrue(code >= 0 && code < 128, "KeyCode should be between 0 and 127, got \(code)")
     }
 
-    test("selectionHotkeyModifiers has cmd+shift default") {
+    test("selectionHotkeyModifiers has ctrl+shift default") {
         let mod = SettingsManager.shared.selectionHotkeyModifiers
-        try assertEqual(mod, Int(cmdKey | shiftKey))
+        try assertEqual(mod, Int(controlKey | shiftKey))
     }
 
-    test("hotkeyDisplay default is ⌘T") {
-        try assertEqual(SettingsManager.shared.hotkeyDisplay, "⌘T")
+    test("hotkeyDisplay default is ⌃T") {
+        try assertEqual(SettingsManager.shared.hotkeyDisplay, "⌃T")
     }
 
     test("defaultPrompt contains expected sections") {

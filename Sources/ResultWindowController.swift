@@ -36,6 +36,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
 
     private var webView: WKWebView?
     private var escEventTap: CFMachPort?
+    private var escRunLoopSource: CFRunLoopSource?
 
     /// 安装全局关闭面板事件拦截（CGEventTap），翻译弹窗存在期间拦截用户自定义的关闭快捷键
     private func installEscTap() {
@@ -88,6 +89,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
         CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
         escEventTap = tap
+        escRunLoopSource = runLoopSource
         logi("ESC tap: 已安装")
     }
 
@@ -95,10 +97,11 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
     private func removeEscTap() {
         guard let tap = escEventTap else { return }
         CGEvent.tapEnable(tap: tap, enable: false)
-        if let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) {
+        if let source = escRunLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
         }
         escEventTap = nil
+        escRunLoopSource = nil
         logi("ESC tap: 已移除")
     }
 

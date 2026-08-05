@@ -91,10 +91,12 @@ struct KeychainHelper {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-            kSecValueData as String: key.data(using: .utf8)!,
+            kSecValueData as String: key.data(using: .utf8) ?? Data(),
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
-        return SecItemAdd(addQuery as CFDictionary, nil) == errSecSuccess
+        let status = SecItemAdd(addQuery as CFDictionary, nil)
+        if status != errSecSuccess { loge("Keychain 写入失败: status=\(status), account=\(account)") }
+        return status == errSecSuccess
     }
 
     static func read(account: String) -> String? {
@@ -107,7 +109,11 @@ struct KeychainHelper {
         ]
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        if status != errSecSuccess {
+            if status != errSecItemNotFound { loge("Keychain 读取失败: status=\(status), account=\(account)") }
+            return nil
+        }
+        guard let data = result as? Data else { return nil }
         return String(data: data, encoding: .utf8)
     }
 
@@ -117,6 +123,8 @@ struct KeychainHelper {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        return SecItemDelete(query as CFDictionary) == errSecSuccess
+        let status = SecItemDelete(query as CFDictionary)
+        if status != errSecSuccess && status != errSecItemNotFound { loge("Keychain 删除失败: status=\(status), account=\(account)") }
+        return status == errSecSuccess
     }
 }

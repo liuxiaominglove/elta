@@ -1,9 +1,6 @@
 import Cocoa
 import Carbon
 
-import Carbon
-import Foundation
-
 // MARK: - 快捷键辅助
 
 /// 将 Carbon 修饰键掩码转为可读字符串（如 "⌘⌥F1"）

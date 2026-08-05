@@ -117,29 +117,29 @@ final class TranslationPipeline {
             let app = AXUIElementCreateApplication(pid)
             var ref: CFTypeRef?
             guard AXUIElementCopyAttributeValue(app, kAXFocusedUIElementAttribute as CFString, &ref) == .success,
-                  let element = ref else {
+                  let _ = ref else {
                 logi("Accessibility：无法获取 PID=\(pid) 的聚焦元素，回退系统全局")
                 // 回退：使用系统全局
                 let sys = AXUIElementCreateSystemWide()
                 var sysRef: CFTypeRef?
                 guard AXUIElementCopyAttributeValue(sys, kAXFocusedUIElementAttribute as CFString, &sysRef) == .success,
-                      let sysElement = sysRef else {
+                      let _ = sysRef else {
                     logi("Accessibility：系统全局也无法获取聚焦元素")
                     return nil
                 }
-                focusedElement = sysElement as! AXUIElement
+                focusedElement = sysRef as! AXUIElement
                 return extractSelectedText(from: focusedElement)
             }
-            focusedElement = element as! AXUIElement
+            focusedElement = ref as! AXUIElement
         } else {
             let system = AXUIElementCreateSystemWide()
             var focusedRef: CFTypeRef?
             guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success,
-                  let element = focusedRef else {
+                  let _ = focusedRef else {
                 logi("Accessibility：无法获取聚焦元素")
                 return nil
             }
-            focusedElement = element as! AXUIElement
+            focusedElement = focusedRef as! AXUIElement
         }
 
         return extractSelectedText(from: focusedElement)
@@ -339,7 +339,7 @@ final class TranslationPipeline {
         panel.title = APP_DISPLAY_NAME
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true
-        panel.center()
+        panel.setFrameOrigin(loadingPanelOrigin(size: NSSize(width: w, height: h)))
         panel.makeKeyAndOrderFront(nil)
 
         let v = NSView(frame: NSRect(x: 0, y: 0, width: w, height: h))
@@ -380,7 +380,7 @@ final class TranslationPipeline {
         panel.title = APP_DISPLAY_NAME
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true
-        panel.center()
+        panel.setFrameOrigin(loadingPanelOrigin(size: NSSize(width: w, height: h)))
         panel.makeKeyAndOrderFront(nil)
 
         let v = NSView(frame: NSRect(x: 0, y: 0, width: w, height: h))
@@ -397,6 +397,17 @@ final class TranslationPipeline {
 
         panel.contentView = v
         loadingPanel = panel
+    }
+
+    private func loadingPanelOrigin(size: NSSize) -> NSPoint {
+        let pos = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(pos) }) ?? NSScreen.main else {
+            return NSPoint(x: 100, y: 100)
+        }
+        let vf = screen.visibleFrame
+        let x = vf.midX - size.width / 2
+        let y = vf.midY - size.height / 2
+        return NSPoint(x: x, y: y)
     }
 
     private func showAlert(_ title: String, _ message: String) {

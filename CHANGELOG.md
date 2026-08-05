@@ -2,6 +2,29 @@
 
 All notable changes to ELTA will be documented in this file.
 
+## [v5.1.29] — 2026-08-05
+
+### Security
+- API Key 从 UserDefaults 明文存储迁移至 macOS Keychain 安全存储
+- KeychainHelper 增加 force-unwrap 兜底保护
+
+### Fixed
+- Anthropic（Claude）测试连接按钮永远失败的问题
+- 翻译弹窗关闭后 CFRunLoopSource 内存泄漏
+- Gemini 测试连接与翻译使用一致的 `x-goog-api-key` Header 鉴权
+- 偏好设置窗口关闭后重新打开不刷新 Key 字段
+- 加载提示框始终定位在主屏幕而非当前活动屏幕
+- AppDelegate 悬垂指针导致 SIGSEGV 崩溃
+
+### Changed
+- 三个快捷键录制器拆分为独立的事件监听器
+- 删除 4 个文件中的重复 `import` 语句
+- `gen_icon.swift` 硬编码路径改为当前工作目录
+- 修正 `SettingsManagerTests` 中快捷键默认值的错误断言
+
+### Added
+- `AGENTS.md` 开发者指引文档
+
 ## [v5.1.18] — 2026-07-31
 
 ### Added
