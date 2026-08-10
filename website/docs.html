@@ -53,14 +53,18 @@
     <section id="install">
       <h2>安装说明</h2>
 
-      <h3>方式一：手动安装（推荐）</h3>
+      <h3>手动安装</h3>
       <ol>
         <li>前往 <a href="/download">下载页面</a>，按提示下载最新版 ELTA.dmg</li>
         <li>双击打开 DMG，将 <strong>ELTA.app</strong> 拖入 <strong>Applications</strong> 文件夹</li>
-        <li>首次打开时，可能提示"无法验证"。<strong>macOS 14 及以下</strong>：右键点击 ELTA.app → "打开"</li>
-        <li><strong>macOS 15 (Sequoia) 及以上</strong>：打开终端，输入以下命令后回车：
-          <pre class="code-inline">xattr -cr /Applications/ELTA.app</pre>
-          然后再双击 ELTA 即可正常打开。</li>
+        <li>首次打开时，可能提示"无法验证"，可通过以下任一方式解决：
+          <ul>
+            <li><strong>方式一（终端）</strong>：打开终端，输入以下命令后回车，再双击 ELTA 即可正常打开：
+              <pre class="code-inline">xattr -cr /Applications/ELTA.app</pre>
+            </li>
+            <li><strong>方式二（系统设置）</strong>：前往 <strong>系统设置 → 隐私与安全性</strong>，在页面最底部找到 ELTA 的提示（"已阻止 'ELTA' 保护 Mac"），点击 <strong>"仍要打开"</strong>。</li>
+          </ul>
+        </li>
         <li>如若仍然无法打开，请查看页面底部<a href="#faq">常见问题</a>。</li>
       </ol>
 
@@ -126,8 +130,8 @@
           <tr><th>快捷键</th><th>功能</th><th>说明</th></tr>
         </thead>
         <tbody>
-          <tr><td><kbd>⌃T</kbd></td><td>截图翻译</td><td>全局可用，框选屏幕区域 → 自动 OCR + 翻译</td></tr>
-          <tr><td><kbd>⇧⌃T</kbd></td><td>划词翻译</td><td>选中文本后使用，跳过 OCR 直接翻译</td></tr>
+          <tr><td><kbd>⌃T</kbd>（可自定义）</td><td>截图翻译</td><td>全局可用，框选屏幕区域 → 自动 OCR + 翻译</td></tr>
+          <tr><td><kbd>⇧⌃T</kbd>（可自定义）</td><td>划词翻译</td><td>选中文本后使用，跳过 OCR 直接翻译</td></tr>
           <tr><td><kbd>`</kbd>（可自定义）</td><td>切换弹窗位置</td><td>翻译弹窗可见时，一键切换弹窗到屏幕另一侧</td></tr>
           <tr><td><kbd>Esc</kbd>（可自定义）</td><td>关闭</td><td>关闭翻译结果浮动面板，可在偏好设置中修改</td></tr>
         </tbody>
