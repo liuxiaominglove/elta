@@ -38,6 +38,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         logi("\(APP_DISPLAY_NAME) 就绪 — Cmd+T 截图翻译 | Shift+Cmd+T 划词翻译 | 点击菜单栏 📖 操作")
+
+        // 后台检查更新
+        UpdateChecker.shared.check()
     }
 
     /// 点击 Dock 图标时弹出设置窗口（保持 .accessory，不切换策略）

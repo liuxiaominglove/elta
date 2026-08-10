@@ -29,6 +29,7 @@ final class SettingsManager {
         static let customEndpoint   = "snaptranslate.customEndpoint"
         static let customModel      = "snaptranslate.customModel"
         static let ollamaModel      = "snaptranslate.ollamaModel"
+        static let skipUpdateVersion = "snaptranslate.skipUpdateVersion"
     }
 
     private init() {
@@ -221,5 +222,13 @@ final class SettingsManager {
             if let f = newValue { defaults.set(NSStringFromRect(f), forKey: Keys.windowFrame) }
             else { defaults.removeObject(forKey: Keys.windowFrame) }
         }
+    }
+
+    // MARK: 更新跳过
+
+    /// 用户选择跳过的版本号，此版本不再提醒更新
+    var skipUpdateVersion: String? {
+        get { defaults.string(forKey: Keys.skipUpdateVersion) }
+        set { defaults.set(newValue, forKey: Keys.skipUpdateVersion) }
     }
 }
