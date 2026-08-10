@@ -37,6 +37,8 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
     private var webView: WKWebView?
     private var escEventTap: CFMachPort?
     private var escRunLoopSource: CFRunLoopSource?
+    private var togglePanelTap: CFMachPort?
+    private var togglePanelRunLoopSource: CFRunLoopSource?
 
     /// 安装全局关闭面板事件拦截（CGEventTap），翻译弹窗存在期间拦截用户自定义的关闭快捷键
     private func installEscTap() {
@@ -105,6 +107,90 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
         logi("ESC tap: 已移除")
     }
 
+    private func togglePanelPosition() {
+        guard let panel = panel,
+              let screen = panel.screen ?? NSScreen.main else { return }
+
+        let vf = screen.visibleFrame
+        let midline = screen.frame.midX
+        let isOnLeft = panel.frame.midX < midline
+
+        var newFrame = panel.frame
+        if isOnLeft {
+            newFrame.origin.x = midline
+            newFrame.size.width = vf.maxX - midline
+        } else {
+            newFrame.origin.x = vf.minX
+            newFrame.size.width = midline - vf.minX
+        }
+        panel.setFrame(newFrame, display: true, animate: true)
+    }
+
+    private func installToggleTap() {
+        guard togglePanelTap == nil else { return }
+        let callback: CGEventTapCallBack = { (proxy, type, event, info) -> Unmanaged<CGEvent>? in
+            guard let info = info else { return Unmanaged.passRetained(event) }
+            let ctrl = Unmanaged<ResultWindowController>.fromOpaque(info).takeUnretainedValue()
+            guard ctrl.panel != nil else {
+                return Unmanaged.passRetained(event)
+            }
+
+            let settings = SettingsManager.shared
+            let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+            let expectedKeyCode = Int64(settings.togglePanelHotkeyKeyCode)
+            if keyCode != expectedKeyCode {
+                return Unmanaged.passRetained(event)
+            }
+
+            let expectedModifiers = settings.togglePanelHotkeyModifiers
+            if expectedModifiers != 0 {
+                let flags = event.flags
+                var actualModifiers = 0
+                if flags.contains(.maskCommand) { actualModifiers |= Int(cmdKey) }
+                if flags.contains(.maskShift) { actualModifiers |= Int(shiftKey) }
+                if flags.contains(.maskControl) { actualModifiers |= Int(controlKey) }
+                if flags.contains(.maskAlternate) { actualModifiers |= Int(optionKey) }
+                if actualModifiers != expectedModifiers {
+                    return Unmanaged.passRetained(event)
+                }
+            }
+
+            DispatchQueue.main.async {
+                ctrl.togglePanelPosition()
+            }
+            return nil
+        }
+        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
+            callback: callback,
+            userInfo: selfPtr
+        ) else {
+            logi("TogglePanel tap: 创建失败（可能缺少 Accessibility 权限）")
+            return
+        }
+        let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        togglePanelTap = tap
+        togglePanelRunLoopSource = runLoopSource
+        logi("TogglePanel tap: 已安装 (\(SettingsManager.shared.togglePanelHotkeyDisplay) 切换弹窗位置)")
+    }
+
+    private func removeToggleTap() {
+        guard let tap = togglePanelTap else { return }
+        CGEvent.tapEnable(tap: tap, enable: false)
+        if let source = togglePanelRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
+        }
+        togglePanelTap = nil
+        togglePanelRunLoopSource = nil
+        logi("TogglePanel tap: 已移除")
+    }
+
     func show(markdown: String, originalText: String, screenshotRect: NSRect) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
@@ -137,6 +223,8 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
 
             // 安装全局 ESC 拦截，确保无论焦点在哪里都能关闭弹窗
             self.installEscTap()
+            // 安装切换弹窗位置快捷键
+            self.installToggleTap()
         }
     }
 
@@ -171,6 +259,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         guard let win = notification.object as? NSWindow, win == panel else { return }
         removeEscTap()
+        removeToggleTap()
         panel = nil
         webView = nil
     }

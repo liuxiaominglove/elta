@@ -34,3 +34,6 @@ xcuserdata/
 # IDE
 .vscode/
 .idea/
+
+# nlpm generated artifacts
+~/.config/opencode/nlpm-history.json

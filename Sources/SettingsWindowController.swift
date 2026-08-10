@@ -48,6 +48,14 @@ final class SettingsWindowController: NSObject {
     private var selectionHotkeyMonitor: Any?
     private var closePanelHotkeyMonitor: Any?
 
+    // 切换弹窗位置快捷键
+    private var togglePanelHotkeyRecordBtn: NSButton?
+    private var togglePanelHotkeyStatusLabel: NSTextField?
+    private var isRecordingTogglePanelHotkey = false
+    private var recordedTogglePanelKeyCode: Int = 0
+    private var recordedTogglePanelModifiers: Int = 0
+    private var togglePanelHotkeyMonitor: Any?
+
     // Tab 3: 翻译模板
     private var templateTextView: NSTextView?
     private var templatePreviewWebView: WKWebView?
@@ -374,9 +382,10 @@ final class SettingsWindowController: NSObject {
     // MARK: - Tab 2: 快捷键
 
     private func buildHotkeyTab(size: NSSize) -> NSView {
-        let v = NSView(frame: NSRect(origin: .zero, size: size))
+        let contentHeight = size.height + 180
+        let v = NSView(frame: NSRect(x: 0, y: 0, width: size.width, height: contentHeight))
         let w = size.width
-        let y0: CGFloat = size.height - 30
+        let y0: CGFloat = contentHeight - 30
 
         // ---- 1. 截图翻译 ----
         let titleLabel = NSTextField(labelWithString: "📷 截图翻译快捷键")
@@ -463,24 +472,56 @@ final class SettingsWindowController: NSObject {
         v.addSubview(escStatus)
         closePanelHotkeyStatusLabel = escStatus
 
+        // ---- 4. 切换弹窗位置 ----
+        let toggleY = escY - 140
+        let toggleTitle = NSTextField(labelWithString: "↔️ 切换弹窗位置")
+        toggleTitle.frame = NSRect(x: 20, y: toggleY, width: 300, height: 22)
+        toggleTitle.font = .systemFont(ofSize: 15, weight: .semibold)
+        v.addSubview(toggleTitle)
+
+        let toggleDesc = NSTextField(labelWithString: "翻译浮动面板显示时，按快捷键将弹窗切换到屏幕另一侧")
+        toggleDesc.frame = NSRect(x: 20, y: toggleY - 24, width: w - 40, height: 16)
+        toggleDesc.font = .systemFont(ofSize: 11)
+        toggleDesc.textColor = .secondaryLabelColor
+        v.addSubview(toggleDesc)
+
+        let togglePanelBtn = NSButton(title: "  \(SettingsManager.shared.togglePanelHotkeyDisplay)  ", target: self, action: #selector(startRecordingTogglePanelHotkey))
+        togglePanelBtn.frame = NSRect(x: 20, y: toggleY - 65, width: 180, height: 32)
+        togglePanelBtn.font = .systemFont(ofSize: 18, weight: .medium)
+        togglePanelBtn.bezelStyle = .rounded
+        v.addSubview(togglePanelBtn)
+        togglePanelHotkeyRecordBtn = togglePanelBtn
+
+        let toggleStatus = NSTextField(labelWithString: "点击上方按钮开始录制新快捷键")
+        toggleStatus.frame = NSRect(x: 210, y: toggleY - 60, width: w - 230, height: 30)
+        toggleStatus.font = .systemFont(ofSize: 12)
+        toggleStatus.textColor = .secondaryLabelColor
+        toggleStatus.lineBreakMode = .byWordWrapping
+        v.addSubview(toggleStatus)
+        togglePanelHotkeyStatusLabel = toggleStatus
+
         // ---- 统一提示 ----
         let infoLabel = NSTextField(labelWithString: """
         💡 提示：
         • 截图翻译：任意位置按下快捷键 → 框选区域 → 自动翻译
         • 划词翻译：先选中文字 → 按下快捷键 → 自动翻译（更快捷）
         • 关闭面板：翻译浮动面板显示时，按下自定义快捷键即可关闭
+        • 切换弹窗：翻译浮动面板显示时，按下快捷键可在左右侧之间切换
         • 默认组合键：⌃Control、⇧Shift + 任意按键（单个字母无效）
-        • 关闭面板允许单独按 ESC，也可以设置为 Control/Shift/Command + 任意键
+        • 关闭面板允许单独按 ESC，切换弹窗允许单独按 ` 键
         • 红色代表未保存，点击「保存并应用」立即生效
         • 录制时若检测到与系统快捷键冲突，会给出黄色提醒
         """)
-        infoLabel.frame = NSRect(x: 20, y: escY - 210, width: w - 40, height: 120)
+        infoLabel.frame = NSRect(x: 20, y: toggleY - 220, width: w - 40, height: 140)
         infoLabel.font = .systemFont(ofSize: 11)
         infoLabel.textColor = .secondaryLabelColor
         infoLabel.lineBreakMode = .byWordWrapping
         v.addSubview(infoLabel)
 
-        return v
+        let scrollView = NSScrollView(frame: NSRect(origin: .zero, size: size))
+        scrollView.hasVerticalScroller = true
+        scrollView.documentView = v
+        return scrollView
     }
 
     @objc private func startRecordingHotkey() {
@@ -637,7 +678,7 @@ final class SettingsWindowController: NSObject {
     // MARK: - 关闭翻译面板快捷键录制
 
     @objc private func startRecordingClosePanelHotkey() {
-        guard !isRecordingClosePanelHotkey, !isRecordingHotkey, !isRecordingSelectionHotkey else { return }
+        guard !isRecordingClosePanelHotkey, !isRecordingHotkey, !isRecordingSelectionHotkey, !isRecordingTogglePanelHotkey else { return }
         isRecordingClosePanelHotkey = true
         recordedClosePanelKeyCode = 0
         recordedClosePanelModifiers = 0
@@ -707,6 +748,80 @@ final class SettingsWindowController: NSObject {
         closePanelHotkeyRecordBtn?.title = "    \(display)    "
         closePanelHotkeyRecordBtn?.bezelColor = nil
         closePanelHotkeyStatusLabel?.stringValue = "录制超时，请重试"
+    }
+
+    // MARK: - 切换弹窗位置快捷键录制
+
+    @objc private func startRecordingTogglePanelHotkey() {
+        guard !isRecordingTogglePanelHotkey, !isRecordingHotkey, !isRecordingSelectionHotkey, !isRecordingClosePanelHotkey else { return }
+        isRecordingTogglePanelHotkey = true
+        recordedTogglePanelKeyCode = 0
+        recordedTogglePanelModifiers = 0
+
+        togglePanelHotkeyRecordBtn?.title = "  ... 按下快捷键 ...  "
+        togglePanelHotkeyRecordBtn?.bezelColor = .systemOrange
+        togglePanelHotkeyStatusLabel?.stringValue = "请按下快捷键（允许单独按 ` 键）..."
+
+        togglePanelHotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, self.isRecordingTogglePanelHotkey else { return event }
+            self.recordTogglePanelHotkey(event: event)
+            return nil
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+            guard let self = self, self.isRecordingTogglePanelHotkey else { return }
+            self.cancelTogglePanelRecording()
+        }
+    }
+
+    private func recordTogglePanelHotkey(event: NSEvent) {
+        let carbonModifiers = cocoaToCarbonModifiers(event.modifierFlags)
+        let keyCode = Int(event.keyCode)
+
+        guard keyCode == 0x32 || hotkeyHasRequiredModifiers(carbonModifiers) else {
+            cancelTogglePanelRecording()
+            togglePanelHotkeyStatusLabel?.stringValue = "❌ 单个字母不能作为快捷键\n请同时按住 ⌘ / ⌥ / ⌃ / ⇧ 之一，或直接按 ` 键"
+            togglePanelHotkeyRecordBtn?.bezelColor = .systemRed
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                self?.togglePanelHotkeyRecordBtn?.bezelColor = nil
+            }
+            return
+        }
+
+        recordedTogglePanelKeyCode = keyCode
+        recordedTogglePanelModifiers = carbonModifiers
+        isRecordingTogglePanelHotkey = false
+
+        if let monitor = togglePanelHotkeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            togglePanelHotkeyMonitor = nil
+        }
+
+        let display = hotkeyDisplayString(keyCode: recordedTogglePanelKeyCode, modifiers: recordedTogglePanelModifiers)
+        togglePanelHotkeyRecordBtn?.title = "    \(display)    "
+        togglePanelHotkeyRecordBtn?.bezelColor = .systemGreen
+        var status = "✅ 已录制：\(display)\n点击「保存并应用」使快捷键生效"
+        if let conflict = checkSystemHotkeyConflict(modifiers: recordedTogglePanelModifiers, keyCode: recordedTogglePanelKeyCode) {
+            status += "\n⚠️ 可能与系统快捷键冲突：\(conflict)"
+            togglePanelHotkeyRecordBtn?.bezelColor = .systemOrange
+        }
+        togglePanelHotkeyStatusLabel?.stringValue = status
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.togglePanelHotkeyRecordBtn?.bezelColor = nil
+        }
+    }
+
+    private func cancelTogglePanelRecording() {
+        isRecordingTogglePanelHotkey = false
+        if let monitor = togglePanelHotkeyMonitor {
+            NSEvent.removeMonitor(monitor)
+            togglePanelHotkeyMonitor = nil
+        }
+        let display = SettingsManager.shared.togglePanelHotkeyDisplay
+        togglePanelHotkeyRecordBtn?.title = "    \(display)    "
+        togglePanelHotkeyRecordBtn?.bezelColor = nil
+        togglePanelHotkeyStatusLabel?.stringValue = "录制超时，请重试"
     }
 
     // MARK: - Tab 3: 翻译模板
@@ -865,6 +980,13 @@ final class SettingsWindowController: NSObject {
             settings.closePanelHotkeyDisplay = hotkeyDisplayString(keyCode: recordedClosePanelKeyCode, modifiers: recordedClosePanelModifiers)
         }
 
+        // 切换弹窗位置快捷键
+        if recordedTogglePanelKeyCode != 0 {
+            settings.togglePanelHotkeyKeyCode = recordedTogglePanelKeyCode
+            settings.togglePanelHotkeyModifiers = recordedTogglePanelModifiers
+            settings.togglePanelHotkeyDisplay = hotkeyDisplayString(keyCode: recordedTogglePanelKeyCode, modifiers: recordedTogglePanelModifiers)
+        }
+
         // 重新注册所有快捷键
         DispatchQueue.main.async {
             (NSApp.delegate as? AppDelegate)?.reregisterHotkey()
@@ -902,6 +1024,9 @@ final class SettingsWindowController: NSObject {
         settings.closePanelHotkeyKeyCode = 0x35
         settings.closePanelHotkeyModifiers = 0
         settings.closePanelHotkeyDisplay = "Esc"
+        settings.togglePanelHotkeyKeyCode = 0x32
+        settings.togglePanelHotkeyModifiers = 0
+        settings.togglePanelHotkeyDisplay = "`"
 
         // 更新 UI
         templateTextView?.string = settings.defaultPrompt
@@ -912,6 +1037,8 @@ final class SettingsWindowController: NSObject {
         selectionHotkeyStatusLabel?.stringValue = "已恢复默认快捷键 ⇧⌃T"
         closePanelHotkeyRecordBtn?.title = "    Esc    "
         closePanelHotkeyStatusLabel?.stringValue = "已恢复默认快捷键 Esc"
+        togglePanelHotkeyRecordBtn?.title = "    `    "
+        togglePanelHotkeyStatusLabel?.stringValue = "已恢复默认快捷键 `"
 
         // 清除录制的临时值
         recordedKeyCode = 0
@@ -920,6 +1047,8 @@ final class SettingsWindowController: NSObject {
         recordedSelectionModifiers = 0
         recordedClosePanelKeyCode = 0
         recordedClosePanelModifiers = 0
+        recordedTogglePanelKeyCode = 0
+        recordedTogglePanelModifiers = 0
     }
 
     // MARK: - 提供商切换

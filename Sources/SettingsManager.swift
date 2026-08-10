@@ -22,6 +22,10 @@ final class SettingsManager {
         static let closePanelHotkeyKeyCode   = "snaptranslate.closePanelHotkeyKeyCode"
         static let closePanelHotkeyModifiers = "snaptranslate.closePanelHotkeyModifiers"
         static let closePanelHotkeyDisplay   = "snaptranslate.closePanelHotkeyDisplay"
+        // 切换弹窗位置快捷键
+        static let togglePanelHotkeyKeyCode   = "snaptranslate.togglePanelHotkeyKeyCode"
+        static let togglePanelHotkeyModifiers = "snaptranslate.togglePanelHotkeyModifiers"
+        static let togglePanelHotkeyDisplay   = "snaptranslate.togglePanelHotkeyDisplay"
         static let customEndpoint   = "snaptranslate.customEndpoint"
         static let customModel      = "snaptranslate.customModel"
         static let ollamaModel      = "snaptranslate.ollamaModel"
@@ -190,6 +194,20 @@ final class SettingsManager {
     var closePanelHotkeyDisplay: String {
         get { defaults.string(forKey: Keys.closePanelHotkeyDisplay) ?? "Esc" }
         set { defaults.set(newValue, forKey: Keys.closePanelHotkeyDisplay) }
+    }
+
+    // 切换弹窗位置快捷键（默认 ` 键，keyCode 0x32，无修饰键）
+    var togglePanelHotkeyKeyCode: Int {
+        get { defaults.integer(forKey: Keys.togglePanelHotkeyKeyCode) == 0 ? 0x32 : defaults.integer(forKey: Keys.togglePanelHotkeyKeyCode) }
+        set { defaults.set(newValue, forKey: Keys.togglePanelHotkeyKeyCode) }
+    }
+    var togglePanelHotkeyModifiers: Int {
+        get { defaults.integer(forKey: Keys.togglePanelHotkeyModifiers) }
+        set { defaults.set(newValue, forKey: Keys.togglePanelHotkeyModifiers) }
+    }
+    var togglePanelHotkeyDisplay: String {
+        get { defaults.string(forKey: Keys.togglePanelHotkeyDisplay) ?? "`" }
+        set { defaults.set(newValue, forKey: Keys.togglePanelHotkeyDisplay) }
     }
 
     // MARK: 窗口
