@@ -2,6 +2,12 @@
 
 All notable changes to ELTA will be documented in this file.
 
+## [v5.1.30] — 2026-08-10
+
+### Added
+- 新增切换弹窗位置快捷键，默认 `` ` `` 键一键切换翻译面板左右位置
+- 快捷键可在设置 → 快捷键中自定义
+
 ## [v5.1.29] — 2026-08-05
 
 ### Security
