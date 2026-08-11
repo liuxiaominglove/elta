@@ -47,4 +47,17 @@ func runTextNormalizerTests() {
         let expected = "A\n\nB"
         try assertEqual(TextNormalizer.normalizeLineBreaks(input), expected)
     }
+
+    // === 缩进分段场景（Apple Books） ===
+    test("tab-indented line starts new paragraph") {
+        let input = "First paragraph\n\t\t\tSecond paragraph"
+        let expected = "First paragraph\n\nSecond paragraph"
+        try assertEqual(TextNormalizer.normalizeLineBreaks(input), expected)
+    }
+
+    test("mixed: inline continuation + tab-indented paragraph + standard paragraph") {
+        let input = "A\nB\n\t\t\tC\n\nD\nE"
+        let expected = "A B\n\nC\n\nD E"
+        try assertEqual(TextNormalizer.normalizeLineBreaks(input), expected)
+    }
 }

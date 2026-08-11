@@ -80,7 +80,13 @@ let loge = Logger.shared.error
 enum TextNormalizer {
     /// 段内单 \n 合并为空格，\n\n 保留为段落间隔，去掉首尾多余空行
     static func normalizeLineBreaks(_ text: String) -> String {
-        let paragraphs = text.components(separatedBy: "\n\n")
+        // 预处理：换行+缩进（\n\t或\n 空格）→ 标准段落分隔
+        var result = text
+        if let r = try? NSRegularExpression(pattern: "\\n[\\t ]+") {
+            let range = NSRange(result.startIndex..., in: result)
+            result = r.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "\n\n")
+        }
+        let paragraphs = result.components(separatedBy: "\n\n")
         let processed = paragraphs.map { paragraph in
             paragraph
                 .components(separatedBy: "\n")
