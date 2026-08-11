@@ -104,6 +104,18 @@ func runSettingsManagerTests() {
         try assertNil(SettingsManager.shared.apiKey(for: .openai) as Any?)
     }
 
+    test("apiKey falls back to UserDefaults when Keychain is empty") {
+        let udKey = "snaptranslate.apikey.deepseek"
+        // Ensure Keychain is empty
+        SettingsManager.shared.setApiKey(nil, for: .deepseek)
+        // Write directly to UserDefaults (simulating failed Keychain migration)
+        UserDefaults.standard.set("sk-ud-fallback", forKey: udKey)
+        // Currently RED: apiKey only reads from Keychain, not UserDefaults
+        try assertEqual(SettingsManager.shared.apiKey(for: .deepseek), "sk-ud-fallback")
+        // Clean up
+        UserDefaults.standard.removeObject(forKey: udKey)
+    }
+
     // Restore default state
     SettingsManager.shared.apiProvider = .deepseek
 }

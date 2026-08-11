@@ -54,9 +54,13 @@ final class SettingsManager {
     }
 
     func apiKey(for provider: AIProvider) -> String? {
-        let result = KeychainHelper.read(account: Self.apiKeyUDKey(for: provider))
-        logi("Keychain 读取: provider=\(provider.rawValue), hit=\(result != nil)")
-        return result
+        let account = Self.apiKeyUDKey(for: provider)
+        if let result = KeychainHelper.read(account: account) {
+            logi("Keychain 读取: provider=\(provider.rawValue), hit=true")
+            return result
+        }
+        logi("Keychain 读取: provider=\(provider.rawValue), hit=false, fallback to UserDefaults")
+        return defaults.string(forKey: account)
     }
 
     func setApiKey(_ key: String?, for provider: AIProvider) {
