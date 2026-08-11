@@ -122,6 +122,8 @@ kbd {
   margin-top: 14px;
   font-size: 13px; color: var(--muted);
 }
+.version-link { color: var(--accent); opacity: 0.85; }
+.version-link:hover { opacity: 1; }
 
 /* ---- Section ---- */
 .section {
