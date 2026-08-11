@@ -53,6 +53,7 @@ func runAllTests() -> Int32 {
     runHotkeyHelpersTests()
     runSettingsManagerTests()
     runTextPreprocessorTests()
+    runBuildScriptTests()
 
     print("\n========== Results ==========")
     print("Total: \(totalTests) | Passed: \(passedTests) | Failed: \(failedTests)")

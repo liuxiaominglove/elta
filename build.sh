@@ -87,42 +87,35 @@ echo "=========================================="
 echo " 打包完成: $APP_BUNDLE"
 echo ""
 
-# 询问是否安装
-read -p "是否安装到 /Applications？[Y/n] " -n 1 -r
+# 6. 自动安装到 /Applications
+echo "[6/6] 安装到 /Applications..."
+
+# 终止旧版本
+killall "$BINARY_NAME" 2>/dev/null || true
+sleep 0.5
+
+# 删除旧版本
+rm -rf "$APP_TARGET" 2>/dev/null || true
+
+# 复制新版本
+cp -R "$APP_BUNDLE" "$APP_TARGET"
+
+# 签名
+codesign --force --sign - "$APP_TARGET" 2>/dev/null
+
+echo "安装完成: $APP_TARGET"
+echo ""
+
+# 询问是否启动
+read -p "是否立即启动？[Y/n] " -n 1 -r
 echo ""
 if [[ $REPLY =~ ^[Yy] ]] || [[ -z $REPLY ]]; then
-    echo "正在安装..."
-    
-    # 终止旧版本
-    killall "$BINARY_NAME" 2>/dev/null || true
-    sleep 0.5
-
-    # 删除旧版本
-    rm -rf "$APP_TARGET" 2>/dev/null || true
-
-    # 复制新版本
-    cp -R "$APP_BUNDLE" "$APP_TARGET"
-
-    # 签名
-    codesign --force --sign - "$APP_TARGET" 2>/dev/null
-
-    echo "安装完成: $APP_TARGET"
+    open "$APP_TARGET"
+    echo "已启动 $APP_NAME"
+    sleep 1
     echo ""
-    
-    # 启动
-    read -p "是否立即启动？[Y/n] " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Yy] ]] || [[ -z $REPLY ]]; then
-        open "$APP_TARGET"
-        echo "已启动 $APP_NAME"
-        sleep 1
-        echo ""
-        echo "📖 查看菜单栏右上角的 ELTA 图标"
-        echo "⌨️  快捷键: Cmd+T 截图翻译"
-    fi
-else
-    echo ""
-    echo "手动安装: cp -R \"$APP_BUNDLE\" /Applications/"
+    echo "📖 查看菜单栏右上角的 ELTA 图标"
+    echo "⌨️  快捷键: Cmd+T 截图翻译"
 fi
 
 echo ""

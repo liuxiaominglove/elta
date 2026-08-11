@@ -32,6 +32,7 @@ TEST_FILES=(
   "$PROJECT_DIR/Tests/HotkeyHelpersTests.swift"
   "$PROJECT_DIR/Tests/SettingsManagerTests.swift"
   "$PROJECT_DIR/Tests/TextPreprocessorTests.swift"
+  "$PROJECT_DIR/Tests/BuildScriptTests.swift"
   "$PROJECT_DIR/Tests/main.swift"
 )
 
