@@ -291,11 +291,12 @@ final class HTMLRenderer {
         html = html.replacingOccurrences(of: "<p></p>", with: "")
         html = html.replacingOccurrences(of: "<p><br></p>", with: "")
 
-        let escaped = originalText
+        let normalized = TextNormalizer.normalizeLineBreaks(originalText)
+        let escaped = normalized
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
-            .replacingOccurrences(of: "\n", with: "<br>")
+            .replacingOccurrences(of: "\n\n", with: "<br><br>")
 
         let themeClass = isDark ? "dark" : "light"
         return """

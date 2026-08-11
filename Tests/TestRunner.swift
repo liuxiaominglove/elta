@@ -53,6 +53,7 @@ func runAllTests() -> Int32 {
     runHotkeyHelpersTests()
     runSettingsManagerTests()
     runTextPreprocessorTests()
+    runTextNormalizerTests()
     runBuildScriptTests()
 
     print("\n========== Results ==========")

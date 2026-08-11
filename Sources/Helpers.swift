@@ -75,6 +75,23 @@ let logi = Logger.shared.info
 let loge = Logger.shared.error
 
 
+// MARK: - 文本归一化
+
+enum TextNormalizer {
+    /// 段内单 \n 合并为空格，\n\n 保留为段落间隔，去掉首尾多余空行
+    static func normalizeLineBreaks(_ text: String) -> String {
+        let paragraphs = text.components(separatedBy: "\n\n")
+        let processed = paragraphs.map { paragraph in
+            paragraph
+                .components(separatedBy: "\n")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+        }.filter { !$0.isEmpty }
+        return processed.joined(separator: "\n\n")
+    }
+}
+
 // MARK: - Keychain 安全存储
 
 struct KeychainHelper {
