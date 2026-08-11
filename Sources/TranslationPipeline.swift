@@ -78,7 +78,8 @@ final class TranslationPipeline {
                 }
 
                 // 表格检测：OCR 坐标 → Markdown 表格（或纯文本）
-                let text = TableExtractor.process(blocks: blocks)
+                let rawText = TableExtractor.process(blocks: blocks)
+                let text = TextPreprocessor.condenseCitation(rawText)
                 let isTable = text.contains("| -")
                 logi("表格检测: \(isTable ? "是表格" : "纯文本"), \(blocks.count) 块文本")
 
@@ -239,10 +240,13 @@ final class TranslationPipeline {
             selectedText = getSelectedTextViaCopyPasteboard()
         }
 
-        guard let text = selectedText, !text.isEmpty else {
+        guard let rawText = selectedText, !rawText.isEmpty else {
             showError("未能获取选中文本。\n可能原因：\n1. 未选中文本\n2. 未授予【辅助功能】权限（系统设置 → 隐私与安全性 → 辅助功能）")
             return
         }
+
+        // 预处理：压缩 Apple Books 多行引用块为单行
+        let text = TextPreprocessor.condenseCitation(rawText)
 
         logi("划词获取文本: \(text.prefix(100))...")
         showTextLoading()

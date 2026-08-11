@@ -22,6 +22,7 @@ SRC_FILES=(
   "$PROJECT_DIR/Sources/HotkeyHelpers.swift"
   "$PROJECT_DIR/Sources/Helpers.swift"
   "$PROJECT_DIR/Sources/SettingsManager.swift"
+  "$PROJECT_DIR/Sources/TextPreprocessor.swift"
 )
 
 TEST_FILES=(
@@ -30,6 +31,7 @@ TEST_FILES=(
   "$PROJECT_DIR/Tests/AIProviderTests.swift"
   "$PROJECT_DIR/Tests/HotkeyHelpersTests.swift"
   "$PROJECT_DIR/Tests/SettingsManagerTests.swift"
+  "$PROJECT_DIR/Tests/TextPreprocessorTests.swift"
   "$PROJECT_DIR/Tests/main.swift"
 )
 
