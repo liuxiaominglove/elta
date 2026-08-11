@@ -116,6 +116,20 @@ func runSettingsManagerTests() {
         UserDefaults.standard.removeObject(forKey: udKey)
     }
 
+    test("setApiKey writes to UserDefaults as fallback") {
+        let udKey = "snaptranslate.apikey.deepseek"
+        // Clean up first
+        SettingsManager.shared.setApiKey(nil, for: .deepseek)
+        UserDefaults.standard.removeObject(forKey: udKey)
+        // Set key
+        SettingsManager.shared.setApiKey("sk-dual-write", for: .deepseek)
+        // Verify UserDefaults has the value (RED: setApiKey only writes to Keychain)
+        try assertEqual(UserDefaults.standard.string(forKey: udKey), "sk-dual-write")
+        // Clean up
+        SettingsManager.shared.setApiKey(nil, for: .deepseek)
+        UserDefaults.standard.removeObject(forKey: udKey)
+    }
+
     // Restore default state
     SettingsManager.shared.apiProvider = .deepseek
 }

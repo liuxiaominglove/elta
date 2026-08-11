@@ -67,10 +67,16 @@ final class SettingsManager {
         let account = Self.apiKeyUDKey(for: provider)
         if let key = key, !key.isEmpty {
             logi("Keychain 写入: provider=\(provider.rawValue), len=\(key.count)")
-            _ = KeychainHelper.save(key: key, account: account)
+            let ok = KeychainHelper.save(key: key, account: account)
+            if !ok {
+                logi("Keychain 写入失败, fallback to UserDefaults: provider=\(provider.rawValue)")
+            }
+            // Always store in UserDefaults as fallback for ad-hoc signed builds
+            defaults.set(key, forKey: account)
         } else {
             logi("Keychain 删除: provider=\(provider.rawValue)")
             _ = KeychainHelper.delete(account: account)
+            defaults.removeObject(forKey: account)
         }
     }
 
