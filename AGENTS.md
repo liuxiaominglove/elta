@@ -37,6 +37,24 @@ Key modules: `AppDelegate` (lifecycle + hotkey registration), `StatusBarControll
 - GitHub Actions on `macos-14`, triggered by `v*` tags or manual dispatch.
 - Builds Universal Binary → packages `.app` → creates DMG via `create-dmg` → uploads to release.
 
-## Permissions
+## Security
+
+**API Key / Secret 调试纪律。** 以下命令**禁止**无过滤输出：
+
+```bash
+# ❌ 禁止 — 会打印完整 Key 值到对话日志
+defaults read com.elta.app
+security find-generic-password -s "com.elta.snaptranslate"
+defaults read com.elta.app | grep apikey
+
+# ✅ 正确 — 只确认存在与否，不泄露值
+defaults read com.elta.app | grep -c apikey
+security find-generic-password -s "com.elta.snaptranslate" -w >/dev/null 2>&1 && echo "exists" || echo "missing"
+```
+
+- 代码中使用 `logi("len=\(key.count)")` 输出长度，已正确处理。不新增输出 Key 明文的日志。
+- 测试中存储测试 Key 后必须在 cleanup 中删除（`setApiKey(nil)`）。
+- `.env`、`ghp_*` token、`sk-*` key 不得写入文件、commit、或在对话中完整打印。
+- 如不慎暴露 Key，立即提醒用户去对应平台重置。
 
 The app requires macOS **Screen Recording** and **Accessibility** permissions (TCC). These are requested at first use in `TranslationPipeline.primePermissionsIfNeeded()`. Both must be granted for all features to work.
