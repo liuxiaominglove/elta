@@ -92,42 +92,32 @@ func runSettingsManagerTests() {
         UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt")
     }
 
-    test("setApiKey stores and retrieves key") {
+    test("setApiKey stores to Keychain and retrieves via activeApiKey") {
         SettingsManager.shared.setApiKey("test-key-123", for: .deepseek)
         try assertEqual(SettingsManager.shared.apiKey(for: .deepseek), "test-key-123")
-        // Clean up
         SettingsManager.shared.setApiKey(nil, for: .deepseek)
+    }
+
+    test("setApiKey does NOT write to UserDefaults") {
+        let udKey = "snaptranslate.apikey.deepseek"
+        SettingsManager.shared.setApiKey(nil, for: .deepseek)
+        UserDefaults.standard.removeObject(forKey: udKey)
+        SettingsManager.shared.setApiKey("sk-secure-only", for: .deepseek)
+        try assertNil(UserDefaults.standard.string(forKey: udKey) as Any?)
+        SettingsManager.shared.setApiKey(nil, for: .deepseek)
+    }
+
+    test("activeApiKey reflects current provider's key") {
+        SettingsManager.shared.apiProvider = .openai
+        SettingsManager.shared.setApiKey("sk-openai-test", for: .openai)
+        try assertEqual(SettingsManager.shared.activeApiKey, "sk-openai-test")
+        SettingsManager.shared.setApiKey(nil, for: .openai)
+        SettingsManager.shared.apiProvider = .deepseek
     }
 
     test("apiKey returns nil when not set") {
         SettingsManager.shared.setApiKey(nil, for: .openai)
         try assertNil(SettingsManager.shared.apiKey(for: .openai) as Any?)
-    }
-
-    test("apiKey falls back to UserDefaults when Keychain is empty") {
-        let udKey = "snaptranslate.apikey.deepseek"
-        // Ensure Keychain is empty
-        SettingsManager.shared.setApiKey(nil, for: .deepseek)
-        // Write directly to UserDefaults (simulating failed Keychain migration)
-        UserDefaults.standard.set("sk-ud-fallback", forKey: udKey)
-        // Currently RED: apiKey only reads from Keychain, not UserDefaults
-        try assertEqual(SettingsManager.shared.apiKey(for: .deepseek), "sk-ud-fallback")
-        // Clean up
-        UserDefaults.standard.removeObject(forKey: udKey)
-    }
-
-    test("setApiKey writes to UserDefaults as fallback") {
-        let udKey = "snaptranslate.apikey.deepseek"
-        // Clean up first
-        SettingsManager.shared.setApiKey(nil, for: .deepseek)
-        UserDefaults.standard.removeObject(forKey: udKey)
-        // Set key
-        SettingsManager.shared.setApiKey("sk-dual-write", for: .deepseek)
-        // Verify UserDefaults has the value (RED: setApiKey only writes to Keychain)
-        try assertEqual(UserDefaults.standard.string(forKey: udKey), "sk-dual-write")
-        // Clean up
-        SettingsManager.shared.setApiKey(nil, for: .deepseek)
-        UserDefaults.standard.removeObject(forKey: udKey)
     }
 
     // Restore default state

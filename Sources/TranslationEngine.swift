@@ -6,7 +6,7 @@ import Foundation
 final class TranslationEngine {
     static let shared = TranslationEngine()
 
-    func translate(text: String) -> String? {
+    func translate(text: String, completion: @escaping (String?) -> Void) {
         let settings = SettingsManager.shared
         let provider = settings.apiProvider
         guard let key = settings.activeApiKey, !key.isEmpty else {
@@ -27,7 +27,8 @@ final class TranslationEngine {
                 }
                 NSApp.deactivate()
             }
-            return nil
+            completion(nil)
+            return
         }
 
         let messages: [[String: Any]] = [
@@ -39,10 +40,9 @@ final class TranslationEngine {
         let endpoint = provider.endpoint
         var request: URLRequest
 
-        // 不同提供商的请求格式
         switch provider {
         case .anthropic:
-            guard let url = URL(string: endpoint) else { loge("无效 API 地址"); return nil }
+            guard let url = URL(string: endpoint) else { loge("无效 API 地址"); completion(nil); return }
             request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -57,7 +57,7 @@ final class TranslationEngine {
 
         case .googleAI:
             let googleEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/\(provider.defaultModel):generateContent"
-            guard let url = URL(string: googleEndpoint) else { loge("无效 API 地址"); return nil }
+            guard let url = URL(string: googleEndpoint) else { loge("无效 API 地址"); completion(nil); return }
             request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -69,8 +69,7 @@ final class TranslationEngine {
             ]
 
         default:
-            // OpenAI-compatible API
-            guard let url = URL(string: endpoint) else { loge("无效 API 地址"); return nil }
+            guard let url = URL(string: endpoint) else { loge("无效 API 地址"); completion(nil); return }
             request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -87,59 +86,37 @@ final class TranslationEngine {
         request.timeoutInterval = 120
 
         do { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
-        catch { loge("JSON 序列化失败: \(error)"); return nil }
+        catch { loge("JSON 序列化失败: \(error)"); completion(nil); return }
 
         logi("调用 \(provider.displayName) API...")
-        let semaphore = DispatchSemaphore(value: 0)
-        var resultText: String?
-        var errorMsg: String?
 
         let task = URLSession.shared.dataTask(with: request) { data, response, error in
-            defer { semaphore.signal() }
-            if let e = error { errorMsg = "网络: \(e.localizedDescription)"; return }
-            guard let http = response as? HTTPURLResponse else { errorMsg = "无效响应"; return }
-            guard let data = data else { errorMsg = "无数据"; return }
+            if let e = error {
+                loge("API 失败: 网络: \(e.localizedDescription)")
+                completion(nil)
+                return
+            }
+            guard let http = response as? HTTPURLResponse else {
+                loge("API 失败: 无效响应")
+                completion(nil)
+                return
+            }
+            guard let data = data else {
+                loge("API 失败: 无数据")
+                completion(nil)
+                return
+            }
             if http.statusCode != 200 {
                 let b = String(data: data, encoding: .utf8) ?? ""
-                errorMsg = "HTTP \(http.statusCode): \(b.prefix(200))"; return
+                loge("API 失败: HTTP \(http.statusCode): \(b.prefix(200))")
+                completion(nil)
+                return
             }
-            do {
-                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    switch provider {
-                    case .anthropic:
-                        // Anthropic 响应格式: { "content": [{"type": "text", "text": "..."}] }
-                        if let content = json["content"] as? [[String: Any]],
-                           let first = content.first,
-                           let text = first["text"] as? String {
-                            resultText = text
-                        } else { errorMsg = "解析 Anthropic 响应失败" }
-                    case .googleAI:
-                        // Google Gemini 响应格式: { "candidates": [{"content": {"parts": [{"text": "..."}]}}] }
-                        if let candidates = json["candidates"] as? [[String: Any]],
-                           let first = candidates.first,
-                           let content = first["content"] as? [String: Any],
-                           let parts = content["parts"] as? [[String: Any]],
-                           let firstPart = parts.first,
-                           let text = firstPart["text"] as? String {
-                            resultText = text
-                        } else { errorMsg = "解析 Gemini 响应失败" }
-                    default:
-                        // OpenAI-compatible 响应格式: { "choices": [{"message": {"content": "..."}}] }
-                        if let choices = json["choices"] as? [[String: Any]],
-                           let first = choices.first,
-                           let msg = first["message"] as? [String: Any],
-                           let content = msg["content"] as? String {
-                            resultText = content
-                        } else { errorMsg = "解析响应失败" }
-                    }
-                } else { errorMsg = "解析响应失败" }
-            } catch { errorMsg = "JSON 错误: \(error)" }
+
+            let result = ResponseParser.parse(data: data, provider: provider)
+            logi("API 返回 \(result?.count ?? 0) 字符")
+            completion(result)
         }
         task.resume()
-        semaphore.wait()
-
-        if let err = errorMsg { loge("API 失败: \(err)"); return nil }
-        logi("API 返回 \(resultText?.count ?? 0) 字符")
-        return resultText
     }
 }

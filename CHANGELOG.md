@@ -2,6 +2,24 @@
 
 All notable changes to ELTA will be documented in this file.
 
+## [v5.1.32] — 2026-08-12
+
+### Security
+- API Key 不再写入 UserDefaults 明文存储，仅保留 Keychain 加密（移除 `setApiKey` 的 UD 回写）
+- 翻译结果面板 AI 响应做 HTML 转义 + WKWebView 禁用 JavaScript（防御 XSS）
+- 自定义 Endpoint URL 校验：拦截 `file://`/`javascript:` 等危险 scheme，非本地 HTTP 必须 HTTPS
+- 划词翻译剪贴板恢复失败时记录警告日志
+
+### Fixed
+- 修复快捷键重注册时 Carbon 事件处理器累积泄漏（多次切换快捷键后重复触发翻译）
+- 修复 `activeApiKey` 保护性判空，防止未经配置首次启动偶发崩溃
+- SettingsManager 关键属性（`apiProvider`/`activeApiKey`/热键）加 `NSLock` 线程安全保护
+
+### Changed
+- TranslationEngine 从阻塞式 Semaphore 重构为异步回调，避免占用 GCD 线程池
+- 提取 `ResponseParser` 独立模块，统一多提供商 JSON 响应解析
+- 翻译结果面板 JavaScript 禁用 API 改用 `allowsContentJavaScript`（替代已 deprecated 的 `javaScriptEnabled`）
+
 ## [v5.1.30] — 2026-08-10
 
 ### Added

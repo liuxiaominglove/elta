@@ -85,16 +85,17 @@ final class TranslationPipeline {
 
                 // 翻译
                 logi("[Step 3] AI 翻译...")
-                guard let result = TranslationEngine.shared.translate(text: text) else {
+                TranslationEngine.shared.translate(text: text) { [weak self] result in
+                    guard let result = result else {
+                        self?.hideLoading()
+                        self?.showError("AI 翻译失败。\nOCR 已识别文本：\n\(text.prefix(200))")
+                        return
+                    }
                     self?.hideLoading()
-                    self?.showError("AI 翻译失败。\nOCR 已识别文本：\n\(text.prefix(200))")
-                    return
+                    ResultWindowController.shared.show(markdown: result, originalText: text, screenshotRect: rect)
+                    NotificationManager.shared.show(title: APP_DISPLAY_NAME, body: "翻译完成，点击查看结果")
+                    logi("流水线完成")
                 }
-
-                self?.hideLoading()
-                ResultWindowController.shared.show(markdown: result, originalText: text, screenshotRect: rect)
-                NotificationManager.shared.show(title: APP_DISPLAY_NAME, body: "翻译完成，点击查看结果")
-                logi("流水线完成")
             }
         }
     }
@@ -259,17 +260,18 @@ final class TranslationPipeline {
 
         // 5. 直接翻译
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let result = TranslationEngine.shared.translate(text: processedText) else {
+            TranslationEngine.shared.translate(text: processedText) { [weak self] result in
+                guard let result = result else {
+                    self?.hideLoading()
+                    self?.showError("AI 翻译失败。\n选中文本：\n\(text.prefix(200))")
+                    return
+                }
                 self?.hideLoading()
-                self?.showError("AI 翻译失败。\n选中文本：\n\(text.prefix(200))")
-                return
+                let mouseRect = NSRect(x: mouseLocation.x - 5, y: mouseLocation.y - 5, width: 10, height: 10)
+                ResultWindowController.shared.show(markdown: result, originalText: text, screenshotRect: mouseRect)
+                NotificationManager.shared.show(title: APP_DISPLAY_NAME, body: "划词翻译完成，点击查看结果")
+                logi("划词翻译流水线完成")
             }
-            self?.hideLoading()
-            // 用鼠标位置构造一个小矩形，让弹窗知道用户在哪一侧屏幕
-            let mouseRect = NSRect(x: mouseLocation.x - 5, y: mouseLocation.y - 5, width: 10, height: 10)
-            ResultWindowController.shared.show(markdown: result, originalText: text, screenshotRect: mouseRect)
-            NotificationManager.shared.show(title: APP_DISPLAY_NAME, body: "划词翻译完成，点击查看结果")
-            logi("划词翻译流水线完成")
         }
     }
 
@@ -322,7 +324,10 @@ final class TranslationPipeline {
         // 恢复旧剪贴板（如果可能）
         if !oldItems.isEmpty {
             pasteboard.clearContents()
-            pasteboard.writeObjects(oldItems as [NSPasteboardWriting])
+            let restored = pasteboard.writeObjects(oldItems as [NSPasteboardWriting])
+            if !restored {
+                logi("⚠️ 剪贴板恢复失败，原始剪贴板内容可能已丢失")
+            }
         }
 
         return selectedText

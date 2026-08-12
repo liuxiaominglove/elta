@@ -56,6 +56,10 @@ func runAllTests() -> Int32 {
     runTextNormalizerTests()
     runTableExtractorTests()
     runBuildScriptTests()
+    runHTMLRendererTests()
+    runEndpointValidationTests()
+    runSettingsManagerThreadSafetyTests()
+    runTranslationEngineTests()
 
     print("\n========== Results ==========")
     print("Total: \(totalTests) | Passed: \(passedTests) | Failed: \(failedTests)")

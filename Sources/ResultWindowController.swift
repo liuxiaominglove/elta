@@ -209,6 +209,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             panel.delegate = self
 
             let config = WKWebViewConfiguration()
+            config.defaultWebpagePreferences.allowsContentJavaScript = false
             let wv = ResultWebView(frame: NSRect(x: 0, y: 0, width: frame.width, height: frame.height),
                                    configuration: config)
             wv.autoresizingMask = [.width, .height]
@@ -274,7 +275,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
 
 final class HTMLRenderer {
     static func render(markdown: String, originalText: String, isDark: Bool) -> String {
-        var html = markdown
+        var html = escapeHTML(markdown)
         // MD 标题 → HTML 标题
         for keyword in ["中文翻译", "重要词汇", "常用短语与习语", "核查"] {
             html = html.replacingOccurrences(of: "## \(keyword)", with: "<h2>\(keyword)</h2>")
@@ -332,6 +333,13 @@ final class HTMLRenderer {
         <div class="footer">Powered by \(SettingsManager.shared.apiProvider.shortName) AI · ELTA — 截图即译，精读利器</div>
         </body></html>
         """
+    }
+
+    static func escapeHTML(_ text: String) -> String {
+        text.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
     }
 
     // MARK: - Markdown 表格 → HTML 表格

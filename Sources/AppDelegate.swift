@@ -7,6 +7,7 @@ import UserNotifications
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkeyRef: EventHotKeyRef?
     private var selectionHotkeyRef: EventHotKeyRef?
+    private var eventHandlerRef: EventHandlerRef?
     private let settings = SettingsManager.shared
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -29,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         registerHotkey()
 
         // 启动时弹出设置窗口
-        if settings.activeApiKey == nil || settings.activeApiKey!.isEmpty {
+        if settings.activeApiKey?.isEmpty ?? true {
             logi("首次运行，API Key 未配置")
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
@@ -101,7 +102,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else { loge("划词快捷键注册失败") }
         }
 
-        // 事件处理器（只安装一次，按 id 分发）
+        // 事件处理器 — 先移除旧的再安装新的，防止重复累积
+        if let oldHandler = eventHandlerRef {
+            RemoveEventHandler(oldHandler)
+            eventHandlerRef = nil
+        }
         var eventSpec = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
             eventKind: OSType(kEventHotKeyPressed)
@@ -113,26 +118,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                         EventParamType(typeEventHotKeyID), nil,
                                         MemoryLayout<EventHotKeyID>.size, nil, &hkID)
             if err == noErr {
-                // 在快捷键事件上下文中立即捕获前台应用的 PID，
-                // 避免 dispatch async 之后焦点已转移到自身导致读取失败
                 let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-                // 如果当前前台应用是 ELTA 自己（比如旧弹窗在最前），
-                // 传 nil 给划词翻译，让它回退到系统全局聚焦元素读取文本。
                 let ownPID = pid_t(ProcessInfo.processInfo.processIdentifier)
                 let effectivePID: pid_t? = (frontPID == ownPID) ? nil : frontPID
                 DispatchQueue.main.async {
                     if hkID.id == 10 || hkID.id == 11 {
-                        // 划词翻译
                         TranslationPipeline.shared.selectionSourcePID = effectivePID
                         TranslationPipeline.shared.startTextTranslation()
                     } else {
-                        // 截图翻译
                         TranslationPipeline.shared.start()
                     }
                 }
             }
             return noErr
-        }, 1, &eventSpec, nil, nil)
+        }, 1, &eventSpec, nil, &eventHandlerRef)
     }
 
     @objc func screenshotTranslate() {
@@ -151,6 +150,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ScreenshotEngine.shared.cleanup()
         if let ref = hotkeyRef { UnregisterEventHotKey(ref) }
         if let ref = selectionHotkeyRef { UnregisterEventHotKey(ref) }
+        if let ref = eventHandlerRef { RemoveEventHandler(ref) }
         logi("\(APP_DISPLAY_NAME) 已退出")
     }
 }

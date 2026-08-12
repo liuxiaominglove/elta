@@ -24,6 +24,8 @@ SRC_FILES=(
   "$PROJECT_DIR/Sources/SettingsManager.swift"
   "$PROJECT_DIR/Sources/TextPreprocessor.swift"
   "$PROJECT_DIR/Sources/TableExtractor.swift"
+  "$PROJECT_DIR/Sources/ResultWindowController.swift"
+  "$PROJECT_DIR/Sources/ResponseParser.swift"
 )
 
 TEST_FILES=(
@@ -36,6 +38,10 @@ TEST_FILES=(
   "$PROJECT_DIR/Tests/TextNormalizerTests.swift"
   "$PROJECT_DIR/Tests/TableExtractorTests.swift"
   "$PROJECT_DIR/Tests/BuildScriptTests.swift"
+  "$PROJECT_DIR/Tests/HTMLRendererTests.swift"
+  "$PROJECT_DIR/Tests/EndpointValidationTests.swift"
+  "$PROJECT_DIR/Tests/SettingsManagerThreadSafetyTests.swift"
+  "$PROJECT_DIR/Tests/TranslationEngineTests.swift"
   "$PROJECT_DIR/Tests/main.swift"
 )
 
@@ -50,6 +56,7 @@ swiftc \
   -framework Carbon \
   -framework Security \
   -framework ApplicationServices \
+  -framework WebKit \
   "${ALL_FILES[@]}"
 
 echo "[1/2] Build succeeded."

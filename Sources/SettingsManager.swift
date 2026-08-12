@@ -7,6 +7,7 @@ final class SettingsManager {
     static let shared = SettingsManager()
 
     private let defaults = UserDefaults.standard
+    private let lock = NSLock()
     private enum Keys {
         static let apiProvider      = "snaptranslate.apiProvider"
         static let prompt           = "snaptranslate.prompt"
@@ -40,11 +41,16 @@ final class SettingsManager {
 
     var apiProvider: AIProvider {
         get {
+            lock.lock(); defer { lock.unlock() }
             guard let raw = defaults.string(forKey: Keys.apiProvider),
                   let p = AIProvider(rawValue: raw) else { return .deepseek }
             return p
         }
-        set { defaults.set(newValue.rawValue, forKey: Keys.apiProvider) }
+        set {
+            lock.lock()
+            defaults.set(newValue.rawValue, forKey: Keys.apiProvider)
+            lock.unlock()
+        }
     }
 
     // MARK: API Keys（Keychain 安全存储）
@@ -69,10 +75,8 @@ final class SettingsManager {
             logi("Keychain 写入: provider=\(provider.rawValue), len=\(key.count)")
             let ok = KeychainHelper.save(key: key, account: account)
             if !ok {
-                logi("Keychain 写入失败, fallback to UserDefaults: provider=\(provider.rawValue)")
+                logi("Keychain 写入失败: provider=\(provider.rawValue)")
             }
-            // Always store in UserDefaults as fallback for ad-hoc signed builds
-            defaults.set(key, forKey: account)
         } else {
             logi("Keychain 删除: provider=\(provider.rawValue)")
             _ = KeychainHelper.delete(account: account)
@@ -80,9 +84,22 @@ final class SettingsManager {
         }
     }
 
-    /// 当前激活的 API Key
+    /// 当前激活的 API Key（线程安全：一次锁定读取 provider + key）
     var activeApiKey: String? {
-        apiKey(for: apiProvider)
+        lock.lock(); defer { lock.unlock() }
+        return _apiKeyUnlocked(for: _apiProviderUnlocked())
+    }
+
+    private func _apiProviderUnlocked() -> AIProvider {
+        guard let raw = defaults.string(forKey: Keys.apiProvider),
+              let p = AIProvider(rawValue: raw) else { return .deepseek }
+        return p
+    }
+
+    private func _apiKeyUnlocked(for provider: AIProvider) -> String? {
+        let account = Self.apiKeyUDKey(for: provider)
+        if let result = KeychainHelper.read(account: account) { return result }
+        return defaults.string(forKey: account)
     }
 
     /// 一次性迁移：将之前误存到 UserDefaults 的 API Key 迁移到 Keychain 安全存储
@@ -161,16 +178,28 @@ final class SettingsManager {
     // MARK: 快捷键
 
     var hotkeyKeyCode: Int {
-        get { defaults.integer(forKey: Keys.hotkeyKeyCode) == 0 ? DEFAULT_HOTKEY_KEYCODE : defaults.integer(forKey: Keys.hotkeyKeyCode) }
-        set { defaults.set(newValue, forKey: Keys.hotkeyKeyCode) }
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return defaults.integer(forKey: Keys.hotkeyKeyCode) == 0 ? DEFAULT_HOTKEY_KEYCODE : defaults.integer(forKey: Keys.hotkeyKeyCode)
+        }
+        set {
+            lock.lock()
+            defaults.set(newValue, forKey: Keys.hotkeyKeyCode)
+            lock.unlock()
+        }
     }
 
     var hotkeyModifiers: Int {
         get {
+            lock.lock(); defer { lock.unlock() }
             let v = defaults.integer(forKey: Keys.hotkeyModifiers)
             return v == 0 ? Int(controlKey) : v
         }
-        set { defaults.set(newValue, forKey: Keys.hotkeyModifiers) }
+        set {
+            lock.lock()
+            defaults.set(newValue, forKey: Keys.hotkeyModifiers)
+            lock.unlock()
+        }
     }
 
     /// 快捷键的可读描述（如 "⌃T"）
@@ -195,12 +224,26 @@ final class SettingsManager {
 
     // 关闭翻译面板快捷键（默认 ESC，keyCode 0x35，无修饰键）
     var closePanelHotkeyKeyCode: Int {
-        get { defaults.integer(forKey: Keys.closePanelHotkeyKeyCode) == 0 ? 0x35 : defaults.integer(forKey: Keys.closePanelHotkeyKeyCode) }
-        set { defaults.set(newValue, forKey: Keys.closePanelHotkeyKeyCode) }
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return defaults.integer(forKey: Keys.closePanelHotkeyKeyCode) == 0 ? 0x35 : defaults.integer(forKey: Keys.closePanelHotkeyKeyCode)
+        }
+        set {
+            lock.lock()
+            defaults.set(newValue, forKey: Keys.closePanelHotkeyKeyCode)
+            lock.unlock()
+        }
     }
     var closePanelHotkeyModifiers: Int {
-        get { defaults.integer(forKey: Keys.closePanelHotkeyModifiers) }
-        set { defaults.set(newValue, forKey: Keys.closePanelHotkeyModifiers) }
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return defaults.integer(forKey: Keys.closePanelHotkeyModifiers)
+        }
+        set {
+            lock.lock()
+            defaults.set(newValue, forKey: Keys.closePanelHotkeyModifiers)
+            lock.unlock()
+        }
     }
     var closePanelHotkeyDisplay: String {
         get { defaults.string(forKey: Keys.closePanelHotkeyDisplay) ?? "Esc" }
@@ -209,12 +252,26 @@ final class SettingsManager {
 
     // 切换弹窗位置快捷键（默认 ` 键，keyCode 0x32，无修饰键）
     var togglePanelHotkeyKeyCode: Int {
-        get { defaults.integer(forKey: Keys.togglePanelHotkeyKeyCode) == 0 ? 0x32 : defaults.integer(forKey: Keys.togglePanelHotkeyKeyCode) }
-        set { defaults.set(newValue, forKey: Keys.togglePanelHotkeyKeyCode) }
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return defaults.integer(forKey: Keys.togglePanelHotkeyKeyCode) == 0 ? 0x32 : defaults.integer(forKey: Keys.togglePanelHotkeyKeyCode)
+        }
+        set {
+            lock.lock()
+            defaults.set(newValue, forKey: Keys.togglePanelHotkeyKeyCode)
+            lock.unlock()
+        }
     }
     var togglePanelHotkeyModifiers: Int {
-        get { defaults.integer(forKey: Keys.togglePanelHotkeyModifiers) }
-        set { defaults.set(newValue, forKey: Keys.togglePanelHotkeyModifiers) }
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return defaults.integer(forKey: Keys.togglePanelHotkeyModifiers)
+        }
+        set {
+            lock.lock()
+            defaults.set(newValue, forKey: Keys.togglePanelHotkeyModifiers)
+            lock.unlock()
+        }
     }
     var togglePanelHotkeyDisplay: String {
         get { defaults.string(forKey: Keys.togglePanelHotkeyDisplay) ?? "`" }
