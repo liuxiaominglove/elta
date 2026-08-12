@@ -23,6 +23,7 @@ SRC_FILES=(
   "$PROJECT_DIR/Sources/Helpers.swift"
   "$PROJECT_DIR/Sources/SettingsManager.swift"
   "$PROJECT_DIR/Sources/TextPreprocessor.swift"
+  "$PROJECT_DIR/Sources/TableExtractor.swift"
 )
 
 TEST_FILES=(
@@ -33,6 +34,7 @@ TEST_FILES=(
   "$PROJECT_DIR/Tests/SettingsManagerTests.swift"
   "$PROJECT_DIR/Tests/TextPreprocessorTests.swift"
   "$PROJECT_DIR/Tests/TextNormalizerTests.swift"
+  "$PROJECT_DIR/Tests/TableExtractorTests.swift"
   "$PROJECT_DIR/Tests/BuildScriptTests.swift"
   "$PROJECT_DIR/Tests/main.swift"
 )

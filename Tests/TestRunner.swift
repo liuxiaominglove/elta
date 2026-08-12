@@ -54,6 +54,7 @@ func runAllTests() -> Int32 {
     runSettingsManagerTests()
     runTextPreprocessorTests()
     runTextNormalizerTests()
+    runTableExtractorTests()
     runBuildScriptTests()
 
     print("\n========== Results ==========")

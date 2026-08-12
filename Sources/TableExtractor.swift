@@ -276,7 +276,36 @@ final class TableExtractor {
 
     private static func flatText(from blocks: [OCRBlock]) -> String {
         let sorted = blocks.sorted { $0.boundingBox.minY < $1.boundingBox.minY }
-        return sorted.map { $0.text }.joined(separator: "\n")
+        guard sorted.count >= 2 else {
+            return sorted.first?.text ?? ""
+        }
+
+        let widths = sorted.map { $0.boundingBox.width }
+        let minXs = sorted.map { $0.boundingBox.minX }
+        let heights = sorted.map { $0.boundingBox.height }
+
+        let lineHeight = median(heights) ?? 14
+        let medianWidth = median(widths) ?? 500
+        let normalWidths = widths.filter { $0 > medianWidth * 0.6 }
+        let normalWidth = normalWidths.isEmpty ? medianWidth : (normalWidths.reduce(0, +) / CGFloat(normalWidths.count))
+        let normalMinX = median(minXs) ?? 50
+
+        var result = sorted[0].text
+        for i in 1..<sorted.count {
+            let prev = sorted[i - 1]
+            let curr = sorted[i]
+            let gap = curr.boundingBox.minY - prev.boundingBox.maxY
+
+            if gap > lineHeight * 1.5
+                || curr.boundingBox.minX > normalMinX + 8
+                || prev.boundingBox.width < normalWidth * 0.8 {
+                result += "\n\n"
+            } else {
+                result += "\n"
+            }
+            result += curr.text
+        }
+        return result
     }
 
     private static func median(_ values: [CGFloat]) -> CGFloat? {
