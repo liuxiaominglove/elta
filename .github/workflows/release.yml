@@ -64,16 +64,20 @@ jobs:
       - name: Create DMG
         run: |
           APP_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
+          # 先清理旧 DMG 防止重复上传
+          rm -f build/*.dmg
           # 生成带拖拽式安装界面的 DMG（包含 Applications 快捷方式）
-          create-dmg --overwrite build/ELTA.app build/ || true
-          # create-dmg 默认输出 "ELTA <version>.dmg"，重命名为统一格式
-          GENERATED="build/ELTA ${APP_VERSION}.dmg"
-          TARGET="build/ELTA(v${APP_VERSION}).dmg"
-          if [ -f "$GENERATED" ]; then
-            mv "$GENERATED" "$TARGET"
+          create-dmg --overwrite build/ELTA.app build/ || { echo "create-dmg failed"; exit 1; }
+          # 找到生成的 DMG 并重命名为统一格式
+          GENERATED=$(ls -t build/*.dmg 2>/dev/null | head -1)
+          if [ -z "$GENERATED" ]; then
+            echo "Error: no DMG generated"
+            exit 1
           fi
+          TARGET="build/ELTA.v${APP_VERSION}.dmg"
+          mv "$GENERATED" "$TARGET"
           echo "DMG: $TARGET"
-          ls -lh build/*.dmg
+          ls -lh "$TARGET"
         shell: bash
       
       - name: Upload to Release
