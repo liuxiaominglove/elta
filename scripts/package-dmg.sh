@@ -9,8 +9,8 @@ package_dmg() {
   # 清理旧 DMG，防止重复上传
   rm -f "$BUILD_DIR"/*.dmg
 
-  # 生成 DMG
-  create-dmg --overwrite "$APP_BUNDLE" "$BUILD_DIR" || {
+  # 生成 DMG（CI 环境无开发者证书，跳过签名）
+  create-dmg --overwrite --no-code-sign "$APP_BUNDLE" "$BUILD_DIR" || {
     echo "create-dmg failed" >&2
     return 1
   }
