@@ -60,4 +60,11 @@ func runTextNormalizerTests() {
         let expected = "A B\n\nC\n\nD E"
         try assertEqual(TextNormalizer.normalizeLineBreaks(input), expected)
     }
+
+    // === 真实场景（Outlive 三段落 OCR 文本） ===
+    test("real Outlive 3 paragraphs separated by tab indent") {
+        let input = "I believe that we already know more than enough to bend the curve. That is why this book is called Outlive. I mean it in both senses of the word: live longer and live better. Unlike Tithonus, you can outlive your life expectancy and enjoy better health, getting more out of your life.\n\t\t\tMy goal is to create an actionable operating manual for the practice of longevity. A guide that will help you Outlive. I hope to convince you that with enough time and effort, you can potentially extend your lifespan by a decade and your healthspan possibly by two, meaning you might hope to function like someone twenty years younger than you.\n\t\t\tBut my intent here is not to tell you exactly what to do; it\u{2019}s to help you learn how to think about doing these things. For me, that has been the journey, an obsessive process of study and iteration that began that day on the rocky shore of Catalina Island."
+        let expected = "I believe that we already know more than enough to bend the curve. That is why this book is called Outlive. I mean it in both senses of the word: live longer and live better. Unlike Tithonus, you can outlive your life expectancy and enjoy better health, getting more out of your life.\n\nMy goal is to create an actionable operating manual for the practice of longevity. A guide that will help you Outlive. I hope to convince you that with enough time and effort, you can potentially extend your lifespan by a decade and your healthspan possibly by two, meaning you might hope to function like someone twenty years younger than you.\n\nBut my intent here is not to tell you exactly what to do; it\u{2019}s to help you learn how to think about doing these things. For me, that has been the journey, an obsessive process of study and iteration that began that day on the rocky shore of Catalina Island."
+        try assertEqual(TextNormalizer.normalizeLineBreaks(input), expected)
+    }
 }

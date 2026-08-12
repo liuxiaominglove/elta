@@ -1,0 +1,16 @@
+{
+  "snapshots": [
+    {
+      "timestamp": "2026-08-10T00:00:00Z",
+      "overall": 95,
+      "files": {
+        "EnglishTranslator/AGENTS.md": {
+          "score": 95,
+          "type": "document"
+        }
+      },
+      "scope": "full",
+      "files_scored": 1
+    }
+  ]
+}
