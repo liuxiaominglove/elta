@@ -5,17 +5,22 @@ const path = require('path');
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+const TOKEN_SIGNING_SECRET = process.env.TOKEN_SIGNING_SECRET || ADMIN_PASSWORD;
 const TOKEN_TTL = 30 * 60 * 1000; // 30 分钟有效期
+
+function getSigningKey() {
+  return TOKEN_SIGNING_SECRET || '';
+}
 
 // 生成限时 token（HMAC 签名，服务端无状态验证）
 function createToken() {
   const expires = Date.now() + TOKEN_TTL;
   const payload = expires.toString();
-  const sig = crypto.createHmac('sha256', ADMIN_PASSWORD).update(payload).digest('hex');
+  const sig = crypto.createHmac('sha256', getSigningKey()).update(payload).digest('hex');
   return Buffer.from(`${expires}:${sig}`).toString('base64');
 }
 
-// 验证 token：检查是否过期 + 签名是否匹配
+// 验证 token：检查是否过期 + 签名是否匹配（使用常量时间比较）
 function verifyToken(token) {
   try {
     const decoded = Buffer.from(token, 'base64').toString('utf8');
@@ -23,21 +28,44 @@ function verifyToken(token) {
     const expires = parseInt(expiresStr, 10);
     const sig = sigParts.join(':');
     if (isNaN(expires) || Date.now() > expires) return false;
-    const expected = crypto.createHmac('sha256', ADMIN_PASSWORD).update(expires.toString()).digest('hex');
-    return sig === expected;
+    const expected = crypto.createHmac('sha256', getSigningKey()).update(expires.toString()).digest('hex');
+    if (sig.length !== expected.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
   } catch {
     return false;
   }
 }
 
+// 安全验证 Origin：只接受精确匹配的允许域名或 localhost
+function isAllowedOrigin(origin) {
+  if (!origin || typeof origin !== 'string') return false;
+  try {
+    const u = new URL(origin);
+    if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') return true;
+    if (u.hostname === 'elta-seven.vercel.app') return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// 从 X-Forwarded-For 获取真实客户端 IP（取最左侧，Vercel prepends 真实 IP）
+function getClientIP(req) {
+  const xff = req.headers['x-forwarded-for'];
+  if (xff && typeof xff === 'string') {
+    const firstIP = xff.split(',')[0].trim();
+    if (firstIP) return firstIP;
+  }
+  return req.socket?.remoteAddress || 'unknown';
+}
+
 module.exports = async (req, res) => {
   // ---------- CORS ----------
-  const allowedOrigin = 'https://elta-seven.vercel.app';
   const origin = req.headers.origin || '';
-  if (origin.startsWith(allowedOrigin) || origin.startsWith('http://localhost')) {
+  if (isAllowedOrigin(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else {
-    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    res.setHeader('Access-Control-Allow-Origin', 'https://elta-seven.vercel.app');
   }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -51,13 +79,14 @@ module.exports = async (req, res) => {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // ---------- CSRF 防护：检查 Origin / Referer ----------
-  const referer = req.headers.referer || '';
+  // ---------- CSRF 防护：检查 Origin ----------
   const originHeader = req.headers.origin || '';
-  const sameOrigin = originHeader.startsWith(allowedOrigin) || originHeader.startsWith('http://localhost');
-  const sameReferer = referer.startsWith(allowedOrigin) || referer.startsWith('http://localhost');
-  // 允许无 Origin 的请求（curl/Postman），但有 Origin 时必须匹配
-  if (originHeader && !sameOrigin && !referer && !sameReferer && !originHeader.startsWith('null')) {
+  // 无 Origin 的请求（curl/Postman 等）允许通过
+  // 有 Origin 但为 null（sandboxed iframe 等）→ 直接拒绝
+  if (originHeader === 'null') {
+    return res.status(403).json({ error: '跨站请求被拒绝' });
+  }
+  if (originHeader && !isAllowedOrigin(originHeader)) {
     return res.status(403).json({ error: '跨站请求被拒绝' });
   }
 
@@ -112,8 +141,9 @@ module.exports = async (req, res) => {
       }
 
       case 'approve': {
+        const encodedId = encodeURIComponent(feedbackId || '');
         const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/feedback?id=eq.${feedbackId}`,
+          `${SUPABASE_URL}/rest/v1/feedback?id=eq.${encodedId}`,
           { method: 'PATCH', headers, body: JSON.stringify({ status: 'approved' }) }
         );
         if (!response.ok) {
@@ -124,8 +154,9 @@ module.exports = async (req, res) => {
       }
 
       case 'reject': {
+        const encodedId = encodeURIComponent(feedbackId || '');
         const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/feedback?id=eq.${feedbackId}`,
+          `${SUPABASE_URL}/rest/v1/feedback?id=eq.${encodedId}`,
           { method: 'PATCH', headers, body: JSON.stringify({ status: 'rejected' }) }
         );
         if (!response.ok) {
@@ -136,8 +167,9 @@ module.exports = async (req, res) => {
       }
 
       case 'reply': {
+        const encodedId = encodeURIComponent(feedbackId || '');
         const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/feedback?id=eq.${feedbackId}`,
+          `${SUPABASE_URL}/rest/v1/feedback?id=eq.${encodedId}`,
           { method: 'PATCH', headers, body: JSON.stringify({ admin_reply: reply, status: 'approved' }) }
         );
         if (!response.ok) {
@@ -165,7 +197,7 @@ async function handleLogin(password, req, res) {
   const RATELIMIT_MAX = 5;
   const RATELIMIT_WINDOW_MS = 60 * 1000;
   const RATELIMIT_LOCK_MS = 5 * 60 * 1000;
-  const clientIP = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.socket?.remoteAddress || 'unknown';
+  const clientIP = getClientIP(req);
   const rateLimitFile = path.join('/tmp', `elta_ratelimit_${clientIP.replace(/[^a-fA-F0-9:.]/g, '_')}.json`);
 
   let rateData = { count: 0, lockUntil: 0 };
@@ -206,3 +238,6 @@ async function handleLogin(password, req, res) {
   const authToken = createToken();
   return res.json({ token: authToken });
 }
+
+// 导出内部函数供测试使用
+module.exports._internal = { createToken, verifyToken, getClientIP, isAllowedOrigin };
