@@ -212,6 +212,10 @@ kbd {
 .footer-links a { font-size: 14px; color: var(--sub); }
 .footer-links a:hover { color: var(--accent); }
 .footer-copy { font-size: 13px; color: var(--muted); }
+.footer-icp { width: 100%; margin-top: 12px; text-align: center; }
+.footer-icp a { font-size: 12px; color: var(--muted); text-decoration: none; }
+.footer-icp a:hover { color: var(--accent); }
+.footer-icp img { height: 14px; width: auto; vertical-align: middle; margin-right: 4px; }
 
 /* ============================================
    文档页 (docs.html)
