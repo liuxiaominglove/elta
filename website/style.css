@@ -217,6 +217,9 @@ kbd {
   padding-top: 16px;
   border-top: 1px solid var(--border);
   text-align: center;
+  max-width: 880px;
+  margin-left: auto;
+  margin-right: auto;
 }
 .footer-beian a {
   font-size: 12px;
