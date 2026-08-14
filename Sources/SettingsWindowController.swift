@@ -2,6 +2,20 @@ import Cocoa
 import Carbon
 import WebKit
 
+// MARK: - 连接测试结果分类
+
+enum ConnectionResult: Equatable {
+    case success(Int)
+    case authFailure(Int)
+    case serverError(Int)
+
+    static func classify(_ code: Int) -> ConnectionResult {
+        if code >= 200 && code < 300 { return .success(code) }
+        if code == 401 || code == 403 { return .authFailure(code) }
+        return .serverError(code)
+    }
+}
+
 // MARK: - 偏好设置窗口
 
 final class SettingsWindowController: NSObject {
@@ -359,11 +373,15 @@ final class SettingsWindowController: NSObject {
                     return
                 }
                 if let http = response as? HTTPURLResponse {
-                    if http.statusCode == 200 || http.statusCode == 401 || http.statusCode == 403 {
-                        self?.testStatusLabel?.stringValue = "连接成功 (HTTP \(http.statusCode))"
+                    switch ConnectionResult.classify(http.statusCode) {
+                    case .success(let code):
+                        self?.testStatusLabel?.stringValue = "连接成功 (HTTP \(code))"
                         self?.testStatusLabel?.textColor = .systemGreen
-                    } else {
-                        self?.testStatusLabel?.stringValue = "服务器返回 HTTP \(http.statusCode)"
+                    case .authFailure(let code):
+                        self?.testStatusLabel?.stringValue = "API Key 无效 (HTTP \(code))"
+                        self?.testStatusLabel?.textColor = .systemRed
+                    case .serverError(let code):
+                        self?.testStatusLabel?.stringValue = "服务器返回 HTTP \(code)"
                         self?.testStatusLabel?.textColor = .systemOrange
                     }
                 }
@@ -541,28 +559,28 @@ final class SettingsWindowController: NSObject {
             }
         }
 
-        if screenshotRecorder.recordedKeyCode != 0 {
-            settings.hotkeyKeyCode = screenshotRecorder.recordedKeyCode
+        if let kc = screenshotRecorder.recordedKeyCode {
+            settings.hotkeyKeyCode = kc
             settings.hotkeyModifiers = screenshotRecorder.recordedModifiers
-            settings.hotkeyDisplay = hotkeyDisplayString(keyCode: screenshotRecorder.recordedKeyCode, modifiers: screenshotRecorder.recordedModifiers)
+            settings.hotkeyDisplay = hotkeyDisplayString(keyCode: kc, modifiers: screenshotRecorder.recordedModifiers)
         }
 
-        if selectionRecorder.recordedKeyCode != 0 {
-            settings.selectionHotkeyKeyCode = selectionRecorder.recordedKeyCode
+        if let kc = selectionRecorder.recordedKeyCode {
+            settings.selectionHotkeyKeyCode = kc
             settings.selectionHotkeyModifiers = selectionRecorder.recordedModifiers
-            settings.selectionHotkeyDisplay = hotkeyDisplayString(keyCode: selectionRecorder.recordedKeyCode, modifiers: selectionRecorder.recordedModifiers)
+            settings.selectionHotkeyDisplay = hotkeyDisplayString(keyCode: kc, modifiers: selectionRecorder.recordedModifiers)
         }
 
-        if closePanelRecorder.recordedKeyCode != 0 {
-            settings.closePanelHotkeyKeyCode = closePanelRecorder.recordedKeyCode
+        if let kc = closePanelRecorder.recordedKeyCode {
+            settings.closePanelHotkeyKeyCode = kc
             settings.closePanelHotkeyModifiers = closePanelRecorder.recordedModifiers
-            settings.closePanelHotkeyDisplay = hotkeyDisplayString(keyCode: closePanelRecorder.recordedKeyCode, modifiers: closePanelRecorder.recordedModifiers)
+            settings.closePanelHotkeyDisplay = hotkeyDisplayString(keyCode: kc, modifiers: closePanelRecorder.recordedModifiers)
         }
 
-        if togglePanelRecorder.recordedKeyCode != 0 {
-            settings.togglePanelHotkeyKeyCode = togglePanelRecorder.recordedKeyCode
+        if let kc = togglePanelRecorder.recordedKeyCode {
+            settings.togglePanelHotkeyKeyCode = kc
             settings.togglePanelHotkeyModifiers = togglePanelRecorder.recordedModifiers
-            settings.togglePanelHotkeyDisplay = hotkeyDisplayString(keyCode: togglePanelRecorder.recordedKeyCode, modifiers: togglePanelRecorder.recordedModifiers)
+            settings.togglePanelHotkeyDisplay = hotkeyDisplayString(keyCode: kc, modifiers: togglePanelRecorder.recordedModifiers)
         }
 
         DispatchQueue.main.async {
@@ -746,7 +764,7 @@ final class HotkeyRecorder: NSObject {
     weak var recordBtn: NSButton?
     weak var statusLabel: NSTextField?
     var isRecording = false
-    var recordedKeyCode = 0
+    var recordedKeyCode: Int? = nil
     var recordedModifiers = 0
     private var monitor: Any?
 
@@ -763,7 +781,7 @@ final class HotkeyRecorder: NSObject {
     @objc func start() {
         guard !HotkeyRecorder.anyRecording else { return }
         isRecording = true
-        recordedKeyCode = 0
+        recordedKeyCode = nil
         recordedModifiers = 0
 
         recordBtn?.title = "  ... 按下组合键 ...  "
@@ -805,11 +823,11 @@ final class HotkeyRecorder: NSObject {
             monitor = nil
         }
 
-        let display = hotkeyDisplayString(keyCode: recordedKeyCode, modifiers: recordedModifiers)
+        let display = hotkeyDisplayString(keyCode: recordedKeyCode ?? 0, modifiers: recordedModifiers)
         recordBtn?.title = "    \(display)    "
         recordBtn?.bezelColor = .systemGreen
         var status = "✅ 已录制：\(display)\n点击「保存并应用」使快捷键生效"
-        if let conflict = checkSystemHotkeyConflict(modifiers: recordedModifiers, keyCode: recordedKeyCode) {
+        if let conflict = checkSystemHotkeyConflict(modifiers: recordedModifiers, keyCode: recordedKeyCode ?? 0) {
             status += "\n⚠️ 可能与系统快捷键冲突：\(conflict)"
             recordBtn?.bezelColor = .systemOrange
         }
@@ -833,7 +851,7 @@ final class HotkeyRecorder: NSObject {
     }
 
     func reset() {
-        recordedKeyCode = 0
+        recordedKeyCode = nil
         recordedModifiers = 0
     }
 

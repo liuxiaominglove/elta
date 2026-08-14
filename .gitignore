@@ -31,6 +31,9 @@ xcuserdata/
 # 日志
 *.log
 
+# cc-suite-pe 任务账本（本地审计状态）
+.cc-suite-pe/
+
 # IDE
 .vscode/
 .idea/

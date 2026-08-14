@@ -188,4 +188,64 @@ func runSettingsManagerTests() {
         SettingsManager.shared.setApiKey(nil, for: .deepseek)
         try assertNil(SettingsManager.shared.activeApiKey as Any?)
     }
+
+    // ━━━ 审计修复 1：迁移写失败丢 key ━━━
+
+    test("migrateKey removes UserDefaults when save succeeds") {
+        var removed = false
+        SettingsManager.migrateKey(value: "k", udKey: "x", save: { _, _ in true }, remove: { removed = true })
+        try assertTrue(removed, "save 成功时应移除 UserDefaults 明文")
+    }
+
+    test("migrateKey does NOT remove UserDefaults when save fails") {
+        var removed = false
+        SettingsManager.migrateKey(value: "k", udKey: "x", save: { _, _ in false }, remove: { removed = true })
+        try assertFalse(removed, "save 失败时不应移除 UserDefaults，否则丢 key")
+    }
+
+    // ━━━ 审计修复 2：setApiKey 应清除明文回退 ━━━
+
+    test("setApiKey clears plaintext UserDefaults fallback after save") {
+        let udKey = "snaptranslate.apikey.deepseek"
+        SettingsManager.shared.setApiKey(nil, for: .deepseek)
+        UserDefaults.standard.set("legacy-plaintext", forKey: udKey)
+        SettingsManager.shared.setApiKey("sk-new", for: .deepseek)
+        try assertNil(UserDefaults.standard.string(forKey: udKey) as Any?, "保存新 key 后应清除明文回退")
+        SettingsManager.shared.setApiKey(nil, for: .deepseek)
+    }
+
+    // ━━━ 审计修复 3：keychain 覆盖写（更新路径）━━━━
+
+    test("setApiKey overwrites existing key via update path") {
+        SettingsManager.shared.setApiKey("sk-first", for: .deepseek)
+        SettingsManager.shared.setApiKey("sk-second", for: .deepseek)
+        try assertEqual(SettingsManager.shared.apiKey(for: .deepseek), "sk-second")
+        SettingsManager.shared.setApiKey(nil, for: .deepseek)
+    }
+
+    // ━━━ 审计修复 4：连接状态分类 ━━━
+
+    test("ConnectionResult.classify treats 2xx as success") {
+        if case .success = ConnectionResult.classify(200) {} else { throw TestFailure("200 应判 success") }
+        if case .success = ConnectionResult.classify(299) {} else { throw TestFailure("299 应判 success") }
+    }
+
+    test("ConnectionResult.classify treats 401/403 as authFailure") {
+        if case .authFailure = ConnectionResult.classify(401) {} else { throw TestFailure("401 应判 authFailure") }
+        if case .authFailure = ConnectionResult.classify(403) {} else { throw TestFailure("403 应判 authFailure") }
+    }
+
+    test("ConnectionResult.classify treats other codes as serverError") {
+        if case .serverError = ConnectionResult.classify(500) {} else { throw TestFailure("500 应判 serverError") }
+        if case .serverError = ConnectionResult.classify(404) {} else { throw TestFailure("404 应判 serverError") }
+    }
+
+    // ━━━ 审计修复 5：keyCode 哨兵改 Optional（nil=未录制，keyCode 0 = A 键是合法值）━━━━
+
+    test("HotkeyRecorder.recordedKeyCode is nil when not recorded (not sentinel 0)") {
+        let r = HotkeyRecorder(allowedSoloKeyCodes: [0x35], soloKeyHint: "Esc", defaultDisplay: { "Esc" })
+        try assertNil(r.recordedKeyCode)
+        r.reset()
+        try assertNil(r.recordedKeyCode)
+    }
 }

@@ -118,22 +118,26 @@ struct KeychainHelper {
     static let service = "com.elta.snaptranslate"
 
     static func save(key: String, account: String) -> Bool {
+        let valueData = key.data(using: .utf8) ?? Data()
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        SecItemDelete(query as CFDictionary) // 先删旧值
-        let addQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: key.data(using: .utf8) ?? Data(),
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-        ]
-        let status = SecItemAdd(addQuery as CFDictionary, nil)
-        if status != errSecSuccess { loge("Keychain 写入失败: status=\(status), account=\(account)") }
-        return status == errSecSuccess
+        // 先尝试更新已存在项（保留旧值，避免"先删后加"失败丢 key）
+        let update: [String: Any] = [kSecValueData as String: valueData]
+        let updateStatus = SecItemUpdate(query as CFDictionary, update as CFDictionary)
+        if updateStatus == errSecSuccess { return true }
+        if updateStatus == errSecItemNotFound {
+            var addQuery = query
+            addQuery[kSecValueData as String] = valueData
+            addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+            if addStatus != errSecSuccess { loge("Keychain 写入失败: status=\(addStatus), account=\(account)") }
+            return addStatus == errSecSuccess
+        }
+        loge("Keychain 写入失败: status=\(updateStatus), account=\(account)")
+        return false
     }
 
     static func read(account: String) -> String? {
