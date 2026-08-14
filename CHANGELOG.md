@@ -10,6 +10,14 @@ All notable changes to ELTA will be documented in this file.
 - 修复 Keychain 存储「先删后加」：`SecItemAdd` 失败时旧 key 已被删除（改为 `SecItemUpdate` 优先，找不到才新增）
 - 修复「测试连接」把 HTTP 401/403（认证失败）误报为「连接成功」，现在显示红色「API Key 无效」
 - 修复快捷键录制用 keyCode `0` 作「未录制」哨兵值，导致 `Cmd+A`（A 键 keyCode=0）被静默丢弃（改为 `Optional<Int>`）
+- 修复 Accessibility 划词截取用 `String.count`（grapheme）当 CFRange 偏移，含 emoji/生僻字时截错位置（改为 UTF-16 偏移）
+- 修复划词选中文本被写入日志文件（隐私），改为只记录长度
+- 修复剪贴板恢复「先 clearContents 再 writeObjects」，写失败会丢失原剪贴板内容（改为 writeObjects 原子替换）
+- 修复 `NSRegularExpression` 每次调用重复编译（提取为静态缓存）
+- 修复切换 provider 后明文/密文输入框可见性状态错乱（loadKey 未复位 isHidden）
+- 修复 providerChanged 先切换 provider 再检查 UI 就绪，失败时半切换（调整顺序）
+- 修复 HotkeyRecorder.reset() 未复位 isRecording、未移除键盘监听（恢复默认时状态残留）
+- 恢复设置界面底部版本号标签（WIP 重构时误删）
 
 ## [v5.1.32] — 2026-08-12
 
