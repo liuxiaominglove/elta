@@ -248,4 +248,13 @@ func runSettingsManagerTests() {
         r.reset()
         try assertNil(r.recordedKeyCode)
     }
+
+    // ━━━ 审计修复：reset() 应完整复位录制状态 ━━━
+
+    test("HotkeyRecorder.reset clears isRecording") {
+        let r = HotkeyRecorder(allowedSoloKeyCodes: [0x35], soloKeyHint: "Esc", defaultDisplay: { "Esc" })
+        r.isRecording = true
+        r.reset()
+        try assertFalse(r.isRecording, "reset 后 isRecording 应为 false")
+    }
 }

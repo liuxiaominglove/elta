@@ -133,6 +133,8 @@ final class SettingsWindowController: NSObject {
         apiKeyHiddenField?.stringValue = key
         apiKeyVisibleField?.stringValue = key
         apiKeyVisible = false
+        apiKeyHiddenField?.isHidden = false
+        apiKeyVisibleField?.isHidden = true
         if let eyeBtn = apiKeyEyeButton {
             eyeBtn.title = "👁️"
         }
@@ -666,8 +668,6 @@ final class SettingsWindowController: NSObject {
             }
         }
 
-        settings.apiProvider = newProvider
-
         guard let scrollView = providerCardView?.enclosingScrollView else { return }
         let cardWidth = scrollView.contentSize.width
 
@@ -677,9 +677,9 @@ final class SettingsWindowController: NSObject {
         card.frame.size.height = max(card.frame.height, scrollView.contentSize.height)
         scrollView.documentView = card
 
+        settings.apiProvider = newProvider
         loadKey(for: newProvider)
     }
-
     // MARK: - Tab 3: 翻译模板
 
     private func buildTemplateTab(size: NSSize) -> NSView {
@@ -851,6 +851,11 @@ final class HotkeyRecorder: NSObject {
     }
 
     func reset() {
+        isRecording = false
+        if let m = monitor {
+            NSEvent.removeMonitor(m)
+            monitor = nil
+        }
         recordedKeyCode = nil
         recordedModifiers = 0
     }

@@ -92,14 +92,14 @@ let loge = Logger.shared.error
 // MARK: - 文本归一化
 
 enum TextNormalizer {
+    private static let newlineIndentRegex = try! NSRegularExpression(pattern: "\\n[\\t ]+")
+
     /// 段内单 \n 合并为空格，\n\n 保留为段落间隔，去掉首尾多余空行
     static func normalizeLineBreaks(_ text: String) -> String {
         // 预处理：换行+缩进（\n\t或\n 空格）→ 标准段落分隔
         var result = text
-        if let r = try? NSRegularExpression(pattern: "\\n[\\t ]+") {
-            let range = NSRange(result.startIndex..., in: result)
-            result = r.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "\n\n")
-        }
+        let range = NSRange(result.startIndex..., in: result)
+        result = newlineIndentRegex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: "\n\n")
         let paragraphs = result.components(separatedBy: "\n\n")
         let processed = paragraphs.map { paragraph in
             paragraph
@@ -200,9 +200,12 @@ struct PasteboardSnapshot {
             }
             return newItem
         }
-        pasteboard.clearContents()
-        // 空快照 = 恢复成空状态，clearContents 已清空，视为成功
-        if newItems.isEmpty { return true }
+        // 空快照 = 恢复成空状态，显式清空
+        if newItems.isEmpty {
+            pasteboard.clearContents()
+            return true
+        }
+        // 非空：直接用 writeObjects 原子替换（不先 clearContents，避免写失败丢原内容）
         return pasteboard.writeObjects(newItems)
     }
 }

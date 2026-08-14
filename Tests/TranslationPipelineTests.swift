@@ -83,6 +83,20 @@ func runTranslationPipelineTests() {
         let result = substringHelper("abc", location: -1, length: 2)
         try assertNil(result)
     }
+
+    // ━━━ 审计修复：CFRange 用 UTF-16 偏移（emoji/生僻字不偏移错）━━━━
+
+    test("substringInRange uses UTF-16 offsets (emoji surrogate pair)") {
+        // "a😀b": UTF-16 单元 [a][😀高][😀低][b] = 4 单元；CFRange(1,2) 应返回 "😀"
+        let s = TranslationPipeline.substringInRange("a😀b", cfLocation: 1, cfLength: 2)
+        try assertEqual(s, "😀")
+    }
+
+    test("substringInRange bounds use UTF-16 length (not grapheme count)") {
+        // "😀a": UTF-16 单元 3（😀=2 + a=1），grapheme 2；CFRange(2,1) 应返回 "a"
+        let s = TranslationPipeline.substringInRange("😀a", cfLocation: 2, cfLength: 1)
+        try assertEqual(s, "a")
+    }
 }
 
 private func substringHelper(_ fullText: String, location: Int, length: Int) -> String? {

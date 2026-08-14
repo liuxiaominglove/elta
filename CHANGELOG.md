@@ -2,6 +2,15 @@
 
 All notable changes to ELTA will be documented in this file.
 
+## [v5.1.33] — 2026-08-14
+
+### Fixed（多模型审计后修复）
+- 修复迁移 API Key 时忽略 Keychain 写入结果、无条件删除 UserDefaults 明文导致的**数据丢失**（写失败时旧 key 永久丢失）
+- 修复 `setApiKey` 保存新 key 后未清除 UserDefaults 明文回退，明文 key 残留
+- 修复 Keychain 存储「先删后加」：`SecItemAdd` 失败时旧 key 已被删除（改为 `SecItemUpdate` 优先，找不到才新增）
+- 修复「测试连接」把 HTTP 401/403（认证失败）误报为「连接成功」，现在显示红色「API Key 无效」
+- 修复快捷键录制用 keyCode `0` 作「未录制」哨兵值，导致 `Cmd+A`（A 键 keyCode=0）被静默丢弃（改为 `Optional<Int>`）
+
 ## [v5.1.32] — 2026-08-12
 
 ### Security

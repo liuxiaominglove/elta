@@ -178,15 +178,16 @@ final class TranslationPipeline {
     }
 
     /// 从 fullText 按 CFRange 截取子串，范围无效时返回 nil
-    private static func substringInRange(_ fullText: String, cfLocation: Int, cfLength: Int) -> String? {
+    /// 注意：Accessibility API 的 CFRange 用 UTF-16 代码单元（NSString 语义），
+    /// 不能直接用 Swift 的 String.count（grapheme cluster），否则含 emoji/生僻字时偏移错。
+    static func substringInRange(_ fullText: String, cfLocation: Int, cfLength: Int) -> String? {
+        let ns = fullText as NSString
         guard cfLocation >= 0,
               cfLength > 0,
-              cfLocation + cfLength <= fullText.count else {
+              cfLocation + cfLength <= ns.length else {
             return nil
         }
-        let start = fullText.index(fullText.startIndex, offsetBy: cfLocation)
-        let end = fullText.index(start, offsetBy: cfLength)
-        let selected = String(fullText[start..<end])
+        let selected = ns.substring(with: NSRange(location: cfLocation, length: cfLength))
         return selected.isEmpty ? nil : selected
     }
 
@@ -250,7 +251,7 @@ final class TranslationPipeline {
         // 预处理：压缩 Apple Books 多行引用块为单行
         let text = TextPreprocessor.condenseCitation(rawText)
 
-        logi("划词获取文本: \(text.prefix(100))...")
+        logi("划词获取文本: len=\(text.count)")
         showTextLoading()
 
         // 4. 表格检测：Tab 分隔符（Excel/Sheets）→ Markdown 表格
@@ -264,7 +265,7 @@ final class TranslationPipeline {
             TranslationEngine.shared.translate(text: processedText) { [weak self] result in
                 guard let result = result else {
                     self?.hideLoading()
-                    self?.showError("AI 翻译失败。\n选中文本：\n\(text.prefix(200))")
+                    self?.showError("AI 翻译失败。\n选中文本长度：\(text.count)")
                     return
                 }
                 self?.hideLoading()
