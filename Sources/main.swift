@@ -22,10 +22,16 @@ let DEFAULT_SELECTION_HOTKEY_KEYCODE: Int = 0x11  // T（配合 Shift）
 
 // 运行时从 Info.plist 读取版本号（每次编译/打包时自动同步）
 let APP_SHORT_VERSION: String = {
-    Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "5.1"
+    guard let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String else {
+        fatalError("缺少 CFBundleShortVersionString — Info.plist 可能未正确打包")
+    }
+    return v
 }()
 let APP_BUILD_VERSION: String = {
-    Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
+    guard let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String else {
+        fatalError("缺少 CFBundleVersion — Info.plist 可能未正确打包")
+    }
+    return v
 }()
 let APP_FULL_VERSION: String = "\(APP_SHORT_VERSION) (\(APP_BUILD_VERSION))"
 

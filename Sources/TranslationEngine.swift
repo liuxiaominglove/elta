@@ -107,8 +107,7 @@ final class TranslationEngine {
                 return
             }
             if http.statusCode != 200 {
-                let b = String(data: data, encoding: .utf8) ?? ""
-                loge("API 失败: HTTP \(http.statusCode): \(b.prefix(200))")
+                loge("API 失败: HTTP \(http.statusCode), 响应体长度=\(data.count) 字节")
                 completion(nil)
                 return
             }

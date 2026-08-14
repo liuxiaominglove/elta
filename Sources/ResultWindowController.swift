@@ -31,7 +31,6 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
 
     private var panel: NSPanel?
 
-    /// 供外部查询：当前是否有翻译结果弹窗正在显示
     var isPanelVisible: Bool { panel != nil }
 
     private var webView: WKWebView?
@@ -40,41 +39,11 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
     private var togglePanelTap: CFMachPort?
     private var togglePanelRunLoopSource: CFRunLoopSource?
 
-    /// 安装全局关闭面板事件拦截（CGEventTap），翻译弹窗存在期间拦截用户自定义的关闭快捷键
-    private func installEscTap() {
-        guard escEventTap == nil else { return }
-        let callback: CGEventTapCallBack = { (proxy, type, event, info) -> Unmanaged<CGEvent>? in
-            guard let info = info else { return Unmanaged.passRetained(event) }
-            let ctrl = Unmanaged<ResultWindowController>.fromOpaque(info).takeUnretainedValue()
-            guard ctrl.panel != nil else {
-                return Unmanaged.passRetained(event)
-            }
-            let settings = SettingsManager.shared
-            let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-            let expectedKeyCode = Int64(settings.closePanelHotkeyKeyCode)
-            if keyCode != expectedKeyCode {
-                return Unmanaged.passRetained(event)
-            }
-
-            let expectedModifiers = settings.closePanelHotkeyModifiers
-            // ESC 默认无修饰键，直接匹配；组合键需要比较 modifiers
-            if expectedModifiers != 0 {
-                let flags = event.flags
-                var actualModifiers = 0
-                if flags.contains(.maskCommand) { actualModifiers |= Int(cmdKey) }
-                if flags.contains(.maskShift) { actualModifiers |= Int(shiftKey) }
-                if flags.contains(.maskControl) { actualModifiers |= Int(controlKey) }
-                if flags.contains(.maskAlternate) { actualModifiers |= Int(optionKey) }
-                if actualModifiers != expectedModifiers {
-                    return Unmanaged.passRetained(event)
-                }
-            }
-
-            DispatchQueue.main.async {
-                ctrl.panel?.close()
-            }
-            return nil
-        }
+    /// 共享 CGEventTap 创建与安装逻辑，消除 installEscTap / installToggleTap 的重复代码
+    private func createAndInstallTap(
+        callback: @escaping CGEventTapCallBack,
+        tag: String
+    ) -> (tap: CFMachPort?, source: CFRunLoopSource?) {
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -84,15 +53,44 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             callback: callback,
             userInfo: selfPtr
         ) else {
-            logi("ESC tap: 创建失败（可能缺少 Accessibility 权限）")
-            return
+            logi("\(tag) tap: 创建失败（可能缺少 Accessibility 权限）")
+            return (nil, nil)
         }
         let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
+        logi("\(tag) tap: 已安装")
+        return (tap, runLoopSource)
+    }
+
+    private func installEscTap() {
+        guard escEventTap == nil else { return }
+        let callback: CGEventTapCallBack = { (proxy, type, event, info) -> Unmanaged<CGEvent>? in
+            guard let info = info else { return Unmanaged.passRetained(event) }
+            let ctrl = Unmanaged<ResultWindowController>.fromOpaque(info).takeUnretainedValue()
+            guard ctrl.panel != nil else { return Unmanaged.passRetained(event) }
+
+            let settings = SettingsManager.shared
+            let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+            if keyCode != Int64(settings.closePanelHotkeyKeyCode) { return Unmanaged.passRetained(event) }
+
+            let expectedModifiers = settings.closePanelHotkeyModifiers
+            if expectedModifiers != 0 {
+                let flags = event.flags
+                var actualModifiers = 0
+                if flags.contains(.maskCommand) { actualModifiers |= Int(cmdKey) }
+                if flags.contains(.maskShift) { actualModifiers |= Int(shiftKey) }
+                if flags.contains(.maskControl) { actualModifiers |= Int(controlKey) }
+                if flags.contains(.maskAlternate) { actualModifiers |= Int(optionKey) }
+                if actualModifiers != expectedModifiers { return Unmanaged.passRetained(event) }
+            }
+
+            DispatchQueue.main.async { ctrl.panel?.close() }
+            return nil
+        }
+        let (tap, source) = createAndInstallTap(callback: callback, tag: "ESC")
         escEventTap = tap
-        escRunLoopSource = runLoopSource
-        logi("ESC tap: 已安装")
+        escRunLoopSource = source
     }
 
     /// 移除全局 ESC 事件拦截
@@ -131,16 +129,11 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
         let callback: CGEventTapCallBack = { (proxy, type, event, info) -> Unmanaged<CGEvent>? in
             guard let info = info else { return Unmanaged.passRetained(event) }
             let ctrl = Unmanaged<ResultWindowController>.fromOpaque(info).takeUnretainedValue()
-            guard ctrl.panel != nil else {
-                return Unmanaged.passRetained(event)
-            }
+            guard ctrl.panel != nil else { return Unmanaged.passRetained(event) }
 
             let settings = SettingsManager.shared
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-            let expectedKeyCode = Int64(settings.togglePanelHotkeyKeyCode)
-            if keyCode != expectedKeyCode {
-                return Unmanaged.passRetained(event)
-            }
+            if keyCode != Int64(settings.togglePanelHotkeyKeyCode) { return Unmanaged.passRetained(event) }
 
             let expectedModifiers = settings.togglePanelHotkeyModifiers
             if expectedModifiers != 0 {
@@ -150,34 +143,15 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
                 if flags.contains(.maskShift) { actualModifiers |= Int(shiftKey) }
                 if flags.contains(.maskControl) { actualModifiers |= Int(controlKey) }
                 if flags.contains(.maskAlternate) { actualModifiers |= Int(optionKey) }
-                if actualModifiers != expectedModifiers {
-                    return Unmanaged.passRetained(event)
-                }
+                if actualModifiers != expectedModifiers { return Unmanaged.passRetained(event) }
             }
 
-            DispatchQueue.main.async {
-                ctrl.togglePanelPosition()
-            }
+            DispatchQueue.main.async { ctrl.togglePanelPosition() }
             return nil
         }
-        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
-            callback: callback,
-            userInfo: selfPtr
-        ) else {
-            logi("TogglePanel tap: 创建失败（可能缺少 Accessibility 权限）")
-            return
-        }
-        let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
+        let (tap, source) = createAndInstallTap(callback: callback, tag: "TogglePanel")
         togglePanelTap = tap
-        togglePanelRunLoopSource = runLoopSource
-        logi("TogglePanel tap: 已安装 (\(SettingsManager.shared.togglePanelHotkeyDisplay) 切换弹窗位置)")
+        togglePanelRunLoopSource = source
     }
 
     private func removeToggleTap() {

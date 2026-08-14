@@ -60,6 +60,8 @@ func runAllTests() -> Int32 {
     runEndpointValidationTests()
     runSettingsManagerThreadSafetyTests()
     runTranslationEngineTests()
+    runTranslationPipelineTests()
+    runPasteboardSnapshotTests()
 
     print("\n========== Results ==========")
     print("Total: \(totalTests) | Passed: \(passedTests) | Failed: \(failedTests)")

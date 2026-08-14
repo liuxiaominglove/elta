@@ -41,11 +41,63 @@ func runSettingsManagerTests() {
     }
 
     test("setting hotkey keyCode works") {
-        // Save original
         let orig = SettingsManager.shared.hotkeyKeyCode
         SettingsManager.shared.hotkeyKeyCode = 0x03 // F key
         try assertEqual(SettingsManager.shared.hotkeyKeyCode, 0x03)
         SettingsManager.shared.hotkeyKeyCode = orig // Restore
+    }
+
+    test("hotkeyKeyCode=0 (A key) is preserved, NOT default T key") {
+        let orig = SettingsManager.shared.hotkeyKeyCode
+        SettingsManager.shared.hotkeyKeyCode = 0
+        try assertEqual(SettingsManager.shared.hotkeyKeyCode, 0)
+        SettingsManager.shared.hotkeyKeyCode = orig
+    }
+
+    test("hotkeyModifiers=0 preserved, NOT replaced by controlKey") {
+        let orig = SettingsManager.shared.hotkeyModifiers
+        SettingsManager.shared.hotkeyModifiers = 0
+        try assertEqual(SettingsManager.shared.hotkeyModifiers, 0)
+        SettingsManager.shared.hotkeyModifiers = orig
+    }
+
+    test("selectionHotkeyKeyCode=0 preserved, NOT default") {
+        let orig = SettingsManager.shared.selectionHotkeyKeyCode
+        SettingsManager.shared.selectionHotkeyKeyCode = 0
+        try assertEqual(SettingsManager.shared.selectionHotkeyKeyCode, 0)
+        SettingsManager.shared.selectionHotkeyKeyCode = orig
+    }
+
+    test("selectionHotkeyModifiers has ctrl+shift default") {
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.selectionHotkeyModifiers")
+        let mod = SettingsManager.shared.selectionHotkeyModifiers
+        try assertEqual(mod, Int(controlKey | shiftKey))
+    }
+
+    test("selectionHotkeyModifiers=0 preserved, NOT ctrl+shift") {
+        let orig = SettingsManager.shared.selectionHotkeyModifiers
+        SettingsManager.shared.selectionHotkeyModifiers = 0
+        try assertEqual(SettingsManager.shared.selectionHotkeyModifiers, 0)
+        // 恢复原始值；若 orig 也是 0 则清空 key 避免污染后续默认值测试
+        if orig == 0 {
+            UserDefaults.standard.removeObject(forKey: "snaptranslate.selectionHotkeyModifiers")
+        } else {
+            SettingsManager.shared.selectionHotkeyModifiers = orig
+        }
+    }
+
+    test("closePanelHotkeyKeyCode=0 preserved, NOT ESC 0x35") {
+        let orig = SettingsManager.shared.closePanelHotkeyKeyCode
+        SettingsManager.shared.closePanelHotkeyKeyCode = 0
+        try assertEqual(SettingsManager.shared.closePanelHotkeyKeyCode, 0)
+        SettingsManager.shared.closePanelHotkeyKeyCode = orig
+    }
+
+    test("togglePanelHotkeyKeyCode=0 preserved, NOT backtick 0x32") {
+        let orig = SettingsManager.shared.togglePanelHotkeyKeyCode
+        SettingsManager.shared.togglePanelHotkeyKeyCode = 0
+        try assertEqual(SettingsManager.shared.togglePanelHotkeyKeyCode, 0)
+        SettingsManager.shared.togglePanelHotkeyKeyCode = orig
     }
 
     test("setting hotkey modifiers works") {
@@ -59,11 +111,6 @@ func runSettingsManagerTests() {
     test("selectionHotkeyKeyCode has valid default") {
         let code = SettingsManager.shared.selectionHotkeyKeyCode
         try assertTrue(code >= 0 && code < 128, "KeyCode should be between 0 and 127, got \(code)")
-    }
-
-    test("selectionHotkeyModifiers has ctrl+shift default") {
-        let mod = SettingsManager.shared.selectionHotkeyModifiers
-        try assertEqual(mod, Int(controlKey | shiftKey))
     }
 
     test("hotkeyDisplay default is ⌃T") {
@@ -120,6 +167,25 @@ func runSettingsManagerTests() {
         try assertNil(SettingsManager.shared.apiKey(for: .openai) as Any?)
     }
 
-    // Restore default state
-    SettingsManager.shared.apiProvider = .deepseek
+    // WI-B2: 验证 activeApiKey 优先读取当前 provider 的 key
+    test("activeApiKey reads from Keychain, not stale UserDefaults") {
+        SettingsManager.shared.setApiKey("sk-test-active", for: .deepseek)
+        try assertEqual(SettingsManager.shared.activeApiKey, "sk-test-active")
+        SettingsManager.shared.setApiKey(nil, for: .deepseek)
+    }
+
+    test("activeApiKey returns nil when Keychain and UserDefaults both empty") {
+        SettingsManager.shared.setApiKey(nil, for: .deepseek)
+        try assertNil(SettingsManager.shared.activeApiKey as Any?)
+    }
+
+    // WI-C3: API Key 存储往返回归（保存后重开应能读回）
+    test("setApiKey persists and activeApiKey reads back after provider roundtrip") {
+        SettingsManager.shared.apiProvider = .deepseek
+        SettingsManager.shared.setApiKey("sk-persist-test", for: .deepseek)
+        try assertEqual(SettingsManager.shared.activeApiKey, "sk-persist-test")
+        try assertEqual(SettingsManager.shared.apiKey(for: .deepseek), "sk-persist-test")
+        SettingsManager.shared.setApiKey(nil, for: .deepseek)
+        try assertNil(SettingsManager.shared.activeApiKey as Any?)
+    }
 }

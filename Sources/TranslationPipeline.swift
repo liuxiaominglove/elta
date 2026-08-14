@@ -47,10 +47,7 @@ final class TranslationPipeline {
             }
         }
 
-        if !Self.screenCapturePrimed || !Self.accessibilityPrimed {
-            // 仍可能有一项未触发（首次调用时两者都会设为 true，所以这个分支实际只在异常情况进入）
-            logi("Prime: 权限弹窗已触发，请在系统设置中授权")
-        }
+
     }
 
     func start() {
@@ -103,7 +100,7 @@ final class TranslationPipeline {
     /// 通过 macOS Accessibility API 读取指定应用（或系统全局）当前聚焦元素中的选中文本
     /// - Parameter pid: 目标应用的进程 PID；传 nil 则回退为系统全局聚焦元素（兼容旧逻辑）
     /// 不依赖剪贴板，也不需要模拟 Cmd+C，兼容性更好
-    private func getSelectedTextViaAccessibility(pid: pid_t? = nil) -> String? {
+    func getSelectedTextViaAccessibility(pid: pid_t? = nil) -> String? {
         // 检查辅助功能权限
         guard AXIsProcessTrusted() else {
             logi("Accessibility：未获得辅助功能权限，提示用户授权")
@@ -163,31 +160,34 @@ final class TranslationPipeline {
            let fullText = valueRef as? String, !fullText.isEmpty {
             var selectedRangeRef: CFTypeRef?
             if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &selectedRangeRef) == .success,
-               let rangeValue = selectedRangeRef,
-               CFGetTypeID(rangeValue) == AXValueGetTypeID() {
+               let rangeValue = selectedRangeRef {
                 let axValue = rangeValue as! AXValue
                 var range = CFRange(location: 0, length: 0)
-                if AXValueGetValue(axValue, .cfRange, &range) {
-                    let nsRange = NSRange(location: range.location, length: range.length)
-                    if nsRange.location != NSNotFound,
-                       nsRange.location >= 0,
-                       nsRange.location + nsRange.length <= fullText.count {
-                        let start = fullText.index(fullText.startIndex, offsetBy: nsRange.location)
-                        let end = fullText.index(start, offsetBy: nsRange.length)
-                        let selected = String(fullText[start..<end])
-                        if !selected.isEmpty {
-                            logi("Accessibility：按范围截取选中文本 \(selected.count) 字符")
-                            return selected
-                        }
-                    }
+                if AXValueGetValue(axValue, .cfRange, &range),
+                   let selected = Self.substringInRange(fullText, cfLocation: range.location, cfLength: range.length) {
+                    logi("Accessibility：按范围截取选中文本 \(selected.count) 字符")
+                    return selected
                 }
             }
-            logi("Accessibility：未拿到范围，使用完整文本兜底 \(fullText.count) 字符")
-            return fullText
+            logi("Accessibility：无选中范围，回退到 Cmd+C")
+            return nil
         }
 
         logi("Accessibility：未找到任何文本")
         return nil
+    }
+
+    /// 从 fullText 按 CFRange 截取子串，范围无效时返回 nil
+    private static func substringInRange(_ fullText: String, cfLocation: Int, cfLength: Int) -> String? {
+        guard cfLocation >= 0,
+              cfLength > 0,
+              cfLocation + cfLength <= fullText.count else {
+            return nil
+        }
+        let start = fullText.index(fullText.startIndex, offsetBy: cfLocation)
+        let end = fullText.index(start, offsetBy: cfLength)
+        let selected = String(fullText[start..<end])
+        return selected.isEmpty ? nil : selected
     }
 
     /// 引导用户前往系统设置开启辅助功能权限
@@ -222,7 +222,8 @@ final class TranslationPipeline {
         let mouseLocation = NSEvent.mouseLocation
 
         // 1. 等待用户释放快捷键按键（Cmd/Shift）
-        usleep(300_000)  // 300ms
+        // 使用 RunLoop 而非 usleep：不彻底冻结主线程，事件循环可处理系统消息
+        RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.3))
 
         // 2. 优先使用 Accessibility API 读取选中文本（最可靠）
         //    过滤掉 ELTA 自己的 PID：当旧弹窗在前台时，frontmost 可能是 ELTA 自己，
@@ -279,7 +280,11 @@ final class TranslationPipeline {
     private func getSelectedTextViaCopyPasteboard() -> String? {
         let pasteboard = NSPasteboard.general
         let oldChangeCount = pasteboard.changeCount
-        let oldItems = pasteboard.pasteboardItems?.compactMap { $0.string(forType: .string) } ?? []
+        let oldSnapshot = PasteboardSnapshot.capture(from: pasteboard)
+        let oldTextItems = oldSnapshot.items.compactMap { item -> String? in
+            guard let data = item.types.first(where: { $0.type == .string })?.data else { return nil }
+            return String(data: data, encoding: .utf8)
+        }
 
         // 模拟 Cmd+C 复制选中文本
         // 关键：cmdDown 的 flags 必须为空（不能设 .maskCommand），否则系统认为事件矛盾
@@ -291,12 +296,16 @@ final class TranslationPipeline {
         cUp?.flags  = .maskCommand
         let cmdUp   = CGEvent(keyboardEventSource: src, virtualKey: 0x37, keyDown: false)
 
+        // 按键间隔：确保系统正确处理每个按键事件
+        let keyPressDelay: useconds_t = 30_000
+        let keyHoldDelay: useconds_t = 40_000
+
         cmdDown?.post(tap: .cghidEventTap)
-        usleep(30_000)
+        usleep(keyPressDelay)
         cDown?.post(tap: .cghidEventTap)
-        usleep(40_000)
+        usleep(keyHoldDelay)
         cUp?.post(tap: .cghidEventTap)
-        usleep(30_000)
+        usleep(keyPressDelay)
         cmdUp?.post(tap: .cghidEventTap)
 
         // 读取剪贴板（重试等待目标 App 处理 Cmd+C）
@@ -316,59 +325,28 @@ final class TranslationPipeline {
         if selectedText == nil,
            let newText = pasteboard.string(forType: .string),
            !newText.isEmpty,
-           !oldItems.contains(newText) {
+           !oldTextItems.contains(newText) {
             selectedText = newText
             logi("Cmd+C 获取成功（兜底读取）")
         }
 
-        // 恢复旧剪贴板（如果可能）
-        if !oldItems.isEmpty {
-            pasteboard.clearContents()
-            let restored = pasteboard.writeObjects(oldItems as [NSPasteboardWriting])
-            if !restored {
-                logi("⚠️ 剪贴板恢复失败，原始剪贴板内容可能已丢失")
-            }
-        }
+        // 恢复旧剪贴板（保留所有类型；空快照则恢复成空，清除 Cmd+C 残留）
+        oldSnapshot.restore(to: pasteboard)
+        logi("剪贴板已恢复（\(oldSnapshot.items.count) 个条目）")
 
         return selectedText
     }
 
     private func showTextLoading() {
-        DispatchQueue.main.async { [weak self] in self?.showTextLoadingPanel() }
-    }
-
-    private func showTextLoadingPanel() {
-        guard loadingPanel == nil else { return }
-        let w: CGFloat = 300, h: CGFloat = 140
-        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: w, height: h),
-                            styleMask: [.titled, .nonactivatingPanel],
-                            backing: .buffered, defer: false)
-        panel.isFloatingPanel = true; panel.level = .floating
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.title = APP_DISPLAY_NAME
-        panel.titlebarAppearsTransparent = true
-        panel.isMovableByWindowBackground = true
-        panel.setFrameOrigin(loadingPanelOrigin(size: NSSize(width: w, height: h)))
-        panel.makeKeyAndOrderFront(nil)
-
-        let v = NSView(frame: NSRect(x: 0, y: 0, width: w, height: h))
-        let spinner = NSProgressIndicator(frame: NSRect(x: (w - 40) / 2, y: 60, width: 40, height: 40))
-        spinner.style = .spinning; spinner.startAnimation(nil); v.addSubview(spinner)
-
-        let label = NSTextField(labelWithString: "正在翻译...")
-        label.frame = NSRect(x: 0, y: 30, width: w, height: 24); label.alignment = .center
-        label.font = .systemFont(ofSize: 14); v.addSubview(label)
-
-        let sub = NSTextField(labelWithString: "划词翻译 → AI 翻译分析")
-        sub.frame = NSRect(x: 0, y: 12, width: w, height: 18); sub.alignment = .center
-        sub.font = .systemFont(ofSize: 11); sub.textColor = .secondaryLabelColor; v.addSubview(sub)
-
-        panel.contentView = v
-        loadingPanel = panel
+        DispatchQueue.main.async { [weak self] in
+            self?.showLoadingPanel(title: "正在翻译...", subtitle: "划词翻译 → AI 翻译分析")
+        }
     }
 
     private func showLoading() {
-        DispatchQueue.main.async { [weak self] in self?.showLoadingPanel() }
+        DispatchQueue.main.async { [weak self] in
+            self?.showLoadingPanel(title: "正在识别与翻译...", subtitle: "OCR 识别 → AI 翻译分析")
+        }
     }
 
     private func hideLoading() {
@@ -378,7 +356,7 @@ final class TranslationPipeline {
         }
     }
 
-    private func showLoadingPanel() {
+    private func showLoadingPanel(title: String, subtitle: String) {
         guard loadingPanel == nil else { return }
         let w: CGFloat = 300, h: CGFloat = 140
         let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: w, height: h),
@@ -396,11 +374,11 @@ final class TranslationPipeline {
         let spinner = NSProgressIndicator(frame: NSRect(x: (w - 40) / 2, y: 60, width: 40, height: 40))
         spinner.style = .spinning; spinner.startAnimation(nil); v.addSubview(spinner)
 
-        let label = NSTextField(labelWithString: "正在识别与翻译...")
+        let label = NSTextField(labelWithString: title)
         label.frame = NSRect(x: 0, y: 30, width: w, height: 24); label.alignment = .center
         label.font = .systemFont(ofSize: 14); v.addSubview(label)
 
-        let sub = NSTextField(labelWithString: "OCR 识别 → AI 翻译分析")
+        let sub = NSTextField(labelWithString: subtitle)
         sub.frame = NSRect(x: 0, y: 12, width: w, height: 18); sub.alignment = .center
         sub.font = .systemFont(ofSize: 11); sub.textColor = .secondaryLabelColor; v.addSubview(sub)
 

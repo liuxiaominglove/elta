@@ -15,6 +15,7 @@ final class ScreenshotEngine: NSObject {
     private var safetyTimer: DispatchWorkItem?
     private var screenSnapshot: NSImage?
     private var fullScreenCGImage: CGImage?  // 首次截图时的原始 CGImage，用于裁切选区（避免拍到遮罩层）
+    private var capturedScreen: NSScreen?     // 启动时截图的屏幕（避免跨屏裁剪错位）
 
     func start(done: @escaping (NSRect, CGImage?) -> Void) {
         guard !isActive else {
@@ -37,6 +38,7 @@ final class ScreenshotEngine: NSObject {
         }
         screenSnapshot = bg
         fullScreenCGImage = rawCG
+        capturedScreen = screen
 
         // 2) 推入全局十字光标
         NSCursor.crosshair.push()
@@ -98,7 +100,8 @@ final class ScreenshotEngine: NSObject {
         isActive = false
         screenSnapshot = nil
         fullScreenCGImage = nil
-        for _ in 0..<3 { NSCursor.crosshair.pop() }
+        capturedScreen = nil
+        NSCursor.crosshair.pop()
         NSCursor.arrow.push(); NSCursor.arrow.pop()
         panel?.orderOut(nil)
         panel = nil
@@ -166,7 +169,6 @@ final class ScreenshotEngine: NSObject {
     /// 返回框选区域的高清 CGImage。使用初始全屏截图裁切（而非重新截图），
     /// 避免拍到我们自己的遮罩面板。
     private func captureRectCG(rect: NSRect) -> CGImage? {
-        // 优先使用启动时缓存的原始 CGImage（最初的全屏截图，不含遮罩层）
         guard let full = fullScreenCGImage else {
             loge("缺少全屏 CGImage 缓存，回退实时截图")
             let pos = NSEvent.mouseLocation
@@ -175,8 +177,7 @@ final class ScreenshotEngine: NSObject {
             return cropFromFull(fallback, screen: screen, rect: rect)
         }
 
-        let pos = NSEvent.mouseLocation
-        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(pos) }) ?? NSScreen.main else { return nil }
+        guard let screen = capturedScreen ?? NSScreen.main else { return nil }
         return cropFromFull(full, screen: screen, rect: rect)
     }
 
@@ -226,9 +227,5 @@ final class ScreenshotEngine: NSObject {
         }
         img.unlockFocus()
         return (img, full)  // 返回 NSImage（显示用）+ CGImage（裁切用）
-    }
-
-    private func displayIDForScreen(_ screen: NSScreen) -> CGDirectDisplayID? {
-        (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
     }
 }

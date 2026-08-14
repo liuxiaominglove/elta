@@ -121,18 +121,39 @@ final class SettingsManager {
     // MARK: 自定义配置（OpenAI-Compatible & Ollama）
 
     var customEndpoint: String? {
-        get { defaults.string(forKey: Keys.customEndpoint) }
-        set { defaults.set(newValue, forKey: Keys.customEndpoint) }
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return defaults.string(forKey: Keys.customEndpoint)
+        }
+        set {
+            lock.lock()
+            defaults.set(newValue, forKey: Keys.customEndpoint)
+            lock.unlock()
+        }
     }
 
     var customModel: String? {
-        get { defaults.string(forKey: Keys.customModel) }
-        set { defaults.set(newValue, forKey: Keys.customModel) }
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return defaults.string(forKey: Keys.customModel)
+        }
+        set {
+            lock.lock()
+            defaults.set(newValue, forKey: Keys.customModel)
+            lock.unlock()
+        }
     }
 
     var ollamaModel: String? {
-        get { defaults.string(forKey: Keys.ollamaModel) }
-        set { defaults.set(newValue, forKey: Keys.ollamaModel) }
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return defaults.string(forKey: Keys.ollamaModel)
+        }
+        set {
+            lock.lock()
+            defaults.set(newValue, forKey: Keys.ollamaModel)
+            lock.unlock()
+        }
     }
 
     // 旧版兼容：迁移旧的单一 apiKey → deepseek
@@ -143,12 +164,17 @@ final class SettingsManager {
 
     var systemPrompt: String {
         get {
+            lock.lock(); defer { lock.unlock() }
             if let saved = defaults.string(forKey: Keys.prompt), !saved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return saved
             }
             return defaultPrompt
         }
-        set { defaults.set(newValue, forKey: Keys.prompt) }
+        set {
+            lock.lock()
+            defaults.set(newValue, forKey: Keys.prompt)
+            lock.unlock()
+        }
     }
 
     /// 用户可编辑的默认翻译模板
@@ -180,7 +206,7 @@ final class SettingsManager {
     var hotkeyKeyCode: Int {
         get {
             lock.lock(); defer { lock.unlock() }
-            return defaults.integer(forKey: Keys.hotkeyKeyCode) == 0 ? DEFAULT_HOTKEY_KEYCODE : defaults.integer(forKey: Keys.hotkeyKeyCode)
+            return defaults.object(forKey: Keys.hotkeyKeyCode) as? Int ?? DEFAULT_HOTKEY_KEYCODE
         }
         set {
             lock.lock()
@@ -192,8 +218,7 @@ final class SettingsManager {
     var hotkeyModifiers: Int {
         get {
             lock.lock(); defer { lock.unlock() }
-            let v = defaults.integer(forKey: Keys.hotkeyModifiers)
-            return v == 0 ? Int(controlKey) : v
+            return defaults.object(forKey: Keys.hotkeyModifiers) as? Int ?? Int(controlKey)
         }
         set {
             lock.lock()
@@ -210,11 +235,11 @@ final class SettingsManager {
 
     // 划词翻译快捷键
     var selectionHotkeyKeyCode: Int {
-        get { defaults.integer(forKey: Keys.selectionHotkeyKeyCode) == 0 ? DEFAULT_SELECTION_HOTKEY_KEYCODE : defaults.integer(forKey: Keys.selectionHotkeyKeyCode) }
+        get { defaults.object(forKey: Keys.selectionHotkeyKeyCode) as? Int ?? DEFAULT_SELECTION_HOTKEY_KEYCODE }
         set { defaults.set(newValue, forKey: Keys.selectionHotkeyKeyCode) }
     }
     var selectionHotkeyModifiers: Int {
-        get { defaults.integer(forKey: Keys.selectionHotkeyModifiers) == 0 ? Int(controlKey | shiftKey) : defaults.integer(forKey: Keys.selectionHotkeyModifiers) }
+        get { defaults.object(forKey: Keys.selectionHotkeyModifiers) as? Int ?? Int(controlKey | shiftKey) }
         set { defaults.set(newValue, forKey: Keys.selectionHotkeyModifiers) }
     }
     var selectionHotkeyDisplay: String {
@@ -226,7 +251,7 @@ final class SettingsManager {
     var closePanelHotkeyKeyCode: Int {
         get {
             lock.lock(); defer { lock.unlock() }
-            return defaults.integer(forKey: Keys.closePanelHotkeyKeyCode) == 0 ? 0x35 : defaults.integer(forKey: Keys.closePanelHotkeyKeyCode)
+            return defaults.object(forKey: Keys.closePanelHotkeyKeyCode) as? Int ?? 0x35
         }
         set {
             lock.lock()
@@ -254,7 +279,7 @@ final class SettingsManager {
     var togglePanelHotkeyKeyCode: Int {
         get {
             lock.lock(); defer { lock.unlock() }
-            return defaults.integer(forKey: Keys.togglePanelHotkeyKeyCode) == 0 ? 0x32 : defaults.integer(forKey: Keys.togglePanelHotkeyKeyCode)
+            return defaults.object(forKey: Keys.togglePanelHotkeyKeyCode) as? Int ?? 0x32
         }
         set {
             lock.lock()

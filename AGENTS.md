@@ -58,3 +58,29 @@ security find-generic-password -s "com.elta.snaptranslate" -w >/dev/null 2>&1 &&
 - 如不慎暴露 Key，立即提醒用户去对应平台重置。
 
 The app requires macOS **Screen Recording** and **Accessibility** permissions (TCC). These are requested at first use in `TranslationPipeline.primePermissionsIfNeeded()`. Both must be granted for all features to work.
+
+## TDD 与安全修复纪律
+
+以下规则来自真实踩坑经验，适用于本项目和全局：
+
+### ⚠️ CFTypeRef 强制转换规则
+
+- ❌ **禁止** `CFGetTypeID(xxx) == AXUIElementGetTypeID()` 作类型判断——会 SIGSEGV
+- ❌ **禁止** `as? AXUIElement`——编译器 warning "will always succeed" 是误报，实际走的是 CF 桥接，不检查 typeID
+- ✅ **正确**：信任 AX API 契约，`as! AXUIElement` 直接强制转换。AX API 返回的对象契约上是 AXUIElement 类型。**编译通过即可，不要为消除 warning 引入更危险的代码。**
+
+### ⚠️ 同步/异步转换规则
+
+- **改同步函数为异步前，必须先 grep 所有调用方**，确认调用方不依赖同步返回语义
+- 热键处理器、C 回调函数中的同步函数**不可**改成异步
+- 如需减少主线程阻塞，用 `RunLoop.current.run(mode: .default, before: Date(...))` 代替 `usleep`
+
+### ⚠️ NSScrollView documentView 遍历规则
+
+- `documentView.superview` 返回 `NSClipView`，**不是** `NSScrollView`
+- 要获取 scrollView 必须用 `enclosingScrollView` 或 `superview?.superview`
+
+### ⚠️ Swift 编译配置
+
+- `run_tests.sh` 需要和 `build.sh` **同样的** `-target` 参数（当前：`macosx13.0`）
+- 新增源文件依赖时，`run_tests.sh` 的 `SRC_FILES` 数组需要同步更新

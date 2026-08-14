@@ -13,7 +13,7 @@ final class SettingsWindowController: NSObject {
     // Tab 1: 通用 — API 提供商 & Key
     private var providerPopup: NSPopUpButton?
     private var apiKeyVisibleField: PasteTextField?   // 明文输入
-    private var apiKeyHiddenField: NSSecureTextField?  // 密文（默认显示）
+    private var apiKeyHiddenField: PasteSecureTextField?  // 密文（默认显示）
     private var apiKeyEyeButton: NSButton?
     private var apiKeyVisible: Bool = false             // 当前是否明文
     private var customEndpointField: NSTextField?
@@ -23,38 +23,27 @@ final class SettingsWindowController: NSObject {
     private var providerCardView: NSView?          // 当前提供商的卡片容器
     private var providerCardHeight: CGFloat = 0
 
-    // Tab 2: 快捷键
-    private var hotkeyLabel: NSTextField?
-    private var hotkeyRecordBtn: NSButton?
-    private var hotkeyStatusLabel: NSTextField?
-    private var isRecordingHotkey = false
-    private var recordedKeyCode: Int = 0
-    private var recordedModifiers: Int = 0
-
-    // 划词翻译快捷键
-    private var selectionHotkeyRecordBtn: NSButton?
-    private var selectionHotkeyStatusLabel: NSTextField?
-    private var isRecordingSelectionHotkey = false
-    private var recordedSelectionKeyCode: Int = 0
-    private var recordedSelectionModifiers: Int = 0
-    private var hotkeyMonitor: Any?
-
-    // 关闭翻译面板快捷键
-    private var closePanelHotkeyRecordBtn: NSButton?
-    private var closePanelHotkeyStatusLabel: NSTextField?
-    private var isRecordingClosePanelHotkey = false
-    private var recordedClosePanelKeyCode: Int = 0
-    private var recordedClosePanelModifiers: Int = 0
-    private var selectionHotkeyMonitor: Any?
-    private var closePanelHotkeyMonitor: Any?
-
-    // 切换弹窗位置快捷键
-    private var togglePanelHotkeyRecordBtn: NSButton?
-    private var togglePanelHotkeyStatusLabel: NSTextField?
-    private var isRecordingTogglePanelHotkey = false
-    private var recordedTogglePanelKeyCode: Int = 0
-    private var recordedTogglePanelModifiers: Int = 0
-    private var togglePanelHotkeyMonitor: Any?
+    // Tab 2: 快捷键 — 4 个 HotkeyRecorder 实例
+    let screenshotRecorder = HotkeyRecorder(
+        allowedSoloKeyCodes: [],
+        soloKeyHint: "",
+        defaultDisplay: { SettingsManager.shared.hotkeyDisplay }
+    )
+    let selectionRecorder = HotkeyRecorder(
+        allowedSoloKeyCodes: [],
+        soloKeyHint: "",
+        defaultDisplay: { SettingsManager.shared.selectionHotkeyDisplay }
+    )
+    let closePanelRecorder = HotkeyRecorder(
+        allowedSoloKeyCodes: [0x35],
+        soloKeyHint: "或直接按 ESC",
+        defaultDisplay: { SettingsManager.shared.closePanelHotkeyDisplay }
+    )
+    let togglePanelRecorder = HotkeyRecorder(
+        allowedSoloKeyCodes: [0x32],
+        soloKeyHint: "或直接按 ` 键",
+        defaultDisplay: { SettingsManager.shared.togglePanelHotkeyDisplay }
+    )
 
     // Tab 3: 翻译模板
     private var templateTextView: NSTextView?
@@ -63,7 +52,7 @@ final class SettingsWindowController: NSObject {
     func show() {
         if let w = window { w.close(); window = nil }
 
-        let ww: CGFloat = 640, hh: CGFloat = 700
+        let ww: CGFloat = 640, hh: CGFloat = 780
         let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: ww, height: hh),
                            styleMask: [.titled, .closable, .miniaturizable],
                            backing: .buffered, defer: false)
@@ -72,195 +61,169 @@ final class SettingsWindowController: NSObject {
         win.isReleasedWhenClosed = false
         win.level = .floating
         win.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        win.delegate = self
 
-        let content = NSView(frame: NSRect(x: 0, y: 0, width: ww, height: hh))
+        let tabs = NSTabView(frame: NSRect(x: 12, y: 50, width: ww - 24, height: hh - 74))
+        tabs.tabViewType = .topTabsBezelBorder
+        tabs.tabViewBorderType = .none
 
-        // ---- 标签页 ----
-        let tabView = NSTabView(frame: NSRect(x: 16, y: 50, width: ww - 32, height: hh - 66))
-        tabView.tabViewType = .topTabsBezelBorder
-
-        // Tab 1: 通用
         let generalTab = NSTabViewItem(identifier: "general")
         generalTab.label = "通用"
-        generalTab.view = buildGeneralTab(size: tabView.frame.size)
-        tabView.addTabViewItem(generalTab)
+        generalTab.view = buildGeneralTab(size: tabs.contentRect.size)
+        tabs.addTabViewItem(generalTab)
 
-        // Tab 2: 快捷键
-        let hotkeyTab = NSTabViewItem(identifier: "hotkey")
-        hotkeyTab.label = "快捷键"
-        hotkeyTab.view = buildHotkeyTab(size: tabView.frame.size)
-        tabView.addTabViewItem(hotkeyTab)
+        let hotkeysTab = NSTabViewItem(identifier: "hotkeys")
+        hotkeysTab.label = "快捷键"
+        hotkeysTab.view = buildHotkeysTab(size: tabs.contentRect.size)
+        tabs.addTabViewItem(hotkeysTab)
 
-        // Tab 3: 翻译模板
         let templateTab = NSTabViewItem(identifier: "template")
-        templateTab.label = "翻译模板"
-        templateTab.view = buildTemplateTab(size: tabView.frame.size)
-        tabView.addTabViewItem(templateTab)
+        templateTab.label = "模板"
+        templateTab.view = buildTemplateTab(size: tabs.contentRect.size)
+        tabs.addTabViewItem(templateTab)
 
-        content.addSubview(tabView)
-        self.tabView = tabView
+        win.contentView?.addSubview(tabs)
+        tabView = tabs
 
-        // ---- 底部按钮 ----
-        let resetBtn = NSButton(title: "恢复默认", target: self, action: #selector(resetAll))
-        resetBtn.frame = NSRect(x: 16, y: 12, width: 100, height: 28)
-        resetBtn.bezelStyle = .rounded
-        content.addSubview(resetBtn)
-
+        // 保存按钮——窗口底部，所有标签页通用
         let saveBtn = NSButton(title: "保存并应用", target: self, action: #selector(saveAllSettings))
-        saveBtn.frame = NSRect(x: ww - 135, y: 12, width: 120, height: 28)
+        saveBtn.frame = NSRect(x: 16, y: 12, width: 120, height: 32)
         saveBtn.bezelStyle = .rounded
-        saveBtn.keyEquivalent = "\r"
-        content.addSubview(saveBtn)
+        saveBtn.keyEquivalent = "\r"  // Enter 键快捷保存
+        win.contentView?.addSubview(saveBtn)
 
-        // ---- 版本号（底部居中，极简不干扰 UI） ----
-        let versionLabel = NSTextField(labelWithString: "ELTA \(APP_FULL_VERSION)")
-        versionLabel.frame = NSRect(x: (ww - 160) / 2, y: 0, width: 160, height: 14)
-        versionLabel.alignment = .center
-        versionLabel.font = .systemFont(ofSize: 10, weight: .regular)
-        versionLabel.textColor = .secondaryLabelColor
-        content.addSubview(versionLabel)
+        window = win
 
-        win.contentView = content
         win.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        // 避免 API Key 输入框默认成为 first responder 并自动选中全部文本，
-        // 防止通用剪贴板（Handoff）意外把 Key 同步到其他设备。
-        win.makeFirstResponder(content)
-        self.window = win
+        win.level = .floating
+        let f = win.level
+        DispatchQueue.main.async {
+            win.level = f
+            win.makeKeyAndOrderFront(nil)
+        }
+
+        // 初始化 API Key 字段（同时填充密文/明文两个字段，避免显示空框）
+        loadKey(for: SettingsManager.shared.apiProvider)
     }
 
-    // MARK: - Tab 1: 通用（滚动列表 + 动态卡片）
+    // --- computed helpers ---
+
+    private var activeApiKeyFieldValue: String {
+        if apiKeyVisible { return apiKeyVisibleField?.stringValue ?? "" }
+        return apiKeyHiddenField?.stringValue ?? ""
+    }
+
+    private func loadKey(for provider: AIProvider) {
+        let key = SettingsManager.shared.apiKey(for: provider) ?? ""
+        apiKeyHiddenField?.stringValue = key
+        apiKeyVisibleField?.stringValue = key
+        apiKeyVisible = false
+        if let eyeBtn = apiKeyEyeButton {
+            eyeBtn.title = "👁️"
+        }
+    }
+
+    // MARK: - Tab 1: General
 
     private func buildGeneralTab(size: NSSize) -> NSView {
         let v = NSView(frame: NSRect(origin: .zero, size: size))
         let w = size.width
-        var y: CGFloat = size.height - 30
 
-        // --- 标题 ---
-        let titleLabel = NSTextField(labelWithString: "AI 翻译引擎配置")
-        titleLabel.frame = NSRect(x: 20, y: y, width: 300, height: 22)
-        titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
-        v.addSubview(titleLabel)
-        y -= 28
+        // Provider selector
+        let providerTitle = NSTextField(labelWithString: "AI 模型提供商：")
+        providerTitle.frame = NSRect(x: 4, y: size.height - 28, width: w - 8, height: 18)
+        providerTitle.font = .systemFont(ofSize: 12, weight: .semibold)
+        v.addSubview(providerTitle)
 
-        // --- 提供商下拉选择器 ---
-        let providerLabel = NSTextField(labelWithString: "当前 AI 提供商：")
-        providerLabel.frame = NSRect(x: 20, y: y, width: 200, height: 18)
-        providerLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        v.addSubview(providerLabel)
-        y -= 24
+        let popup = NSPopUpButton(frame: NSRect(x: 4, y: size.height - 54, width: w - 8, height: 24), pullsDown: false)
+        for provider in AIProvider.allCases {
+            popup.addItem(withTitle: provider.displayName)
+        }
+        if let idx = AIProvider.allCases.firstIndex(of: SettingsManager.shared.apiProvider) {
+            popup.selectItem(at: idx)
+        }
+        popup.target = self
+        popup.action = #selector(providerChanged(_:))
+        v.addSubview(popup)
+        providerPopup = popup
 
-        let providerPopup = NSPopUpButton(frame: NSRect(x: 20, y: y, width: 280, height: 26), pullsDown: false)
-        providerPopup.addItems(withTitles: AIProvider.allCases.map { $0.displayName })
-        let currentProvider = SettingsManager.shared.apiProvider
-        providerPopup.selectItem(at: AIProvider.allCases.firstIndex(of: currentProvider) ?? 0)
-        providerPopup.target = self
-        providerPopup.action = #selector(providerChanged(_:))
-        v.addSubview(providerPopup)
-        self.providerPopup = providerPopup
-        y -= 40
+        // API provider card (scrollable)
+        let scrollView = NSScrollView(frame: NSRect(x: 4, y: 48, width: w - 8, height: size.height - 110))
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
+        scrollView.drawsBackground = false
+        v.addSubview(scrollView)
 
-        // --- 分隔线 ---
-        let sep = NSBox(frame: NSRect(x: 20, y: y, width: w - 40, height: 1))
-        sep.boxType = .separator
-        v.addSubview(sep)
-        y -= 12
-
-        // --- 动态卡片区域（根据选中提供商显示对应配置） ---
-        let cardScroll = NSScrollView(frame: NSRect(x: 16, y: 10, width: w - 32, height: y - 10))
-        cardScroll.hasVerticalScroller = true
-        cardScroll.autohidesScrollers = false
-        cardScroll.borderType = .noBorder
-        cardScroll.drawsBackground = false
-        v.addSubview(cardScroll)
-
-        providerCardHeight = y - 10
-        let cardView = buildProviderCard(width: w - 36, provider: currentProvider)
-        cardScroll.documentView = cardView
-        self.providerCardView = cardView
-        scrollProviderCardToTop(scrollView: cardScroll)
-
+        let provider = SettingsManager.shared.apiProvider
+        let card = buildProviderCard(for: provider, width: w - 8)
+        providerCardView = card
+        providerCardHeight = card.frame.height
+        card.frame.size.height = max(card.frame.height, scrollView.contentSize.height)
+        scrollView.documentView = card
         return v
     }
 
-    /// 根据提供商构建动态配置卡片
-    private func buildProviderCard(width w: CGFloat, provider: AIProvider) -> NSView {
+    private func buildProviderCard(for provider: AIProvider, width w: CGFloat) -> NSView {
         let settings = SettingsManager.shared
-        let workingHeight: CGFloat = 800
-        let v = NSView(frame: NSRect(x: 0, y: 0, width: w, height: workingHeight))
-        var y: CGFloat = workingHeight - 16
+        var y: CGFloat = 160
 
-        // --- API Key 区域 ---
+        let v = NSView(frame: NSRect(x: 0, y: 0, width: w, height: 320))
+        let descLabel = NSTextField(labelWithString: provider == .ollama
+            ? "Ollama 无需注册，本地运行即可"
+            : "注册地址：\(provider.registerURL)")
+        descLabel.frame = NSRect(x: 4, y: 180, width: w - 8, height: 18)
+        descLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        descLabel.textColor = .secondaryLabelColor
+        v.addSubview(descLabel)
+
         if provider.needsAPIKey {
-            let apiTitle = NSTextField(labelWithString: "\(provider.displayName) API Key：")
-            apiTitle.frame = NSRect(x: 4, y: y, width: w - 8, height: 18)
-            apiTitle.font = .systemFont(ofSize: 12, weight: .semibold)
-            v.addSubview(apiTitle)
-            y -= 20
+            let keyTitle = NSTextField(labelWithString: "API Key：")
+            keyTitle.frame = NSRect(x: 4, y: 146, width: w - 8, height: 18)
+            keyTitle.font = .systemFont(ofSize: 12, weight: .semibold)
+            v.addSubview(keyTitle)
 
-            let apiDesc = NSTextField(labelWithString: "注册地址：\(provider.registerURL)")
-            apiDesc.frame = NSRect(x: 4, y: y, width: w - 8, height: 14)
-            apiDesc.font = .systemFont(ofSize: 10)
-            apiDesc.textColor = .secondaryLabelColor
-            v.addSubview(apiDesc)
-            self.providerDescLabel = apiDesc
-            y -= 20
-
-            // API Key 输入行：密文字段 + 明文字段（叠放） + 小眼睛切换按钮
-            let keyRow = NSView(frame: NSRect(x: 4, y: y, width: w - 8, height: 26))
-            let fieldWid = w - 8 - 32  // 为眼睛按钮留 32pt
-
-            // 明文输入框（PasteTextField，支持 Cmd+V）
-            let visibleField = PasteTextField(frame: NSRect(x: 0, y: 0, width: fieldWid, height: 26))
-            visibleField.placeholderString = (provider == .anthropic) ? "sk-ant-..." : "sk-..."
-            visibleField.stringValue = settings.apiKey(for: provider) ?? ""
-            visibleField.isBordered = true
-            visibleField.bezelStyle = .roundedBezel
-            visibleField.isEditable = true
-            visibleField.isSelectable = true
-            visibleField.isHidden = true  // 默认隐藏（密文模式）
-            keyRow.addSubview(visibleField)
-
-            // 密文输入框（NSSecureTextField，默认显示）
-            let hiddenField = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: fieldWid, height: 26))
-            hiddenField.placeholderString = (provider == .anthropic) ? "sk-ant-..." : "sk-..."
-            hiddenField.stringValue = settings.apiKey(for: provider) ?? ""
+            // Hidden secure field
+            let hiddenField = PasteSecureTextField(frame: NSRect(x: 4, y: 116, width: w - 40, height: 26))
+            hiddenField.placeholderString = "输入 API Key..."
             hiddenField.isBordered = true
             hiddenField.bezelStyle = .roundedBezel
-            hiddenField.isEditable = true
-            hiddenField.isSelectable = true
-            keyRow.addSubview(hiddenField)
-
-            // 小眼睛按钮
-            let eyeBtn = NSButton(frame: NSRect(x: fieldWid + 4, y: 1, width: 26, height: 24))
-            eyeBtn.bezelStyle = .regularSquare
-            eyeBtn.isBordered = false
-            eyeBtn.title = "🔐"
-            eyeBtn.toolTip = "显示/隐藏 API Key"
-            eyeBtn.font = .systemFont(ofSize: 16)
-            eyeBtn.target = self
-            eyeBtn.action = #selector(toggleApiKeyVisibility(_:))
-            keyRow.addSubview(eyeBtn)
-
-            v.addSubview(keyRow)
-            apiKeyVisibleField = visibleField
+            v.addSubview(hiddenField)
             apiKeyHiddenField = hiddenField
-            apiKeyEyeButton = eyeBtn
-            apiKeyVisible = false
-            y -= 36
 
-            let testBtn = NSButton(title: "测试连接", target: self, action: #selector(testAPIKey))
-            testBtn.frame = NSRect(x: 4, y: y, width: 90, height: 28)
+            // Visible field
+            let visibleField = PasteTextField(frame: NSRect(x: 4, y: 116, width: w - 40, height: 26))
+            visibleField.placeholderString = "输入 API Key..."
+            visibleField.isBordered = true
+            visibleField.bezelStyle = .roundedBezel
+            visibleField.isHidden = true
+            v.addSubview(visibleField)
+            apiKeyVisibleField = visibleField
+
+            // Eye toggle button
+            let eyeBtn = NSButton(title: "👁️", target: self, action: #selector(toggleKeyVisibility))
+            eyeBtn.frame = NSRect(x: w - 34, y: 116, width: 28, height: 26)
+            eyeBtn.bezelStyle = .roundRect
+            eyeBtn.isBordered = false
+            v.addSubview(eyeBtn)
+            apiKeyEyeButton = eyeBtn
+
+            // Test button
+            let testBtn = NSButton(title: "测试连接", target: self, action: #selector(testAPIKeyConnection))
+            testBtn.frame = NSRect(x: 4, y: 78, width: 100, height: 26)
             testBtn.bezelStyle = .rounded
             v.addSubview(testBtn)
 
-            let statusLabel = NSTextField(labelWithString: "")
-            statusLabel.frame = NSRect(x: 100, y: y + 4, width: w - 104, height: 18)
-            statusLabel.font = .systemFont(ofSize: 11)
-            statusLabel.textColor = .secondaryLabelColor
-            v.addSubview(statusLabel)
-            self.testStatusLabel = statusLabel
-            y -= 42
+            let testStatus = NSTextField(labelWithString: "")
+            testStatus.frame = NSRect(x: 112, y: 82, width: w - 120, height: 18)
+            testStatus.font = .systemFont(ofSize: 11)
+            testStatus.textColor = .secondaryLabelColor
+            testStatus.lineBreakMode = .byWordWrapping
+            v.addSubview(testStatus)
+            testStatusLabel = testStatus
+
+            y = 60
         } else {
             // Ollama 无需 API Key
             let noKeyLabel = NSTextField(labelWithString: "Ollama 运行在本地，无需 API Key。")
@@ -317,78 +280,106 @@ final class SettingsWindowController: NSObject {
             mdlField.isBordered = true
             mdlField.bezelStyle = .roundedBezel
             v.addSubview(mdlField)
-            self.customModelField = mdlField
+            customModelField = mdlField
             y -= 40
         }
 
-        // --- 分隔线 ---
-        let sep2 = NSBox(frame: NSRect(x: 4, y: y, width: w - 8, height: 1))
-        sep2.boxType = .separator
-        v.addSubview(sep2)
-        y -= 16
-
-        // --- 其他提供商的 Key 列表 ---
-        let otherTitle = NSTextField(labelWithString: "其他 AI 提供商的 API Key（填入后切换即可使用）：")
-        otherTitle.frame = NSRect(x: 4, y: y, width: w - 8, height: 18)
-        otherTitle.font = .systemFont(ofSize: 12, weight: .semibold)
-        v.addSubview(otherTitle)
-        y -= 26
-
-        for p in AIProvider.allCases where p != provider && p.needsAPIKey {
-            let hasKey = (settings.apiKey(for: p) ?? "").isEmpty ? false : true
-            let statusIcon = hasKey ? "✅" : "⬜"
-            let rowLabel = NSTextField(labelWithString: "\(statusIcon)  \(p.displayName)")
-            rowLabel.frame = NSRect(x: 8, y: y, width: 200, height: 18)
-            rowLabel.font = .systemFont(ofSize: 11)
-            rowLabel.textColor = hasKey ? .labelColor : .secondaryLabelColor
-            v.addSubview(rowLabel)
-            y -= 18
+        // 确保卡片高度足够
+        if y < 0 {
+            v.frame.size.height += abs(y) + 20
         }
-
-        // --- 提示信息 ---
-        let infoLabel = NSTextField(labelWithString: """
-        💡 提示：Key 仅保存在本地，不会上传到任何第三方服务器。
-        切换提供商后需点击底部「保存并应用」才能生效。
-        """)
-        let infoTop = max(y - 50, 20)
-        infoLabel.frame = NSRect(x: 4, y: infoTop, width: w - 8, height: 50)
-        infoLabel.font = .systemFont(ofSize: 10)
-        infoLabel.textColor = .secondaryLabelColor
-        infoLabel.lineBreakMode = .byWordWrapping
-        v.addSubview(infoLabel)
-
-        // 根据实际内容动态调整卡片高度，并整体下移内容，避免提示文字与列表重叠
-        let requiredHeight = infoTop + 50 + 16
-        let offset = workingHeight - requiredHeight
-        for subview in v.subviews {
-            var frame = subview.frame
-            frame.origin.y -= offset
-            subview.frame = frame
-        }
-        v.frame = NSRect(x: 0, y: 0, width: w, height: requiredHeight)
 
         return v
     }
 
-    /// 将 AI 提供商配置卡片滚动到顶部，确保 API Key 输入区域默认可见
-    private func scrollProviderCardToTop(scrollView: NSScrollView) {
-        guard let documentView = scrollView.documentView else { return }
-        let clipView = scrollView.contentView
-        let targetY = documentView.frame.height - clipView.bounds.height
-        clipView.scroll(to: NSPoint(x: 0, y: max(0, targetY)))
-        scrollView.reflectScrolledClipView(clipView)
+    @objc private func toggleKeyVisibility() {
+        guard let hidden = apiKeyHiddenField, let visible = apiKeyVisibleField, let eye = apiKeyEyeButton else { return }
+        apiKeyVisible.toggle()
+        if apiKeyVisible {
+            visible.stringValue = hidden.stringValue
+            hidden.isHidden = true
+            visible.isHidden = false
+            eye.title = "🔒"
+        } else {
+            hidden.stringValue = visible.stringValue
+            visible.isHidden = true
+            hidden.isHidden = false
+            eye.title = "👁️"
+        }
     }
 
-    // MARK: - Tab 2: 快捷键
+    @objc private func testAPIKeyConnection() {
+        let settings = SettingsManager.shared
+        let provider = settings.apiProvider
 
-    private func buildHotkeyTab(size: NSSize) -> NSView {
-        let contentHeight = size.height + 180
-        let v = NSView(frame: NSRect(x: 0, y: 0, width: size.width, height: contentHeight))
+        // 优先读取输入框中的 Key（用户刚粘贴的），fallback 到 Keychain 已保存的
+        let key: String
+        let fieldKey = activeApiKeyFieldValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !fieldKey.isEmpty {
+            key = fieldKey
+        } else if let savedKey = settings.activeApiKey, !savedKey.isEmpty {
+            key = savedKey
+        } else {
+            testStatusLabel?.stringValue = "请先输入 API Key"
+            testStatusLabel?.textColor = .systemRed
+            return
+        }
+
+        testStatusLabel?.stringValue = "测试中..."
+        testStatusLabel?.textColor = .secondaryLabelColor
+
+        guard let url = URL(string: provider.endpoint) else {
+            testStatusLabel?.stringValue = "无效的 API 地址"
+            testStatusLabel?.textColor = .systemRed
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 10
+        let body: [String: Any] = ["model": provider.defaultModel, "messages": [["role": "user", "content": "hi"]], "max_tokens": 1]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        switch provider {
+        case .anthropic:
+            request.setValue(key, forHTTPHeaderField: "x-api-key")
+            request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        case .googleAI:
+            request.setValue(key, forHTTPHeaderField: "x-goog-api-key")
+        default:
+            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        }
+
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    self?.testStatusLabel?.stringValue = "连接失败: \(error.localizedDescription)"
+                    self?.testStatusLabel?.textColor = .systemRed
+                    return
+                }
+                if let http = response as? HTTPURLResponse {
+                    if http.statusCode == 200 || http.statusCode == 401 || http.statusCode == 403 {
+                        self?.testStatusLabel?.stringValue = "连接成功 (HTTP \(http.statusCode))"
+                        self?.testStatusLabel?.textColor = .systemGreen
+                    } else {
+                        self?.testStatusLabel?.stringValue = "服务器返回 HTTP \(http.statusCode)"
+                        self?.testStatusLabel?.textColor = .systemOrange
+                    }
+                }
+            }
+        }.resume()
+    }
+
+    // MARK: - Tab 2: Hotkeys
+
+    private func buildHotkeysTab(size: NSSize) -> NSView {
+        let v = NSView(frame: NSRect(origin: .zero, size: size))
         let w = size.width
-        let y0: CGFloat = contentHeight - 30
+        let y0 = size.height - 30
 
-        // ---- 1. 截图翻译 ----
-        let titleLabel = NSTextField(labelWithString: "📷 截图翻译快捷键")
+        // ---- 1. Screenshot hotkey ----
+        let titleLabel = NSTextField(labelWithString: "📸 截图翻译快捷键")
         titleLabel.frame = NSRect(x: 20, y: y0, width: 300, height: 22)
         titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         v.addSubview(titleLabel)
@@ -400,12 +391,12 @@ final class SettingsWindowController: NSObject {
         v.addSubview(descLabel)
 
         let currentDisplay = SettingsManager.shared.hotkeyDisplay
-        let recordBtn = NSButton(title: "    \(currentDisplay)    ", target: self, action: #selector(startRecordingHotkey))
+        let recordBtn = NSButton(title: "    \(currentDisplay)    ", target: screenshotRecorder, action: #selector(HotkeyRecorder.start))
         recordBtn.frame = NSRect(x: 20, y: y0 - 80, width: 180, height: 42)
         recordBtn.bezelStyle = .rounded
         recordBtn.font = .systemFont(ofSize: 20, weight: .medium)
         v.addSubview(recordBtn)
-        hotkeyRecordBtn = recordBtn
+        screenshotRecorder.recordBtn = recordBtn
 
         let statusLabel = NSTextField(labelWithString: "点击上方按钮开始录制新快捷键")
         statusLabel.frame = NSRect(x: 210, y: y0 - 70, width: w - 230, height: 30)
@@ -413,9 +404,9 @@ final class SettingsWindowController: NSObject {
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.lineBreakMode = .byWordWrapping
         v.addSubview(statusLabel)
-        hotkeyStatusLabel = statusLabel
+        screenshotRecorder.statusLabel = statusLabel
 
-        // ---- 2. 划词翻译 ----
+        // ---- 2. Selection hotkey ----
         let selY = y0 - 150
         let sTitle = NSTextField(labelWithString: "📝 划词翻译快捷键")
         sTitle.frame = NSRect(x: 20, y: selY, width: 300, height: 22)
@@ -429,12 +420,12 @@ final class SettingsWindowController: NSObject {
         v.addSubview(sDesc)
 
         let selDisplay = SettingsManager.shared.selectionHotkeyDisplay
-        let selRecordBtn = NSButton(title: "    \(selDisplay)    ", target: self, action: #selector(startRecordingSelectionHotkey))
+        let selRecordBtn = NSButton(title: "    \(selDisplay)    ", target: selectionRecorder, action: #selector(HotkeyRecorder.start))
         selRecordBtn.frame = NSRect(x: 20, y: selY - 80, width: 180, height: 42)
         selRecordBtn.bezelStyle = .rounded
         selRecordBtn.font = .systemFont(ofSize: 20, weight: .medium)
         v.addSubview(selRecordBtn)
-        selectionHotkeyRecordBtn = selRecordBtn
+        selectionRecorder.recordBtn = selRecordBtn
 
         let selStatus = NSTextField(labelWithString: "点击上方按钮开始录制新快捷键")
         selStatus.frame = NSRect(x: 210, y: selY - 70, width: w - 230, height: 30)
@@ -442,11 +433,11 @@ final class SettingsWindowController: NSObject {
         selStatus.textColor = .secondaryLabelColor
         selStatus.lineBreakMode = .byWordWrapping
         v.addSubview(selStatus)
-        selectionHotkeyStatusLabel = selStatus
+        selectionRecorder.statusLabel = selStatus
 
-        // ---- 3. 关闭翻译面板 ----
-        let escY = selY - 150
-        let escTitle = NSTextField(labelWithString: "📋 关闭翻译面板")
+        // ---- 3. Close panel hotkey ----
+        let escY = selY - 160
+        let escTitle = NSTextField(labelWithString: "🚪 关闭翻译面板")
         escTitle.frame = NSRect(x: 20, y: escY, width: 300, height: 22)
         escTitle.font = .systemFont(ofSize: 15, weight: .semibold)
         v.addSubview(escTitle)
@@ -457,12 +448,12 @@ final class SettingsWindowController: NSObject {
         escDesc.textColor = .secondaryLabelColor
         v.addSubview(escDesc)
 
-        let closePanelBtn = NSButton(title: "  \(SettingsManager.shared.closePanelHotkeyDisplay)  ", target: self, action: #selector(startRecordingClosePanelHotkey))
+        let closePanelBtn = NSButton(title: "  \(SettingsManager.shared.closePanelHotkeyDisplay)  ", target: closePanelRecorder, action: #selector(HotkeyRecorder.start))
         closePanelBtn.frame = NSRect(x: 20, y: escY - 65, width: 180, height: 32)
         closePanelBtn.font = .systemFont(ofSize: 18, weight: .medium)
         closePanelBtn.bezelStyle = .rounded
         v.addSubview(closePanelBtn)
-        closePanelHotkeyRecordBtn = closePanelBtn
+        closePanelRecorder.recordBtn = closePanelBtn
 
         let escStatus = NSTextField(labelWithString: "点击上方按钮开始录制新快捷键")
         escStatus.frame = NSRect(x: 210, y: escY - 60, width: w - 230, height: 30)
@@ -470,9 +461,9 @@ final class SettingsWindowController: NSObject {
         escStatus.textColor = .secondaryLabelColor
         escStatus.lineBreakMode = .byWordWrapping
         v.addSubview(escStatus)
-        closePanelHotkeyStatusLabel = escStatus
+        closePanelRecorder.statusLabel = escStatus
 
-        // ---- 4. 切换弹窗位置 ----
+        // ---- 4. Toggle panel position ----
         let toggleY = escY - 140
         let toggleTitle = NSTextField(labelWithString: "↔️ 切换弹窗位置")
         toggleTitle.frame = NSRect(x: 20, y: toggleY, width: 300, height: 22)
@@ -485,12 +476,12 @@ final class SettingsWindowController: NSObject {
         toggleDesc.textColor = .secondaryLabelColor
         v.addSubview(toggleDesc)
 
-        let togglePanelBtn = NSButton(title: "  \(SettingsManager.shared.togglePanelHotkeyDisplay)  ", target: self, action: #selector(startRecordingTogglePanelHotkey))
+        let togglePanelBtn = NSButton(title: "  \(SettingsManager.shared.togglePanelHotkeyDisplay)  ", target: togglePanelRecorder, action: #selector(HotkeyRecorder.start))
         togglePanelBtn.frame = NSRect(x: 20, y: toggleY - 65, width: 180, height: 32)
         togglePanelBtn.font = .systemFont(ofSize: 18, weight: .medium)
         togglePanelBtn.bezelStyle = .rounded
         v.addSubview(togglePanelBtn)
-        togglePanelHotkeyRecordBtn = togglePanelBtn
+        togglePanelRecorder.recordBtn = togglePanelBtn
 
         let toggleStatus = NSTextField(labelWithString: "点击上方按钮开始录制新快捷键")
         toggleStatus.frame = NSRect(x: 210, y: toggleY - 60, width: w - 230, height: 30)
@@ -498,7 +489,7 @@ final class SettingsWindowController: NSObject {
         toggleStatus.textColor = .secondaryLabelColor
         toggleStatus.lineBreakMode = .byWordWrapping
         v.addSubview(toggleStatus)
-        togglePanelHotkeyStatusLabel = toggleStatus
+        togglePanelRecorder.statusLabel = toggleStatus
 
         // ---- 统一提示 ----
         let infoLabel = NSTextField(labelWithString: """
@@ -507,448 +498,39 @@ final class SettingsWindowController: NSObject {
         • 划词翻译：先选中文字 → 按下快捷键 → 自动翻译（更快捷）
         • 关闭面板：翻译浮动面板显示时，按下自定义快捷键即可关闭
         • 切换弹窗：翻译浮动面板显示时，按下快捷键可在左右侧之间切换
-        • 默认组合键：⌃Control、⇧Shift + 任意按键（单个字母无效）
-        • 关闭面板允许单独按 ESC，切换弹窗允许单独按 ` 键
-        • 红色代表未保存，点击「保存并应用」立即生效
-        • 录制时若检测到与系统快捷键冲突，会给出黄色提醒
         """)
-        infoLabel.frame = NSRect(x: 20, y: toggleY - 220, width: w - 40, height: 140)
+        infoLabel.frame = NSRect(x: 20, y: 5, width: w - 40, height: 80)
         infoLabel.font = .systemFont(ofSize: 11)
         infoLabel.textColor = .secondaryLabelColor
         infoLabel.lineBreakMode = .byWordWrapping
         v.addSubview(infoLabel)
 
-        let scrollView = NSScrollView(frame: NSRect(origin: .zero, size: size))
-        scrollView.hasVerticalScroller = true
-        scrollView.documentView = v
-        return scrollView
-    }
-
-    @objc private func startRecordingHotkey() {
-        guard !isRecordingHotkey else { return }
-        isRecordingHotkey = true
-        recordedKeyCode = 0
-        recordedModifiers = 0
-
-        hotkeyRecordBtn?.title = "  ... 按下组合键 ...  "
-        hotkeyRecordBtn?.bezelColor = .systemOrange
-        hotkeyStatusLabel?.stringValue = "请按下组合键..."
-
-        // 监听全局按键（通过 NSEvent 本地监听）
-        hotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self = self, self.isRecordingHotkey else { return event }
-            self.recordHotkey(event: event)
-            return nil // 消费事件
-        }
-
-        // 如果 10 秒内没按，自动取消
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
-            guard let self = self, self.isRecordingHotkey else { return }
-            self.cancelRecording()
-        }
-    }
-
-    private func recordHotkey(event: NSEvent) {
-        let carbonModifiers = cocoaToCarbonModifiers(event.modifierFlags)
-        let keyCode = Int(event.keyCode)
-
-        // 必须有修饰键（禁止单个字母）
-        guard hotkeyHasRequiredModifiers(carbonModifiers) else {
-            cancelRecording()
-            hotkeyStatusLabel?.stringValue = "❌ 单个字母不能作为快捷键\n请同时按住 ⌘ / ⌥ / ⌃ / ⇧ 之一再按字母"
-            hotkeyRecordBtn?.bezelColor = .systemRed
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                self?.hotkeyRecordBtn?.bezelColor = nil
-            }
-            return
-        }
-
-        recordedKeyCode = keyCode
-        recordedModifiers = carbonModifiers
-        isRecordingHotkey = false
-
-        if let monitor = hotkeyMonitor {
-            NSEvent.removeMonitor(monitor)
-            hotkeyMonitor = nil
-        }
-
-        let display = hotkeyDisplayString(keyCode: recordedKeyCode, modifiers: recordedModifiers)
-        hotkeyRecordBtn?.title = "    \(display)    "
-        hotkeyRecordBtn?.bezelColor = .systemGreen
-        var status = "✅ 已录制：\(display)\n点击「保存并应用」使快捷键生效"
-        if let conflict = checkSystemHotkeyConflict(modifiers: recordedModifiers, keyCode: recordedKeyCode) {
-            status += "\n⚠️ 可能与系统快捷键冲突：\(conflict)"
-            hotkeyRecordBtn?.bezelColor = .systemOrange
-        }
-        hotkeyStatusLabel?.stringValue = status
-
-        // 闪烁效果后恢复
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            self?.hotkeyRecordBtn?.bezelColor = nil
-        }
-    }
-
-    private func cancelRecording() {
-        isRecordingHotkey = false
-        if let monitor = hotkeyMonitor {
-            NSEvent.removeMonitor(monitor)
-            hotkeyMonitor = nil
-        }
-        let display = SettingsManager.shared.hotkeyDisplay
-        hotkeyRecordBtn?.title = "    \(display)    "
-        hotkeyRecordBtn?.bezelColor = nil
-        hotkeyStatusLabel?.stringValue = "录制超时，请重试"
-    }
-
-    // MARK: - 划词翻译快捷键录制
-
-    @objc private func startRecordingSelectionHotkey() {
-        guard !isRecordingSelectionHotkey, !isRecordingHotkey else { return }
-        isRecordingSelectionHotkey = true
-        recordedSelectionKeyCode = 0
-        recordedSelectionModifiers = 0
-
-        selectionHotkeyRecordBtn?.title = "  ... 按下组合键 ...  "
-        selectionHotkeyRecordBtn?.bezelColor = .systemOrange
-        selectionHotkeyStatusLabel?.stringValue = "请按下组合键..."
-
-        selectionHotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self = self, self.isRecordingSelectionHotkey else { return event }
-            self.recordSelectionHotkey(event: event)
-            return nil
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
-            guard let self = self, self.isRecordingSelectionHotkey else { return }
-            self.cancelSelectionRecording()
-        }
-    }
-
-    private func recordSelectionHotkey(event: NSEvent) {
-        let carbonModifiers = cocoaToCarbonModifiers(event.modifierFlags)
-        let keyCode = Int(event.keyCode)
-
-        // 必须有修饰键（禁止单个字母）
-        guard hotkeyHasRequiredModifiers(carbonModifiers) else {
-            cancelSelectionRecording()
-            selectionHotkeyStatusLabel?.stringValue = "❌ 单个字母不能作为快捷键\n请同时按住 ⌘ / ⌥ / ⌃ / ⇧ 之一再按字母"
-            selectionHotkeyRecordBtn?.bezelColor = .systemRed
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                self?.selectionHotkeyRecordBtn?.bezelColor = nil
-            }
-            return
-        }
-
-        recordedSelectionKeyCode = keyCode
-        recordedSelectionModifiers = carbonModifiers
-        isRecordingSelectionHotkey = false
-
-        if let monitor = selectionHotkeyMonitor {
-            NSEvent.removeMonitor(monitor)
-            selectionHotkeyMonitor = nil
-        }
-
-        let display = hotkeyDisplayString(keyCode: recordedSelectionKeyCode, modifiers: recordedSelectionModifiers)
-        selectionHotkeyRecordBtn?.title = "    \(display)    "
-        selectionHotkeyRecordBtn?.bezelColor = .systemGreen
-        var status = "✅ 已录制：\(display)\n点击「保存并应用」使快捷键生效"
-        if let conflict = checkSystemHotkeyConflict(modifiers: recordedSelectionModifiers, keyCode: recordedSelectionKeyCode) {
-            status += "\n⚠️ 可能与系统快捷键冲突：\(conflict)"
-            selectionHotkeyRecordBtn?.bezelColor = .systemOrange
-        }
-        selectionHotkeyStatusLabel?.stringValue = status
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            self?.selectionHotkeyRecordBtn?.bezelColor = nil
-        }
-    }
-
-    private func cancelSelectionRecording() {
-        isRecordingSelectionHotkey = false
-        if let monitor = selectionHotkeyMonitor {
-            NSEvent.removeMonitor(monitor)
-            selectionHotkeyMonitor = nil
-        }
-        let display = SettingsManager.shared.selectionHotkeyDisplay
-        selectionHotkeyRecordBtn?.title = "    \(display)    "
-        selectionHotkeyRecordBtn?.bezelColor = nil
-        selectionHotkeyStatusLabel?.stringValue = "录制超时，请重试"
-    }
-
-    // MARK: - 关闭翻译面板快捷键录制
-
-    @objc private func startRecordingClosePanelHotkey() {
-        guard !isRecordingClosePanelHotkey, !isRecordingHotkey, !isRecordingSelectionHotkey, !isRecordingTogglePanelHotkey else { return }
-        isRecordingClosePanelHotkey = true
-        recordedClosePanelKeyCode = 0
-        recordedClosePanelModifiers = 0
-
-        closePanelHotkeyRecordBtn?.title = "  ... 按下快捷键 ...  "
-        closePanelHotkeyRecordBtn?.bezelColor = .systemOrange
-        closePanelHotkeyStatusLabel?.stringValue = "请按下快捷键（允许单独按 ESC）..."
-
-        closePanelHotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self = self, self.isRecordingClosePanelHotkey else { return event }
-            self.recordClosePanelHotkey(event: event)
-            return nil
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
-            guard let self = self, self.isRecordingClosePanelHotkey else { return }
-            self.cancelClosePanelRecording()
-        }
-    }
-
-    private func recordClosePanelHotkey(event: NSEvent) {
-        let carbonModifiers = cocoaToCarbonModifiers(event.modifierFlags)
-        let keyCode = Int(event.keyCode)
-
-        // 关闭面板允许单独 ESC；其他按键仍必须带修饰键
-        guard keyCode == 0x35 || hotkeyHasRequiredModifiers(carbonModifiers) else {
-            cancelClosePanelRecording()
-            closePanelHotkeyStatusLabel?.stringValue = "❌ 单个字母不能作为快捷键\n请同时按住 ⌘ / ⌥ / ⌃ / ⇧ 之一，或直接按 ESC"
-            closePanelHotkeyRecordBtn?.bezelColor = .systemRed
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                self?.closePanelHotkeyRecordBtn?.bezelColor = nil
-            }
-            return
-        }
-
-        recordedClosePanelKeyCode = keyCode
-        recordedClosePanelModifiers = carbonModifiers
-        isRecordingClosePanelHotkey = false
-
-        if let monitor = closePanelHotkeyMonitor {
-            NSEvent.removeMonitor(monitor)
-            closePanelHotkeyMonitor = nil
-        }
-
-        let display = hotkeyDisplayString(keyCode: recordedClosePanelKeyCode, modifiers: recordedClosePanelModifiers)
-        closePanelHotkeyRecordBtn?.title = "    \(display)    "
-        closePanelHotkeyRecordBtn?.bezelColor = .systemGreen
-        var status = "✅ 已录制：\(display)\n点击「保存并应用」使快捷键生效"
-        if let conflict = checkSystemHotkeyConflict(modifiers: recordedClosePanelModifiers, keyCode: recordedClosePanelKeyCode) {
-            status += "\n⚠️ 可能与系统快捷键冲突：\(conflict)"
-            closePanelHotkeyRecordBtn?.bezelColor = .systemOrange
-        }
-        closePanelHotkeyStatusLabel?.stringValue = status
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            self?.closePanelHotkeyRecordBtn?.bezelColor = nil
-        }
-    }
-
-    private func cancelClosePanelRecording() {
-        isRecordingClosePanelHotkey = false
-        if let monitor = closePanelHotkeyMonitor {
-            NSEvent.removeMonitor(monitor)
-            closePanelHotkeyMonitor = nil
-        }
-        let display = SettingsManager.shared.closePanelHotkeyDisplay
-        closePanelHotkeyRecordBtn?.title = "    \(display)    "
-        closePanelHotkeyRecordBtn?.bezelColor = nil
-        closePanelHotkeyStatusLabel?.stringValue = "录制超时，请重试"
-    }
-
-    // MARK: - 切换弹窗位置快捷键录制
-
-    @objc private func startRecordingTogglePanelHotkey() {
-        guard !isRecordingTogglePanelHotkey, !isRecordingHotkey, !isRecordingSelectionHotkey, !isRecordingClosePanelHotkey else { return }
-        isRecordingTogglePanelHotkey = true
-        recordedTogglePanelKeyCode = 0
-        recordedTogglePanelModifiers = 0
-
-        togglePanelHotkeyRecordBtn?.title = "  ... 按下快捷键 ...  "
-        togglePanelHotkeyRecordBtn?.bezelColor = .systemOrange
-        togglePanelHotkeyStatusLabel?.stringValue = "请按下快捷键（允许单独按 ` 键）..."
-
-        togglePanelHotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self = self, self.isRecordingTogglePanelHotkey else { return event }
-            self.recordTogglePanelHotkey(event: event)
-            return nil
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
-            guard let self = self, self.isRecordingTogglePanelHotkey else { return }
-            self.cancelTogglePanelRecording()
-        }
-    }
-
-    private func recordTogglePanelHotkey(event: NSEvent) {
-        let carbonModifiers = cocoaToCarbonModifiers(event.modifierFlags)
-        let keyCode = Int(event.keyCode)
-
-        guard keyCode == 0x32 || hotkeyHasRequiredModifiers(carbonModifiers) else {
-            cancelTogglePanelRecording()
-            togglePanelHotkeyStatusLabel?.stringValue = "❌ 单个字母不能作为快捷键\n请同时按住 ⌘ / ⌥ / ⌃ / ⇧ 之一，或直接按 ` 键"
-            togglePanelHotkeyRecordBtn?.bezelColor = .systemRed
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                self?.togglePanelHotkeyRecordBtn?.bezelColor = nil
-            }
-            return
-        }
-
-        recordedTogglePanelKeyCode = keyCode
-        recordedTogglePanelModifiers = carbonModifiers
-        isRecordingTogglePanelHotkey = false
-
-        if let monitor = togglePanelHotkeyMonitor {
-            NSEvent.removeMonitor(monitor)
-            togglePanelHotkeyMonitor = nil
-        }
-
-        let display = hotkeyDisplayString(keyCode: recordedTogglePanelKeyCode, modifiers: recordedTogglePanelModifiers)
-        togglePanelHotkeyRecordBtn?.title = "    \(display)    "
-        togglePanelHotkeyRecordBtn?.bezelColor = .systemGreen
-        var status = "✅ 已录制：\(display)\n点击「保存并应用」使快捷键生效"
-        if let conflict = checkSystemHotkeyConflict(modifiers: recordedTogglePanelModifiers, keyCode: recordedTogglePanelKeyCode) {
-            status += "\n⚠️ 可能与系统快捷键冲突：\(conflict)"
-            togglePanelHotkeyRecordBtn?.bezelColor = .systemOrange
-        }
-        togglePanelHotkeyStatusLabel?.stringValue = status
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            self?.togglePanelHotkeyRecordBtn?.bezelColor = nil
-        }
-    }
-
-    private func cancelTogglePanelRecording() {
-        isRecordingTogglePanelHotkey = false
-        if let monitor = togglePanelHotkeyMonitor {
-            NSEvent.removeMonitor(monitor)
-            togglePanelHotkeyMonitor = nil
-        }
-        let display = SettingsManager.shared.togglePanelHotkeyDisplay
-        togglePanelHotkeyRecordBtn?.title = "    \(display)    "
-        togglePanelHotkeyRecordBtn?.bezelColor = nil
-        togglePanelHotkeyStatusLabel?.stringValue = "录制超时，请重试"
-    }
-
-    // MARK: - Tab 3: 翻译模板
-
-    private func buildTemplateTab(size: NSSize) -> NSView {
-        let v = NSView(frame: NSRect(origin: .zero, size: size))
-        let w = size.width
-
-        let titleLabel = NSTextField(labelWithString: "翻译提示词模板（可编辑）")
-        titleLabel.frame = NSRect(x: 20, y: size.height - 30, width: 400, height: 22)
-        titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
-        v.addSubview(titleLabel)
-
-        let descLabel = NSTextField(labelWithString: "AI 将按此模板输出翻译结果。支持 Markdown 格式。")
-        descLabel.frame = NSRect(x: 20, y: size.height - 52, width: w - 40, height: 16)
-        descLabel.font = .systemFont(ofSize: 11)
-        descLabel.textColor = .secondaryLabelColor
-        v.addSubview(descLabel)
-
-        // 编辑器（左半边）
-        let editorScroll = NSScrollView(frame: NSRect(x: 20, y: 20, width: w/2 - 30, height: size.height - 90))
-        editorScroll.hasVerticalScroller = true
-        editorScroll.borderType = .bezelBorder
-        editorScroll.autohidesScrollers = true
-
-        let tv = NSTextView(frame: NSRect(x: 0, y: 0, width: editorScroll.contentSize.width, height: editorScroll.contentSize.height))
-        tv.string = SettingsManager.shared.systemPrompt
-        tv.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
-        tv.isEditable = true
-        tv.isRichText = false
-        tv.isAutomaticQuoteSubstitutionEnabled = false
-        tv.isAutomaticDashSubstitutionEnabled = false
-        tv.textContainerInset = NSSize(width: 8, height: 8)
-        // 实时预览：编辑时更新
-        tv.delegate = self
-        editorScroll.documentView = tv
-        v.addSubview(editorScroll)
-        templateTextView = tv
-
-        // 预览面板（右半边）
-        let previewScroll = NSScrollView(frame: NSRect(x: w/2 + 10, y: 20, width: w/2 - 30, height: size.height - 90))
-        previewScroll.hasVerticalScroller = true
-        previewScroll.borderType = .bezelBorder
-        previewScroll.autohidesScrollers = true
-
-        let config = WKWebViewConfiguration()
-        let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: previewScroll.contentSize.width, height: previewScroll.contentSize.height), configuration: config)
-        wv.setValue(false, forKey: "drawsBackground")
-        wv.loadHTMLString(templatePreviewHTML(), baseURL: nil)
-        previewScroll.documentView = wv
-        v.addSubview(previewScroll)
-        templatePreviewWebView = wv
-
         return v
     }
 
-    private func templatePreviewHTML() -> String {
-        let prompt = templateTextView?.string ?? SettingsManager.shared.systemPrompt
-        let escaped = prompt
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-            .replacingOccurrences(of: "\n", with: "<br>")
-
-        return """
-        <!DOCTYPE html><html><head><meta charset="utf-8">
-        <style>
-            :root{color-scheme:light dark}*{box-sizing:border-box;margin:0;padding:0}
-            body{font-family:-apple-system,"PingFang SC",sans-serif;font-size:11px;line-height:1.5;color:#555;padding:10px 12px;background:#fff}
-            @media(prefers-color-scheme:dark){body{color:#aaa;background:#2c2c2e}}
-            .preview-title{font-size:12px;font-weight:600;color:#0071e3;margin-bottom:8px;border-bottom:1px solid #e5e5e7;padding-bottom:6px}
-            @media(prefers-color-scheme:dark){.preview-title{color:#0a84ff;border-color:#3a3a3c}}
-            .prompt-text{white-space:pre-wrap;word-break:break-word}
-        </style>
-        </head><body>
-        <div class="preview-title">📋 模板预览（AI 将按此结构输出）</div>
-        <div class="prompt-text">\(escaped)</div>
-        </body></html>
-        """
-    }
-
-    // MARK: - Actions
-
-    /// 切换 API Key 输入框的显隐（明文 ↔ 密文）
-    @objc private func toggleApiKeyVisibility(_ sender: NSButton) {
-        apiKeyVisible.toggle()
-        if apiKeyVisible {
-            // 切到明文：密文框内容同步到明文框
-            apiKeyVisibleField?.stringValue = apiKeyHiddenField?.stringValue ?? ""
-            apiKeyVisibleField?.isHidden = false
-            apiKeyHiddenField?.isHidden = true
-            apiKeyEyeButton?.title = "🔓"
-            apiKeyVisibleField?.window?.makeFirstResponder(apiKeyVisibleField)
-        } else {
-            // 切到密文：明文框内容同步到密文框
-            apiKeyHiddenField?.stringValue = apiKeyVisibleField?.stringValue ?? ""
-            apiKeyHiddenField?.isHidden = false
-            apiKeyVisibleField?.isHidden = true
-            apiKeyEyeButton?.title = "🔐"
-            apiKeyHiddenField?.window?.makeFirstResponder(apiKeyHiddenField)
-        }
-    }
-
-    /// 获取当前显示的 API Key 文本（无论明文/密文模式）
-    private var activeApiKeyFieldValue: String {
-        if apiKeyVisible {
-            return apiKeyVisibleField?.stringValue ?? ""
-        } else {
-            return apiKeyHiddenField?.stringValue ?? ""
-        }
-    }
+    // MARK: - Save
 
     @objc private func saveAllSettings() {
         let settings = SettingsManager.shared
 
-        // API Key — 保存当前提供商的 Key
         let keyStr = activeApiKeyFieldValue.trimmingCharacters(in: .whitespacesAndNewlines)
         logi("保存设置: provider=\(settings.apiProvider.rawValue), keyLen=\(keyStr.count)")
         if !keyStr.isEmpty {
             settings.setApiKey(keyStr, for: settings.apiProvider)
         } else {
-            // 清空 Key
             settings.setApiKey(nil, for: settings.apiProvider)
         }
 
-        // 自定义 Endpoint & Model
         if let ep = customEndpointField?.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), !ep.isEmpty {
+            guard AIProvider.isValidEndpoint(ep) else {
+                let alert = NSAlert()
+                alert.messageText = "无效的自定义接口地址"
+                alert.informativeText = "仅支持 HTTPS 地址或以 localhost / 192.168.x.x / 10.x.x.x 开头的 HTTP 地址。\n当前输入：\(ep)"
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "确定")
+                alert.runModal()
+                return
+            }
             settings.customEndpoint = ep
         }
         if let mdl = customModelField?.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), !mdl.isEmpty {
@@ -959,46 +541,39 @@ final class SettingsWindowController: NSObject {
             }
         }
 
-        // 快捷键
-        if recordedKeyCode != 0 {
-            settings.hotkeyKeyCode = recordedKeyCode
-            settings.hotkeyModifiers = recordedModifiers
-            settings.hotkeyDisplay = hotkeyDisplayString(keyCode: recordedKeyCode, modifiers: recordedModifiers)
+        if screenshotRecorder.recordedKeyCode != 0 {
+            settings.hotkeyKeyCode = screenshotRecorder.recordedKeyCode
+            settings.hotkeyModifiers = screenshotRecorder.recordedModifiers
+            settings.hotkeyDisplay = hotkeyDisplayString(keyCode: screenshotRecorder.recordedKeyCode, modifiers: screenshotRecorder.recordedModifiers)
         }
 
-        // 划词翻译快捷键
-        if recordedSelectionKeyCode != 0 {
-            settings.selectionHotkeyKeyCode = recordedSelectionKeyCode
-            settings.selectionHotkeyModifiers = recordedSelectionModifiers
-            settings.selectionHotkeyDisplay = hotkeyDisplayString(keyCode: recordedSelectionKeyCode, modifiers: recordedSelectionModifiers)
+        if selectionRecorder.recordedKeyCode != 0 {
+            settings.selectionHotkeyKeyCode = selectionRecorder.recordedKeyCode
+            settings.selectionHotkeyModifiers = selectionRecorder.recordedModifiers
+            settings.selectionHotkeyDisplay = hotkeyDisplayString(keyCode: selectionRecorder.recordedKeyCode, modifiers: selectionRecorder.recordedModifiers)
         }
 
-        // 关闭翻译面板快捷键
-        if recordedClosePanelKeyCode != 0 {
-            settings.closePanelHotkeyKeyCode = recordedClosePanelKeyCode
-            settings.closePanelHotkeyModifiers = recordedClosePanelModifiers
-            settings.closePanelHotkeyDisplay = hotkeyDisplayString(keyCode: recordedClosePanelKeyCode, modifiers: recordedClosePanelModifiers)
+        if closePanelRecorder.recordedKeyCode != 0 {
+            settings.closePanelHotkeyKeyCode = closePanelRecorder.recordedKeyCode
+            settings.closePanelHotkeyModifiers = closePanelRecorder.recordedModifiers
+            settings.closePanelHotkeyDisplay = hotkeyDisplayString(keyCode: closePanelRecorder.recordedKeyCode, modifiers: closePanelRecorder.recordedModifiers)
         }
 
-        // 切换弹窗位置快捷键
-        if recordedTogglePanelKeyCode != 0 {
-            settings.togglePanelHotkeyKeyCode = recordedTogglePanelKeyCode
-            settings.togglePanelHotkeyModifiers = recordedTogglePanelModifiers
-            settings.togglePanelHotkeyDisplay = hotkeyDisplayString(keyCode: recordedTogglePanelKeyCode, modifiers: recordedTogglePanelModifiers)
+        if togglePanelRecorder.recordedKeyCode != 0 {
+            settings.togglePanelHotkeyKeyCode = togglePanelRecorder.recordedKeyCode
+            settings.togglePanelHotkeyModifiers = togglePanelRecorder.recordedModifiers
+            settings.togglePanelHotkeyDisplay = hotkeyDisplayString(keyCode: togglePanelRecorder.recordedKeyCode, modifiers: togglePanelRecorder.recordedModifiers)
         }
 
-        // 重新注册所有快捷键
         DispatchQueue.main.async {
             (NSApp.delegate as? AppDelegate)?.reregisterHotkey()
         }
 
-        // 翻译模板
         if let template = templateTextView?.string, !template.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             settings.systemPrompt = template
         }
 
         logi("设置已保存")
-        window?.close()
     }
 
     @objc private func resetAll() {
@@ -1018,37 +593,32 @@ final class SettingsWindowController: NSObject {
         settings.hotkeyKeyCode = DEFAULT_HOTKEY_KEYCODE
         settings.hotkeyModifiers = Int(controlKey)
         settings.hotkeyDisplay = "⌃T"
+
         settings.selectionHotkeyKeyCode = DEFAULT_SELECTION_HOTKEY_KEYCODE
         settings.selectionHotkeyModifiers = Int(controlKey | shiftKey)
         settings.selectionHotkeyDisplay = "⇧⌃T"
+
         settings.closePanelHotkeyKeyCode = 0x35
         settings.closePanelHotkeyModifiers = 0
         settings.closePanelHotkeyDisplay = "Esc"
+
         settings.togglePanelHotkeyKeyCode = 0x32
         settings.togglePanelHotkeyModifiers = 0
         settings.togglePanelHotkeyDisplay = "`"
 
-        // 更新 UI
-        templateTextView?.string = settings.defaultPrompt
-        templatePreviewWebView?.loadHTMLString(templatePreviewHTML(), baseURL: nil)
-        hotkeyRecordBtn?.title = "    ⌃T    "
-        hotkeyStatusLabel?.stringValue = "已恢复默认快捷键 ⌃T"
-        selectionHotkeyRecordBtn?.title = "    ⇧⌃T    "
-        selectionHotkeyStatusLabel?.stringValue = "已恢复默认快捷键 ⇧⌃T"
-        closePanelHotkeyRecordBtn?.title = "    Esc    "
-        closePanelHotkeyStatusLabel?.stringValue = "已恢复默认快捷键 Esc"
-        togglePanelHotkeyRecordBtn?.title = "    `    "
-        togglePanelHotkeyStatusLabel?.stringValue = "已恢复默认快捷键 `"
+        screenshotRecorder.recordBtn?.title = "    ⌃T    "
+        screenshotRecorder.statusLabel?.stringValue = "已恢复默认快捷键 ⌃T"
+        selectionRecorder.recordBtn?.title = "    ⇧⌃T    "
+        selectionRecorder.statusLabel?.stringValue = "已恢复默认快捷键 ⇧⌃T"
+        closePanelRecorder.recordBtn?.title = "    Esc    "
+        closePanelRecorder.statusLabel?.stringValue = "已恢复默认快捷键 Esc"
+        togglePanelRecorder.recordBtn?.title = "    `    "
+        togglePanelRecorder.statusLabel?.stringValue = "已恢复默认快捷键 `"
 
-        // 清除录制的临时值
-        recordedKeyCode = 0
-        recordedModifiers = 0
-        recordedSelectionKeyCode = 0
-        recordedSelectionModifiers = 0
-        recordedClosePanelKeyCode = 0
-        recordedClosePanelModifiers = 0
-        recordedTogglePanelKeyCode = 0
-        recordedTogglePanelModifiers = 0
+        screenshotRecorder.reset()
+        selectionRecorder.reset()
+        closePanelRecorder.reset()
+        togglePanelRecorder.reset()
     }
 
     // MARK: - 提供商切换
@@ -1058,15 +628,17 @@ final class SettingsWindowController: NSObject {
         let newProvider = AIProvider.allCases[idx]
         let settings = SettingsManager.shared
 
-        // 保存当前 Key 到当前提供商
         let currentKey = activeApiKeyFieldValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if !currentKey.isEmpty {
             settings.setApiKey(currentKey, for: settings.apiProvider)
         }
 
-        // 保存自定义 Endpoint/Model
         if let ep = customEndpointField?.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), !ep.isEmpty {
-            settings.customEndpoint = ep
+            if AIProvider.isValidEndpoint(ep) {
+                settings.customEndpoint = ep
+            } else {
+                logi("providerChanged：拒绝保存非法 endpoint: \(ep.prefix(50))")
+            }
         }
         if let mdl = customModelField?.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), !mdl.isEmpty {
             if settings.apiProvider == .ollama {
@@ -1076,111 +648,200 @@ final class SettingsWindowController: NSObject {
             }
         }
 
-        // 切换提供商
         settings.apiProvider = newProvider
 
-        // 重建卡片（刷新 UI）
-        guard let scrollView = providerCardView?.superview as? NSScrollView else { return }
+        guard let scrollView = providerCardView?.enclosingScrollView else { return }
         let cardWidth = scrollView.contentSize.width
-        let newCard = buildProviderCard(width: cardWidth, provider: newProvider)
-        scrollView.documentView = newCard
-        self.providerCardView = newCard
-        scrollProviderCardToTop(scrollView: scrollView)
+
+        let card = buildProviderCard(for: newProvider, width: cardWidth)
+        providerCardView = card
+        providerCardHeight = card.frame.height
+        card.frame.size.height = max(card.frame.height, scrollView.contentSize.height)
+        scrollView.documentView = card
+
+        loadKey(for: newProvider)
     }
 
-    @objc private func testAPIKey() {
-        let settings = SettingsManager.shared
-        let provider = settings.apiProvider
-        let key = activeApiKeyFieldValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else {
-            let a = NSAlert(); a.messageText = "提示"; a.informativeText = "请先输入 API Key。"
-            a.alertStyle = .informational; a.addButton(withTitle: "确定")
-            a.layout(); a.window.level = .floating
-            a.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            a.runModal(); return
-        }
+    // MARK: - Tab 3: 翻译模板
 
-        testStatusLabel?.stringValue = "正在测试..."
-        testStatusLabel?.textColor = .systemOrange
+    private func buildTemplateTab(size: NSSize) -> NSView {
+        let v = NSView(frame: NSRect(origin: .zero, size: size))
+        let w = size.width
 
-        let endpoint = provider.endpoint
-        var body: [String: Any] = [:]
-        guard let baseURL = URL(string: endpoint) else {
-            testStatusLabel?.stringValue = "❌ API 地址无效，请检查设置"
-            testStatusLabel?.textColor = .systemRed
-            return
-        }
-        var req = URLRequest(url: baseURL)
-        req.httpMethod = "POST"
-        req.timeoutInterval = 15
+        let titleLabel = NSTextField(labelWithString: "翻译提示词模板（可编辑）")
+        titleLabel.frame = NSRect(x: 20, y: size.height - 30, width: 400, height: 22)
+        titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        v.addSubview(titleLabel)
 
-        // 不同提供商的请求格式和认证方式
-        switch provider {
-        case .anthropic:
-            req.setValue(key, forHTTPHeaderField: "x-api-key")
-            req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            body = [
-                "model": provider.defaultModel,
-                "max_tokens": 5,
-                "messages": [["role": "user", "content": "回复OK"]]
-            ]
-        case .googleAI:
-            let baseEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
-            guard let googleURL = URL(string: baseEndpoint) else {
-                testStatusLabel?.stringValue = "❌ API 地址无效，请检查设置"
-                testStatusLabel?.textColor = .systemRed
-                return
-            }
-            req = URLRequest(url: googleURL)
-            req.httpMethod = "POST"
-            req.timeoutInterval = 15
-            req.setValue(key, forHTTPHeaderField: "x-goog-api-key")
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            body = [
-                "contents": [["parts": [["text": "回复OK"]]]],
-                "generationConfig": ["maxOutputTokens": 5]
-            ]
-        default:
-            // OpenAI-compatible API（DeepSeek, OpenAI, 千问, Ollama 等）
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-            body = [
-                "model": provider.defaultModel,
-                "messages": [["role": "user", "content": "回复OK"]],
-                "max_tokens": 5
-            ]
-        }
+        let descLabel = NSTextField(labelWithString: "编辑翻译指令与输出格式。修改后点击窗口底部「保存并应用」使更改生效。")
+        descLabel.frame = NSRect(x: 20, y: size.height - 52, width: w - 40, height: 16)
+        descLabel.font = .systemFont(ofSize: 11)
+        descLabel.textColor = .secondaryLabelColor
+        v.addSubview(descLabel)
 
-        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        let tvH = size.height - 260
+        let scrollView = NSScrollView(frame: NSRect(x: 20, y: 190, width: w - 40, height: tvH))
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .bezelBorder
+        scrollView.drawsBackground = true
 
-        let sem = DispatchSemaphore(value: 0)
-        var success = false; var errMsg = ""
-        URLSession.shared.dataTask(with: req) { data, resp, error in
-            defer { sem.signal() }
-            if let e = error { errMsg = e.localizedDescription; return }
-            if let http = resp as? HTTPURLResponse, http.statusCode == 200 { success = true }
-            else { errMsg = "状态码 \((resp as? HTTPURLResponse)?.statusCode ?? 0)" }
-        }.resume()
-        sem.wait()
+        let textView = NSTextView(frame: NSRect(origin: .zero, size: scrollView.contentSize))
+        textView.isEditable = true
+        textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        textView.isRichText = false
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+        textView.delegate = self
+        textView.string = SettingsManager.shared.systemPrompt
+        scrollView.documentView = textView
+        v.addSubview(scrollView)
+        templateTextView = textView
 
-        DispatchQueue.main.async {
-            if success {
-                self.testStatusLabel?.stringValue = "✅ 连接成功"
-                self.testStatusLabel?.textColor = .systemGreen
-            } else {
-                self.testStatusLabel?.stringValue = "❌ 失败：\(errMsg)"
-                self.testStatusLabel?.textColor = .systemRed
-            }
-        }
+        let previewTitle = NSTextField(labelWithString: "实时预览：")
+        previewTitle.frame = NSRect(x: 20, y: 170, width: 200, height: 18)
+        previewTitle.font = .systemFont(ofSize: 12, weight: .semibold)
+        v.addSubview(previewTitle)
+
+        let config = WKWebViewConfiguration()
+        let wv = WKWebView(frame: NSRect(x: 20, y: 10, width: w - 40, height: 155), configuration: config)
+        wv.loadHTMLString(templatePreviewHTML(), baseURL: nil)
+        wv.layer?.borderWidth = 1
+        wv.layer?.borderColor = NSColor.separatorColor.cgColor
+        v.addSubview(wv)
+        templatePreviewWebView = wv
+
+        return v
+    }
+
+    private func templatePreviewHTML() -> String {
+        """
+        <html><head><style>
+        body{font-family:-apple-system;padding:12px;color:#ddd;background:#1e1e1e;margin:0;}
+        h2{font-size:14px;margin-top:8px;margin-bottom:4px;color:#6cf;}
+        p{margin:2px 0;}
+        strong{color:#f9a;}
+        </style></head><body><p style='color:#999;font-size:11px;'>
+        提示词将在翻译时附加到 AI 请求中...</p></body></html>
+        """
     }
 }
 
-// MARK: - NSTextViewDelegate (实时模板预览)
+extension SettingsWindowController: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        window = nil
+    }
+}
 
 extension SettingsWindowController: NSTextViewDelegate {
     func textDidChange(_ notification: Notification) {
         guard let tv = notification.object as? NSTextView, tv == templateTextView else { return }
         templatePreviewWebView?.loadHTMLString(templatePreviewHTML(), baseURL: nil)
+    }
+}
+
+// MARK: - 热键录制器（消除 4 份重复代码）
+
+final class HotkeyRecorder: NSObject {
+    weak var recordBtn: NSButton?
+    weak var statusLabel: NSTextField?
+    var isRecording = false
+    var recordedKeyCode = 0
+    var recordedModifiers = 0
+    private var monitor: Any?
+
+    let allowedSoloKeyCodes: Set<Int>
+    let soloKeyHint: String
+    let defaultDisplay: () -> String
+
+    init(allowedSoloKeyCodes: Set<Int>, soloKeyHint: String, defaultDisplay: @escaping () -> String) {
+        self.allowedSoloKeyCodes = allowedSoloKeyCodes
+        self.soloKeyHint = soloKeyHint
+        self.defaultDisplay = defaultDisplay
+    }
+
+    @objc func start() {
+        guard !HotkeyRecorder.anyRecording else { return }
+        isRecording = true
+        recordedKeyCode = 0
+        recordedModifiers = 0
+
+        recordBtn?.title = "  ... 按下组合键 ...  "
+        recordBtn?.bezelColor = .systemOrange
+        statusLabel?.stringValue = "请按下组合键..."
+
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, self.isRecording else { return event }
+            self.record(event: event)
+            return nil
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+            guard let self = self, self.isRecording else { return }
+            self.cancel()
+        }
+    }
+
+    private func record(event: NSEvent) {
+        let carbonModifiers = cocoaToCarbonModifiers(event.modifierFlags)
+        let keyCode = Int(event.keyCode)
+
+        guard allowedSoloKeyCodes.contains(keyCode) || hotkeyHasRequiredModifiers(carbonModifiers) else {
+            cancel()
+            statusLabel?.stringValue = "❌ 单个字母不能作为快捷键\n请同时按住 ⌘ / ⌥ / ⌃ / ⇧ 之一再按字母"
+            recordBtn?.bezelColor = .systemRed
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                self?.recordBtn?.bezelColor = nil
+            }
+            return
+        }
+
+        recordedKeyCode = keyCode
+        recordedModifiers = carbonModifiers
+        isRecording = false
+
+        if let m = monitor {
+            NSEvent.removeMonitor(m)
+            monitor = nil
+        }
+
+        let display = hotkeyDisplayString(keyCode: recordedKeyCode, modifiers: recordedModifiers)
+        recordBtn?.title = "    \(display)    "
+        recordBtn?.bezelColor = .systemGreen
+        var status = "✅ 已录制：\(display)\n点击「保存并应用」使快捷键生效"
+        if let conflict = checkSystemHotkeyConflict(modifiers: recordedModifiers, keyCode: recordedKeyCode) {
+            status += "\n⚠️ 可能与系统快捷键冲突：\(conflict)"
+            recordBtn?.bezelColor = .systemOrange
+        }
+        statusLabel?.stringValue = status
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.recordBtn?.bezelColor = nil
+        }
+    }
+
+    private func cancel() {
+        isRecording = false
+        if let m = monitor {
+            NSEvent.removeMonitor(m)
+            monitor = nil
+        }
+        let display = defaultDisplay()
+        recordBtn?.title = "    \(display)    "
+        recordBtn?.bezelColor = nil
+        statusLabel?.stringValue = "录制超时，请重试"
+    }
+
+    func reset() {
+        recordedKeyCode = 0
+        recordedModifiers = 0
+    }
+
+    static var anyRecording: Bool {
+        let ctrl = SettingsWindowController.shared
+        return ctrl.screenshotRecorder.isRecording
+            || ctrl.selectionRecorder.isRecording
+            || ctrl.closePanelRecorder.isRecording
+            || ctrl.togglePanelRecorder.isRecording
     }
 }
