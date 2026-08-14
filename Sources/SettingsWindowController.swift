@@ -106,6 +106,14 @@ final class SettingsWindowController: NSObject {
         saveBtn.keyEquivalent = "\r"  // Enter 键快捷保存
         win.contentView?.addSubview(saveBtn)
 
+        // 版本号——底部居中，极简不干扰 UI
+        let versionLabel = NSTextField(labelWithString: "ELTA \(APP_FULL_VERSION)")
+        versionLabel.frame = NSRect(x: (ww - 160) / 2, y: 0, width: 160, height: 14)
+        versionLabel.alignment = .center
+        versionLabel.font = .systemFont(ofSize: 10, weight: .regular)
+        versionLabel.textColor = .secondaryLabelColor
+        win.contentView?.addSubview(versionLabel)
+
         window = win
 
         win.makeKeyAndOrderFront(nil)
