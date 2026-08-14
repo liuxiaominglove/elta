@@ -36,14 +36,16 @@ function verifyToken(token) {
   }
 }
 
+// 允许的域名（autoelta.com 为主，elta-seven.vercel.app 为备用）
+const ALLOWED_ORIGIN_HOSTS = new Set(['autoelta.com', 'elta-seven.vercel.app']);
+
 // 安全验证 Origin：只接受精确匹配的允许域名或 localhost
 function isAllowedOrigin(origin) {
   if (!origin || typeof origin !== 'string') return false;
   try {
     const u = new URL(origin);
     if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') return true;
-    if (u.hostname === 'elta-seven.vercel.app') return true;
-    return false;
+    return ALLOWED_ORIGIN_HOSTS.has(u.hostname);
   } catch {
     return false;
   }
@@ -65,7 +67,7 @@ module.exports = async (req, res) => {
   if (isAllowedOrigin(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   } else {
-    res.setHeader('Access-Control-Allow-Origin', 'https://elta-seven.vercel.app');
+    res.setHeader('Access-Control-Allow-Origin', 'https://autoelta.com');
   }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');

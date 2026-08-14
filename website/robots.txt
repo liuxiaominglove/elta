@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /api/
 Disallow: /admin.html
-Sitemap: https://elta-seven.vercel.app/sitemap.xml
+Sitemap: https://autoelta.com/sitemap.xml

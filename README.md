@@ -4,7 +4,7 @@ ELTA 是一款专为英语精读设计的 macOS 菜单栏翻译工具。选中�
 
 ![ELTA 演示](Resources/demo.gif)
 
-**官网：** [elta-seven.vercel.app](https://elta-seven.vercel.app/)
+**官网：** [autoelta.com](https://autoelta.com/)（备用：elta-seven.vercel.app）
 
 ## 核心功能
 
@@ -35,7 +35,7 @@ ELTA 是一款专为英语精读设计的 macOS 菜单栏翻译工具。选中�
 
 ## 快速开始
 
-1. 从 [官网](https://elta-seven.vercel.app/) 下载最新 DMG
+1. 从 [官网](https://autoelta.com/) 下载最新 DMG
 2. 将 ELTA.app 拖入 `/Applications/`
 3. 首次启动后，打开菜单栏 ELTA 图标 → 设置 → 配置 AI 后端和 API Key
 4. 按 `Cmd+T` 截图翻译，或 `⇧⌘T` 划词翻译
