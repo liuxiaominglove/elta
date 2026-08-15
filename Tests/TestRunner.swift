@@ -62,6 +62,8 @@ func runAllTests() -> Int32 {
     runTranslationEngineTests()
     runTranslationPipelineTests()
     runPasteboardSnapshotTests()
+    runParagraphDetectorTests()
+    runScreenGeometryTests()
 
     print("\n========== Results ==========")
     print("Total: \(totalTests) | Passed: \(passedTests) | Failed: \(failedTests)")

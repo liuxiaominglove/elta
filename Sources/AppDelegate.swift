@@ -7,6 +7,7 @@ import UserNotifications
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkeyRef: EventHotKeyRef?
     private var selectionHotkeyRef: EventHotKeyRef?
+    private var hoverHotkeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
     private let settings = SettingsManager.shared
 
@@ -38,7 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             SettingsWindowController.shared.show()
         }
 
-        logi("\(APP_DISPLAY_NAME) 就绪 — Cmd+T 截图翻译 | Shift+Cmd+T 划词翻译 | 点击菜单栏 📖 操作")
+        logi("\(APP_DISPLAY_NAME) 就绪 — Cmd+T 截图翻译 | Shift+Cmd+T 划词翻译 | ⌥⌘T 悬停翻译 | 点击菜单栏 📖 操作")
 
         // 后台检查更新
         UpdateChecker.shared.check()
@@ -59,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 先注销旧的
         if let ref = hotkeyRef { UnregisterEventHotKey(ref); hotkeyRef = nil }
         if let ref = selectionHotkeyRef { UnregisterEventHotKey(ref); selectionHotkeyRef = nil }
+        if let ref = hoverHotkeyRef { UnregisterEventHotKey(ref); hoverHotkeyRef = nil }
 
         // ---- 截图翻译热键（id=1） ----
         var hotkeyID1 = EventHotKeyID(signature: 0x534E5452, id: 1)  // "SNTR"
@@ -102,6 +104,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else { loge("划词快捷键注册失败") }
         }
 
+        // ---- 悬停翻译热键（id=20） ----
+        var hotkeyID20 = EventHotKeyID(signature: 0x534E5452, id: 20)
+        let hoverKeyCode = settings.hoverHotkeyKeyCode
+        let hoverMods = settings.hoverHotkeyModifiers
+        let s20 = RegisterEventHotKey(UInt32(hoverKeyCode), UInt32(hoverMods), hotkeyID20,
+                                       GetApplicationEventTarget(), 0, &hoverHotkeyRef)
+        if s20 == noErr {
+            settings.hoverHotkeyDisplay = hotkeyDisplayString(keyCode: hoverKeyCode, modifiers: hoverMods)
+            logi("悬停快捷键: \(settings.hoverHotkeyDisplay)")
+        } else {
+            // 降级：Ctrl+Option+F2
+            hotkeyID20.id = 21
+            let fb3 = RegisterEventHotKey(0x78, UInt32(controlKey | optionKey), hotkeyID20,
+                                           GetApplicationEventTarget(), 0, &hoverHotkeyRef)
+            if fb3 == noErr {
+                settings.hoverHotkeyKeyCode = 0x78
+                settings.hoverHotkeyModifiers = Int(controlKey | optionKey)
+                settings.hoverHotkeyDisplay = "⌃⌥F2"
+                logi("悬停快捷键降级为 ⌃⌥F2")
+            } else { loge("悬停快捷键注册失败") }
+        }
+
         // 事件处理器 — 先移除旧的再安装新的，防止重复累积
         if let oldHandler = eventHandlerRef {
             RemoveEventHandler(oldHandler)
@@ -125,6 +149,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     if hkID.id == 10 || hkID.id == 11 {
                         TranslationPipeline.shared.selectionSourcePID = effectivePID
                         TranslationPipeline.shared.startTextTranslation()
+                    } else if hkID.id == 20 || hkID.id == 21 {
+                        TranslationPipeline.shared.startHoverTranslation()
                     } else {
                         TranslationPipeline.shared.start()
                     }
@@ -142,6 +168,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         TranslationPipeline.shared.startTextTranslation()
     }
 
+    @objc func hoverTranslate() {
+        TranslationPipeline.shared.startHoverTranslation()
+    }
+
     @objc func openSettings() {
         SettingsWindowController.shared.show()
     }
@@ -150,6 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ScreenshotEngine.shared.cleanup()
         if let ref = hotkeyRef { UnregisterEventHotKey(ref) }
         if let ref = selectionHotkeyRef { UnregisterEventHotKey(ref) }
+        if let ref = hoverHotkeyRef { UnregisterEventHotKey(ref) }
         if let ref = eventHandlerRef { RemoveEventHandler(ref) }
         logi("\(APP_DISPLAY_NAME) 已退出")
     }

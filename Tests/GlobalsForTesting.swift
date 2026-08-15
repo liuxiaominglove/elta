@@ -6,6 +6,7 @@ let APP_DISPLAY_NAME  = "ELTA"
 let LOG_PATH = "\(NSHomeDirectory())/Library/Logs/elta_test.log"
 let DEFAULT_HOTKEY_KEYCODE: Int = 0x11  // T
 let DEFAULT_SELECTION_HOTKEY_KEYCODE: Int = 0x11  // T（配合 Shift）
+let DEFAULT_HOVER_HOTKEY_KEYCODE: Int = 0x11  // T（配合 Cmd+Option）
 let APP_SHORT_VERSION: String = "5.1.31"
 let APP_BUILD_VERSION: String = "0"
 let APP_FULL_VERSION: String = "\(APP_SHORT_VERSION) (\(APP_BUILD_VERSION))"

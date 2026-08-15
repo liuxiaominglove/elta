@@ -51,7 +51,7 @@ final class OCREngine {
 
         request.recognitionLevel = .accurate
         request.recognitionLanguages = ["en-US", "en-GB", "zh-Hans", "zh-Hant"]
-        request.usesLanguageCorrection = false
+        request.usesLanguageCorrection = true
         request.revision = VNRecognizeTextRequestRevision3
 
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])

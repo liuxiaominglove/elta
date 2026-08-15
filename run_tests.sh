@@ -25,9 +25,11 @@ SRC_FILES=(
   "$PROJECT_DIR/Sources/NotificationManager.swift"
   "$PROJECT_DIR/Sources/OCREngine.swift"
   "$PROJECT_DIR/Sources/OverlayView.swift"
+  "$PROJECT_DIR/Sources/ParagraphDetector.swift"
   "$PROJECT_DIR/Sources/ResponseParser.swift"
   "$PROJECT_DIR/Sources/ResultWindowController.swift"
   "$PROJECT_DIR/Sources/ScreenshotEngine.swift"
+  "$PROJECT_DIR/Sources/ScreenGeometry.swift"
   "$PROJECT_DIR/Sources/SettingsManager.swift"
   "$PROJECT_DIR/Sources/SettingsWindowController.swift"
   "$PROJECT_DIR/Sources/StatusBarController.swift"
@@ -54,6 +56,7 @@ TEST_FILES=(
   "$PROJECT_DIR/Tests/TranslationEngineTests.swift"
   "$PROJECT_DIR/Tests/TranslationPipelineTests.swift"
   "$PROJECT_DIR/Tests/PasteboardSnapshotTests.swift"
+  "$PROJECT_DIR/Tests/ParagraphDetectorTests.swift"
   "$PROJECT_DIR/Tests/main.swift"
 )
 
