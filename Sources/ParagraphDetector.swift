@@ -99,39 +99,90 @@ enum ParagraphDetector {
         return segments
     }
 
-    // MARK: - 水平列边界（重叠聚类）
+    // MARK: - 顶部 chrome 检测
 
-    /// 从 mouseX 向左寻找所在列的左边界。按「水平是否重叠」聚类（无需间隙阈值）：
-    /// 目录栏与正文、左右页之间只要不水平重叠就会自动分离，返回最右列（鼠标所在列）的左缘。
-    static func columnLeftBound(_ blocks: [OCRBlock], mouseX: CGFloat, maxScope: CGFloat) -> CGFloat {
-        let lowerBound = max(0, mouseX - maxScope)
-        let lefts = blocks.filter { $0.boundingBox.minX <= mouseX }
-        guard !lefts.isEmpty else { return lowerBound }
-
-        let sorted = lefts.sorted { $0.boundingBox.minX < $1.boundingBox.minX }
-        var currentMin = sorted[0].boundingBox.minX
-        var currentMax = sorted[0].boundingBox.maxX
-
-        for b in sorted.dropFirst() {
-            let r = b.boundingBox
-            if r.minX <= currentMax {
-                // 与当前列水平重叠 → 同列
-                currentMin = min(currentMin, r.minX)
-                currentMax = max(currentMax, r.maxX)
-            } else {
-                // 无重叠 → 右侧新列
-                currentMin = r.minX
-                currentMax = r.maxX
+    /// 检测正文顶部边界（排除顶部浏览器 chrome：标签栏/地址栏）。
+    /// 按 minY 排序，自顶向下找第一个显著大间隙（> 中位行高 × 2.5），其下即为正文。
+    static func contentTop(_ blocks: [OCRBlock]) -> CGFloat {
+        let sorted = blocks.sorted { $0.boundingBox.minY < $1.boundingBox.minY }
+        guard sorted.count >= 2 else { return 0 }
+        let rawMedH = median(blocks.map { $0.boundingBox.height }) ?? 14
+        let medH = rawMedH > 0 ? rawMedH : 14
+        let threshold = medH * 2.5
+        for i in 1..<sorted.count {
+            let gap = sorted[i].boundingBox.minY - sorted[i - 1].boundingBox.maxY
+            if gap > threshold {
+                return sorted[i].boundingBox.minY
             }
         }
-        return max(lowerBound, currentMin)
+        return 0
+    }
+
+    // MARK: - 水平列（X 重叠聚类）
+
+    /// 返回鼠标所在列的整块集合。按「水平是否重叠」聚类（正文段落间距不影响列归属）：
+    /// 目录栏与正文、左右页之间因水平不重叠自动分离；顶部浏览器 chrome 已由 contentTop 裁掉。
+    static func columnBlocks(_ blocks: [OCRBlock], mouseX: CGFloat, mouseY: CGFloat, maxScope: CGFloat) -> [OCRBlock] {
+        let lowerBound = max(0, mouseX - maxScope)
+        let lefts = blocks.filter { $0.boundingBox.minX <= mouseX }
+        guard !lefts.isEmpty else { return [] }
+
+        let n = lefts.count
+        var parent = Array(0..<n)
+        func find(_ i: Int) -> Int {
+            var r = i
+            while parent[r] != r { r = parent[r] }
+            var c = i
+            while parent[c] != r { let nx = parent[c]; parent[c] = r; c = nx }
+            return r
+        }
+        func union(_ a: Int, _ b: Int) {
+            let ra = find(a), rb = find(b)
+            if ra != rb { parent[ra] = rb }
+        }
+
+        for i in 0..<n {
+            let a = lefts[i].boundingBox
+            for j in (i + 1)..<n {
+                let b = lefts[j].boundingBox
+                let xOverlap = a.maxX >= b.minX && b.maxX >= a.minX
+                if xOverlap { union(i, j) }
+            }
+        }
+
+        func hDist(_ r: CGRect) -> CGFloat {
+            if mouseX < r.minX { return r.minX - mouseX }
+            if mouseX > r.maxX { return mouseX - r.maxX }
+            return 0
+        }
+        func vDist(_ r: CGRect) -> CGFloat {
+            if mouseY < r.minY { return r.minY - mouseY }
+            if mouseY > r.maxY { return mouseY - r.maxY }
+            return 0
+        }
+
+        var anchor = 0
+        var best = CGFloat.greatestFiniteMagnitude
+        for i in 0..<n {
+            let score = vDist(lefts[i].boundingBox) * 2 + hDist(lefts[i].boundingBox)
+            if score < best { best = score; anchor = i }
+        }
+
+        let root = find(anchor)
+        var result: [OCRBlock] = []
+        for i in 0..<n where find(i) == root {
+            if lefts[i].boundingBox.minX >= lowerBound {
+                result.append(lefts[i])
+            }
+        }
+        return result
     }
 
     // MARK: - 主入口：提取固定高度窗口 + 水平列内的文本（自动分段）
 
-    /// 鼠标 = 段落右下角。先取垂直窗口 [mouseY - windowHeight, mouseY]（排除顶部 chrome），
-    /// 再用重叠聚类取鼠标所在水平列（排除左侧目录/侧栏、右侧内容），
-    /// 按「行距 + 缩进」分段，段内行用空格拼接、段间用 "\n\n" 连接。
+    /// 鼠标 = 段落右下角。先裁掉顶部浏览器 chrome（contentTop），再取垂直窗口
+    /// [max(contentTop, mouseY - windowHeight), mouseY]，用「X 重叠」聚类取鼠标所在水平列
+    /// （排除左侧目录/侧栏、右侧内容），按「行距 + 缩进」分段，段内行空格拼接、段间 "\n\n"。
     static func extractWindow(
         _ blocks: [OCRBlock],
         mouseX: CGFloat,
@@ -142,22 +193,20 @@ enum ParagraphDetector {
     ) -> String {
         guard !blocks.isEmpty else { return "" }
 
-        // 1. 垂直窗口
-        let windowTop = max(0, mouseY - windowHeight)
+        // 1. 垂直窗口（顶部裁掉浏览器 chrome）
+        let top = contentTop(blocks)
+        let windowTop = max(top, mouseY - windowHeight)
         let windowBlocks = blocks.filter {
             $0.boundingBox.maxY >= windowTop && $0.boundingBox.minY <= mouseY
         }
         guard !windowBlocks.isEmpty else { return "" }
 
-        // 2. 水平列（重叠聚类取鼠标所在列）
-        let leftBound = columnLeftBound(windowBlocks, mouseX: mouseX, maxScope: horizontalScope)
-        let horizontal = windowBlocks.filter {
-            $0.boundingBox.minX >= leftBound && $0.boundingBox.minX <= mouseX
-        }
-        guard !horizontal.isEmpty else { return "" }
+        // 2. 水平列（X 重叠聚类取鼠标所在列的整块集合）
+        let column = columnBlocks(windowBlocks, mouseX: mouseX, mouseY: mouseY, maxScope: horizontalScope)
+        guard !column.isEmpty else { return "" }
 
         // 3. 聚行 + 分段
-        let lines = clusterLines(horizontal)
+        let lines = clusterLines(column)
         let segments = paragraphSegments(lines, config: config)
         return segments.map { $0.map { $0.text }.joined(separator: " ") }
                        .joined(separator: "\n\n")

@@ -83,21 +83,39 @@ func runParagraphDetectorTests() {
         try assertEqual(ParagraphDetector.paragraphSegments([]).count, 0)
     }
 
-    // ---- columnLeftBound：水平列边界（重叠聚类） ----
-    test("columnLeftBound: 双页·鼠标在右页取右页左缘") {
-        try assertEqual(ParagraphDetector.columnLeftBound(twoPageBlocks(), mouseX: 680, maxScope: 1400), 400)
+    // ---- columnBlocks：水平列（X 重叠聚类，返回整块集合） ----
+    test("columnBlocks: 双页·鼠标在右页只取右页块") {
+        let blocks = ParagraphDetector.columnBlocks(twoPageBlocks(), mouseX: 680, mouseY: 20, maxScope: 1400)
+        try assertEqual(blocks.map { $0.text }.sorted(), ["R1 one", "R1 two"])
     }
-    test("columnLeftBound: 双页·鼠标在左页取左页左缘") {
-        try assertEqual(ParagraphDetector.columnLeftBound(twoPageBlocks(), mouseX: 300, maxScope: 1400), 50)
+    test("columnBlocks: 双页·鼠标在左页只取左页块") {
+        let blocks = ParagraphDetector.columnBlocks(twoPageBlocks(), mouseX: 300, mouseY: 20, maxScope: 1400)
+        try assertEqual(blocks.map { $0.text }.sorted(), ["L1 one", "L1 two"])
     }
-    test("columnLeftBound: 维基式·主文排除左目录") {
-        try assertEqual(ParagraphDetector.columnLeftBound(wikiBlocks(), mouseX: 2500, maxScope: 3360), 659)
+    test("columnBlocks: 维基式·主文排除左目录") {
+        let blocks = ParagraphDetector.columnBlocks(wikiBlocks(), mouseX: 2500, mouseY: 110, maxScope: 3360)
+        try assertEqual(blocks.map { $0.text }.sorted(), ["main one", "main two"])
     }
-    test("columnLeftBound: 单栏取最左缘") {
-        try assertEqual(ParagraphDetector.columnLeftBound([block("a", 100, 10, w: 1800), block("b", 100, 28, w: 1500)], mouseX: 1800, maxScope: 3360), 100)
+    test("columnBlocks: 单栏取全部块") {
+        let blocks = ParagraphDetector.columnBlocks([block("a", 100, 10, w: 1800), block("b", 100, 28, w: 1500)], mouseX: 1800, mouseY: 20, maxScope: 3360)
+        try assertEqual(blocks.count, 2)
     }
-    test("columnLeftBound: 空块返回下界") {
-        try assertEqual(ParagraphDetector.columnLeftBound([], mouseX: 1000, maxScope: 1400), 0)
+    test("columnBlocks: 空块返回空") {
+        try assertEqual(ParagraphDetector.columnBlocks([], mouseX: 1000, mouseY: 20, maxScope: 1400).count, 0)
+    }
+
+    // ---- contentTop：顶部 chrome 检测 ----
+    test("contentTop: 检测顶部浏览器栏边界") {
+        let blocks = [
+            block("tab", 100, 22, w: 500),
+            block("url", 29, 60, w: 1150),
+            block("body", 898, 200, w: 2100),
+        ]
+        try assertEqual(ParagraphDetector.contentTop(blocks), 200)
+    }
+    test("contentTop: 无 chrome（间隙都小）返回 0") {
+        let blocks = [block("a", 100, 10), block("b", 100, 28), block("c", 100, 46)]
+        try assertEqual(ParagraphDetector.contentTop(blocks), 0)
     }
 
     // ---- extractWindow：固定窗口 + 水平列提取（自动分段） ----
@@ -109,6 +127,16 @@ func runParagraphDetectorTests() {
     }
     test("extractWindow: 维基式·整栏只取主文（排除左目录）") {
         try assertEqual(ParagraphDetector.extractWindow(wikiBlocks(), mouseX: 2500, mouseY: 130, windowHeight: 1000, horizontalScope: 3360), "main one main two")
+    }
+    test("extractWindow: 顶部浏览器 chrome 被裁掉") {
+        let blocks = [
+            block("tab", 100, 22, w: 500),
+            block("url", 29, 60, w: 1150),
+            block("TOC1", 22, 200, w: 100),
+            block("body1", 898, 200, w: 2100),
+            block("body2", 898, 218, w: 2100),
+        ]
+        try assertEqual(ParagraphDetector.extractWindow(blocks, mouseX: 3044, mouseY: 225, windowHeight: 1000, horizontalScope: 3360), "body1 body2")
     }
     test("extractWindow: 整栏·全宽段落整段提取") {
         let blocks = [block("F1", 50, 10, w: 600), block("F2", 50, 28, w: 600)]
