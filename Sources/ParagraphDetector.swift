@@ -27,7 +27,8 @@ enum ParagraphDetector {
 
     // MARK: - 聚行：把同一视觉行的 OCR 块合并
 
-    static func clusterLines(_ blocks: [OCRBlock]) -> [TextLine] {
+    /// 把 OCR 块按垂直位置聚成「视觉行」（每行 = 一组同 Y 的块，未合并文本）
+    static func groupLines(_ blocks: [OCRBlock]) -> [[OCRBlock]] {
         guard !blocks.isEmpty else { return [] }
 
         let sorted = blocks.sorted {
@@ -50,8 +51,11 @@ enum ParagraphDetector {
             }
             groups.append([b])
         }
+        return groups
+    }
 
-        return groups.map { group -> TextLine in
+    static func clusterLines(_ blocks: [OCRBlock]) -> [TextLine] {
+        return groupLines(blocks).map { group -> TextLine in
             let xSorted = group.sorted { $0.boundingBox.minX < $1.boundingBox.minX }
             let minX = xSorted.map { $0.boundingBox.minX }.min() ?? 0
             let maxX = xSorted.map { $0.boundingBox.maxX }.max() ?? 0
@@ -101,21 +105,12 @@ enum ParagraphDetector {
 
     // MARK: - 顶部 chrome 检测
 
-    /// 检测正文顶部边界（排除顶部浏览器 chrome：标签栏/地址栏）。
-    /// 按 minY 排序，自顶向下找第一个显著大间隙（> 中位行高 × 2.5），其下即为正文。
-    static func contentTop(_ blocks: [OCRBlock]) -> CGFloat {
-        let sorted = blocks.sorted { $0.boundingBox.minY < $1.boundingBox.minY }
-        guard sorted.count >= 2 else { return 0 }
-        let rawMedH = median(blocks.map { $0.boundingBox.height }) ?? 14
-        let medH = rawMedH > 0 ? rawMedH : 14
-        let threshold = medH * 2.5
-        for i in 1..<sorted.count {
-            let gap = sorted[i].boundingBox.minY - sorted[i - 1].boundingBox.maxY
-            if gap > threshold {
-                return sorted[i].boundingBox.minY
-            }
-        }
-        return 0
+    /// 检测正文顶部边界（排除顶部浏览器 chrome：标签栏/地址栏/书签栏）。
+    /// 若顶部存在标签栏（浏览器 chrome 特征：y < 屏高 4% 的短块），用固定顶部比例（屏高 12%）裁掉 chrome；
+    /// 干净阅读器（无标签栏）返回 0。不再用「大间隙」启发式——正文里的表格/标题间隙会误判。
+    static func contentTop(_ blocks: [OCRBlock], screenHeight: CGFloat) -> CGFloat {
+        let hasTabBar = blocks.contains { $0.boundingBox.maxY < screenHeight * 0.04 }
+        return hasTabBar ? screenHeight * 0.12 : 0
     }
 
     // MARK: - 水平列（X 重叠聚类）
@@ -178,6 +173,71 @@ enum ParagraphDetector {
         return result
     }
 
+    // MARK: - 表格识别 + 列内文本/表格组装
+
+    /// 判断一个「视觉行」（同 Y 的块组）是否为表格行：X 排序后存在被「大间隙」分隔的多个单元格。
+    static func isTableRow(_ line: [OCRBlock], cellGap: CGFloat) -> Bool {
+        guard line.count >= 2 else { return false }
+        let xSorted = line.sorted { $0.boundingBox.minX < $1.boundingBox.minX }
+        for i in 1..<xSorted.count {
+            if xSorted[i].boundingBox.minX - xSorted[i - 1].boundingBox.maxX > cellGap {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// 把列内块转为文本：连续的表格行区域转 Markdown 表格，其余按「行距 + 缩进」分段。
+    static func extractColumnText(_ blocks: [OCRBlock], config: Config) -> String {
+        let lineGroups = groupLines(blocks)
+        guard !lineGroups.isEmpty else { return "" }
+
+        let medH = median(blocks.map { $0.boundingBox.height }) ?? 14
+        let cellGap = max(medH * 0.4, 8)
+
+        var parts: [String] = []
+        var textRun: [OCRBlock] = []
+        var tableRun: [OCRBlock] = []
+
+        for line in lineGroups {
+            if isTableRow(line, cellGap: cellGap) {
+                if !textRun.isEmpty {
+                    parts.append(renderTextRun(textRun, config: config))
+                    textRun = []
+                }
+                tableRun.append(contentsOf: line)
+            } else {
+                if !tableRun.isEmpty {
+                    parts.append(renderTableRun(tableRun, config: config))
+                    tableRun = []
+                }
+                textRun.append(contentsOf: line)
+            }
+        }
+        if !textRun.isEmpty {
+            parts.append(renderTextRun(textRun, config: config))
+        }
+        if !tableRun.isEmpty {
+            parts.append(renderTableRun(tableRun, config: config))
+        }
+        return parts.filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
+
+    private static func renderTextRun(_ blocks: [OCRBlock], config: Config) -> String {
+        let lines = clusterLines(blocks)
+        let segments = paragraphSegments(lines, config: config)
+        return segments.map { $0.map { $0.text }.joined(separator: " ") }
+                       .joined(separator: "\n\n")
+    }
+
+    private static func renderTableRun(_ blocks: [OCRBlock], config: Config) -> String {
+        if let table = TableExtractor.tableMarkdown(blocks) {
+            return table
+        }
+        // 不是表格 → 回退为正文
+        return renderTextRun(blocks, config: config)
+    }
+
     // MARK: - 主入口：提取固定高度窗口 + 水平列内的文本（自动分段）
 
     /// 鼠标 = 段落右下角。先裁掉顶部浏览器 chrome（contentTop），再取垂直窗口
@@ -194,7 +254,7 @@ enum ParagraphDetector {
         guard !blocks.isEmpty else { return "" }
 
         // 1. 垂直窗口（顶部裁掉浏览器 chrome）
-        let top = contentTop(blocks)
+        let top = contentTop(blocks, screenHeight: windowHeight * 2)
         let windowTop = max(top, mouseY - windowHeight)
         let windowBlocks = blocks.filter {
             $0.boundingBox.maxY >= windowTop && $0.boundingBox.minY <= mouseY
@@ -205,11 +265,8 @@ enum ParagraphDetector {
         let column = columnBlocks(windowBlocks, mouseX: mouseX, mouseY: mouseY, maxScope: horizontalScope)
         guard !column.isEmpty else { return "" }
 
-        // 3. 聚行 + 分段
-        let lines = clusterLines(column)
-        let segments = paragraphSegments(lines, config: config)
-        return segments.map { $0.map { $0.text }.joined(separator: " ") }
-                       .joined(separator: "\n\n")
+        // 3. 聚行 + 分段（表格区域转 Markdown 表格，正文按「行距 + 缩进」分段）
+        return extractColumnText(column, config: config)
     }
 
     // MARK: - 工具

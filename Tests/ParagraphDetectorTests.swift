@@ -105,17 +105,33 @@ func runParagraphDetectorTests() {
     }
 
     // ---- contentTop：顶部 chrome 检测 ----
-    test("contentTop: 检测顶部浏览器栏边界") {
+    test("contentTop: 有标签栏（浏览器）→ 固定顶部比例") {
         let blocks = [
-            block("tab", 100, 22, w: 500),
-            block("url", 29, 60, w: 1150),
-            block("body", 898, 200, w: 2100),
+            block("tab", 100, 22, w: 500),      // 22-36（标签栏，y < 4% 屏高）
+            block("url", 29, 50, w: 1150),      // 50-64
+            block("body", 898, 200, w: 2100),   // 200-214
         ]
-        try assertEqual(ParagraphDetector.contentTop(blocks), 200)
+        try assertEqual(ParagraphDetector.contentTop(blocks, screenHeight: 1000), 120)
     }
-    test("contentTop: 无 chrome（间隙都小）返回 0") {
-        let blocks = [block("a", 100, 10), block("b", 100, 28), block("c", 100, 46)]
-        try assertEqual(ParagraphDetector.contentTop(blocks), 0)
+    test("contentTop: 有标签栏 + 正文带表格（大间隙）仍用固定比例，不被表格间隙误判") {
+        let blocks = [
+            block("tab", 100, 22, w: 500),      // 标签栏
+            block("body", 898, 200, w: 2100),   // 正文
+            block("table", 900, 320, w: 300),   // 表格（与正文有 80 大间隙）
+        ]
+        // 有标签栏 → 固定比例 120，而不是被正文→表格间隙带偏
+        try assertEqual(ParagraphDetector.contentTop(blocks, screenHeight: 1000), 120)
+    }
+    test("contentTop: 干净阅读器（无标签栏）返回 0") {
+        let blocks = [
+            block("good question", 268, 116, w: 1289, h: 51),
+            block("your parents", 1781, 116, w: 1267, h: 58),
+            block("best to duck", 196, 181, w: 1332, h: 51),
+        ]
+        try assertEqual(ParagraphDetector.contentTop(blocks, screenHeight: 2100), 0)
+    }
+    test("contentTop: 单块返回 0") {
+        try assertEqual(ParagraphDetector.contentTop([block("a", 100, 200)], screenHeight: 1000), 0)
     }
 
     // ---- extractWindow：固定窗口 + 水平列提取（自动分段） ----
@@ -126,17 +142,17 @@ func runParagraphDetectorTests() {
         try assertEqual(ParagraphDetector.extractWindow(twoPageBlocks(), mouseX: 300, mouseY: 35, windowHeight: 100, horizontalScope: 350), "L1 one L1 two")
     }
     test("extractWindow: 维基式·整栏只取主文（排除左目录）") {
-        try assertEqual(ParagraphDetector.extractWindow(wikiBlocks(), mouseX: 2500, mouseY: 130, windowHeight: 1000, horizontalScope: 3360), "main one main two")
+        try assertEqual(ParagraphDetector.extractWindow(wikiBlocks(), mouseX: 2500, mouseY: 130, windowHeight: 200, horizontalScope: 3360), "main one main two")
     }
     test("extractWindow: 顶部浏览器 chrome 被裁掉") {
         let blocks = [
             block("tab", 100, 22, w: 500),
-            block("url", 29, 60, w: 1150),
-            block("TOC1", 22, 200, w: 100),
-            block("body1", 898, 200, w: 2100),
-            block("body2", 898, 218, w: 2100),
+            block("url", 29, 50, w: 1150),
+            block("TOC1", 22, 300, w: 100),
+            block("body1", 898, 300, w: 2100),
+            block("body2", 898, 318, w: 2100),
         ]
-        try assertEqual(ParagraphDetector.extractWindow(blocks, mouseX: 3044, mouseY: 225, windowHeight: 1000, horizontalScope: 3360), "body1 body2")
+        try assertEqual(ParagraphDetector.extractWindow(blocks, mouseX: 3044, mouseY: 325, windowHeight: 1000, horizontalScope: 3360), "body1 body2")
     }
     test("extractWindow: 整栏·全宽段落整段提取") {
         let blocks = [block("F1", 50, 10, w: 600), block("F2", 50, 28, w: 600)]
@@ -150,17 +166,33 @@ func runParagraphDetectorTests() {
         let blocks = [block("F1", 50, 10, w: 600)]
         try assertEqual(ParagraphDetector.extractWindow(blocks, mouseX: 680, mouseY: 15, windowHeight: 100, horizontalScope: 350), "")
     }
-    test("extractWindow: 多段整窗口（空行分段）") {
-        let blocks = [block("A a", 50, 10), block("A b", 50, 28), block("B one", 50, 66), block("B two", 50, 84)]
-        try assertEqual(ParagraphDetector.extractWindow(blocks, mouseX: 600, mouseY: 98, windowHeight: 120, horizontalScope: 700), "A a A b\n\nB one B two")
+    test("extractWindow: 正文+表格 → 表格转 Markdown，正文保留") {
+        let blocks = [
+            block("intro", 898, 296, w: 2143),
+            block("H1", 927, 500, w: 210),
+            block("H2", 1166, 500, w: 246),
+            block("H3", 1434, 500, w: 311),
+            block("R1C1", 927, 560, w: 167),
+            block("R1C2", 1173, 560, w: 174),
+            block("R1C3", 1441, 560, w: 80),
+        ]
+        let text = ParagraphDetector.extractWindow(blocks, mouseX: 2000, mouseY: 600, windowHeight: 1000, horizontalScope: 3360)
+        try assertTrue(text.contains("intro"), "正文应保留")
+        try assertTrue(text.contains("| H1 | H2 | H3 |"), "表头应为 Markdown")
+        try assertTrue(text.contains("| R1C1 | R1C2 | R1C3 |"), "数据行应为 Markdown")
     }
+    test("extractWindow: 纯文本（无表格）不变") {
+        let blocks = [block("A a", 50, 300), block("A b", 50, 318), block("B one", 50, 344), block("B two", 50, 362)]
+        try assertEqual(ParagraphDetector.extractWindow(blocks, mouseX: 600, mouseY: 378, windowHeight: 100, horizontalScope: 700), "A a A b\n\nB one B two")
+    }
+
     test("extractWindow: 多段整窗口（缩进分段）") {
         let blocks = [block("A one", 50, 10), block("A two", 50, 28), block("B one", 78, 46), block("B two", 50, 64)]
         try assertEqual(ParagraphDetector.extractWindow(blocks, mouseX: 600, mouseY: 78, windowHeight: 100, horizontalScope: 700), "A one A two\n\nB one B two")
     }
     test("extractWindow: 顶部切半个段落 + 整段") {
-        let blocks = [block("A a", 50, 10), block("A b", 50, 28), block("A c", 50, 46), block("B one", 50, 84)]
-        try assertEqual(ParagraphDetector.extractWindow(blocks, mouseX: 600, mouseY: 98, windowHeight: 40, horizontalScope: 700), "A c\n\nB one")
+        let blocks = [block("A a", 50, 10), block("A b", 50, 28), block("A c", 50, 46), block("B one", 50, 74)]
+        try assertEqual(ParagraphDetector.extractWindow(blocks, mouseX: 600, mouseY: 88, windowHeight: 40, horizontalScope: 700), "A c\n\nB one")
     }
     test("extractWindow: 单行段落") {
         try assertEqual(ParagraphDetector.extractWindow([block("Solo line", 78, 10)], mouseX: 600, mouseY: 15, windowHeight: 100, horizontalScope: 700), "Solo line")

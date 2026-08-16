@@ -16,31 +16,29 @@ final class TableExtractor {
 
     /// 输入 OCR 识别到的所有文本块（含坐标），检测是否为表格，是则输出 Markdown 表格，否则输出纯文本
     static func process(blocks: [OCRBlock]) -> String {
-        guard blocks.count >= 4 else {
-            return flatText(from: blocks)
+        if let table = tableMarkdown(blocks) {
+            return table
         }
+        return flatText(from: blocks)
+    }
+
+    /// 检测并转换为 Markdown 表格；若块不构成表格（<2 列或 <2 行）返回 nil。
+    /// 要求传入的块是「干净的表格区域」（不含正文），供悬停翻译在聚行前识别表格用。
+    static func tableMarkdown(_ blocks: [OCRBlock]) -> String? {
+        guard blocks.count >= 4 else { return nil }
 
         // 1. 列检测：基于水平方向重叠聚类（而不是 X 中心距离）
-        //    这样同一列里不同宽度/对齐的文字不会被拆成多列
         let columns = detectColumns(from: blocks)
-        guard columns.count >= 2 else {
-            logi("表格检测: 只识别到 \(columns.count) 列，回退纯文本")
-            return flatText(from: blocks)
-        }
+        guard columns.count >= 2 else { return nil }
 
         // 2. 把每个文字块分配到一个主列
         let colAssignments = blocks.map { block -> Int in
             bestColumn(for: block, columns: columns)
         }
 
-        // 3. 行检测：
-        //    - 先按列把块聚成「单元格」（处理多行单元格）
-        //    - 再把所有单元格的 Y 中心跨列聚类，得到全局行
+        // 3. 行检测
         let rows = detectRows(from: blocks, columns: columns, colAssignments: colAssignments)
-        guard rows.count >= 2 else {
-            logi("表格检测: 只识别到 \(rows.count) 行，回退纯文本")
-            return flatText(from: blocks)
-        }
+        guard rows.count >= 2 else { return nil }
 
         // 4. 把每个块分配进网格单元格
         var cells: [[[(text: String, y: CGFloat)]]] = Array(
@@ -68,12 +66,8 @@ final class TableExtractor {
 
         // 6. 验证：至少 2 行，每行在 ≥2 个不同列里有内容
         let validRows = grid.filter { row in row.filter { !$0.isEmpty }.count >= 2 }.count
-        guard validRows >= 2 else {
-            logi("表格检测: 有效多列行不足(\(validRows))，回退纯文本")
-            return flatText(from: blocks)
-        }
+        guard validRows >= 2 else { return nil }
 
-        logi("表格检测: 成功还原 \(rows.count) 行 × \(columns.count) 列表格")
         return formatMarkdownTable(grid: grid)
     }
 

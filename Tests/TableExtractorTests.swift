@@ -52,4 +52,26 @@ func runTableExtractorTests() {
         let lines = result.components(separatedBy: "\n\n")
         try assertEqual(lines.count, 1)
     }
+
+    test("tableMarkdown: 三列表格返回 Markdown 表格") {
+        let blocks = [
+            OCRBlock(text: "H1", boundingBox: CGRect(x: 100, y: 10, width: 100, height: 14)),
+            OCRBlock(text: "H2", boundingBox: CGRect(x: 250, y: 10, width: 100, height: 14)),
+            OCRBlock(text: "H3", boundingBox: CGRect(x: 400, y: 10, width: 100, height: 14)),
+            OCRBlock(text: "R1C1", boundingBox: CGRect(x: 100, y: 40, width: 100, height: 14)),
+            OCRBlock(text: "R1C2", boundingBox: CGRect(x: 250, y: 40, width: 100, height: 14)),
+            OCRBlock(text: "R1C3", boundingBox: CGRect(x: 400, y: 40, width: 100, height: 14)),
+        ]
+        let table = try assertNotNil(TableExtractor.tableMarkdown(blocks), "应为表格")
+        try assertTrue(table.contains("| H1 | H2 | H3 |"), "表头")
+        try assertTrue(table.contains("| R1C1 | R1C2 | R1C3 |"), "数据行")
+    }
+
+    test("tableMarkdown: 单列文本返回 nil") {
+        let blocks = [
+            OCRBlock(text: "line one", boundingBox: CGRect(x: 100, y: 10, width: 500, height: 14)),
+            OCRBlock(text: "line two", boundingBox: CGRect(x: 100, y: 28, width: 500, height: 14)),
+        ]
+        try assertNil(TableExtractor.tableMarkdown(blocks))
+    }
 }
