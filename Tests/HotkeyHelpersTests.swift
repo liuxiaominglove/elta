@@ -113,4 +113,58 @@ func runHotkeyHelpersTests() {
         let display = hotkeyDisplayString(keyCode: 0x6F, modifiers: Int(cmdKey))
         try assertEqual(display, "⌘F12")
     }
+
+    // ━━━ 审计修复：负数/超大热键值不得让 UInt32 转换崩溃 ━━━
+
+    test("sanitizeHotkeyCode: negative clamps to 0") {
+        try assertEqual(sanitizeHotkeyCode(-1), 0)
+        try assertEqual(sanitizeHotkeyCode(-100), 0)
+    }
+
+    test("sanitizeHotkeyCode: normal value passes through") {
+        try assertEqual(sanitizeHotkeyCode(0x11), 0x11)
+        try assertEqual(sanitizeHotkeyCode(0), 0)
+    }
+
+    test("sanitizeHotkeyCode: out-of-range clamps to UInt32.max") {
+        try assertEqual(sanitizeHotkeyCode(Int.max), UInt32.max)
+    }
+
+    // ━━━ 审计修复：保存前收集「本次新录制热键」中命中已知系统快捷键冲突的项 ━━━
+
+    test("collectHotkeyConflicts: detects Cmd+T conflict") {
+        let conflicts = collectHotkeyConflicts([(keyCode: 0x11, modifiers: Int(cmdKey))])
+        try assertEqual(conflicts.count, 1)
+        try assertEqual(conflicts[0].display, "⌘T")
+        try assertEqual(conflicts[0].reason, "⌘T 新建标签页")
+    }
+
+    test("collectHotkeyConflicts: empty array returns empty") {
+        try assertEqual(collectHotkeyConflicts([]).count, 0)
+    }
+
+    test("collectHotkeyConflicts: nil keyCode (not recorded) is skipped") {
+        let conflicts = collectHotkeyConflicts([(keyCode: nil, modifiers: Int(cmdKey))])
+        try assertEqual(conflicts.count, 0)
+    }
+
+    test("collectHotkeyConflicts: no-conflict combo returns empty") {
+        let conflicts = collectHotkeyConflicts([(keyCode: 0x11, modifiers: Int(cmdKey | optionKey))])
+        try assertEqual(conflicts.count, 0)
+    }
+
+    test("collectHotkeyConflicts: mixed entries return only conflicts") {
+        let conflicts = collectHotkeyConflicts([
+            (keyCode: 0x11, modifiers: Int(cmdKey)),
+            (keyCode: 0x11, modifiers: Int(cmdKey | optionKey)),
+            (keyCode: nil, modifiers: 0),
+        ])
+        try assertEqual(conflicts.count, 1)
+        try assertEqual(conflicts[0].display, "⌘T")
+    }
+
+    test("collectHotkeyConflicts: negative keyCode does not crash") {
+        let conflicts = collectHotkeyConflicts([(keyCode: -1, modifiers: Int(cmdKey))])
+        try assertEqual(conflicts.count, 0)
+    }
 }

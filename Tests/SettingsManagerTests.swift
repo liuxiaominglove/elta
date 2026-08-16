@@ -203,6 +203,40 @@ func runSettingsManagerTests() {
         try assertFalse(removed, "save 失败时不应移除 UserDefaults，否则丢 key")
     }
 
+    // ━━━ 审计修复：migrateKey 返回 save 结果，供迁移 flag 判断是否全部成功 ━━━
+
+    test("migrateKey returns true when save succeeds") {
+        let ok = SettingsManager.migrateKey(value: "k", udKey: "x", save: { _, _ in true }, remove: {})
+        try assertTrue(ok, "save 成功时应返回 true")
+    }
+
+    test("migrateKey returns false when save fails") {
+        let ok = SettingsManager.migrateKey(value: "k", udKey: "x", save: { _, _ in false }, remove: {})
+        try assertFalse(ok, "save 失败时应返回 false")
+    }
+
+    // ━━━ 审计修复：测试连接应使用用户在输入框键入的 endpoint/model，而非 provider 默认 ━━━
+
+    test("resolveConnectionTarget prefers typed endpoint and model") {
+        let (endpoint, model) = SettingsWindowController.resolveConnectionTarget(
+            endpointInput: "https://custom.example.com/v1",
+            modelInput: "my-custom-model",
+            provider: .openAICompatible
+        )
+        try assertEqual(endpoint, "https://custom.example.com/v1")
+        try assertEqual(model, "my-custom-model")
+    }
+
+    test("resolveConnectionTarget falls back to provider when fields empty") {
+        let (endpoint, model) = SettingsWindowController.resolveConnectionTarget(
+            endpointInput: "",
+            modelInput: "  ",
+            provider: .deepseek
+        )
+        try assertEqual(endpoint, AIProvider.deepseek.endpoint)
+        try assertEqual(model, AIProvider.deepseek.defaultModel)
+    }
+
     // ━━━ 审计修复 2：setApiKey 应清除明文回退 ━━━
 
     test("setApiKey clears plaintext UserDefaults fallback after save") {

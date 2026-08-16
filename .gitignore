@@ -33,6 +33,8 @@ xcuserdata/
 
 # cc-suite-pe 任务账本（本地审计状态）
 .cc-suite-pe/
+# cc-suite-cn 任务账本（本地审计状态）
+.cc-suite-cn/
 
 # IDE
 .vscode/

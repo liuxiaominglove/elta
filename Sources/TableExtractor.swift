@@ -86,7 +86,7 @@ final class TableExtractor {
         var md: [String] = []
 
         // 表头
-        let headerCells = lines[0].components(separatedBy: "\t")
+        let headerCells = lines[0].components(separatedBy: "\t").map { escapeMarkdownTableCell($0) }
         md.append("| " + headerCells.joined(separator: " | ") + " |")
 
         // 分隔线
@@ -95,7 +95,7 @@ final class TableExtractor {
 
         // 数据行
         for line in lines.dropFirst() {
-            let cells = line.components(separatedBy: "\t")
+            let cells = line.components(separatedBy: "\t").map { escapeMarkdownTableCell($0) }
             md.append("| " + cells.joined(separator: " | ") + " |")
         }
 
@@ -339,8 +339,9 @@ final class TableExtractor {
         return lines.joined(separator: "\n")
     }
 
-    private static func escapeMarkdownTableCell(_ text: String) -> String {
-        text.replacingOccurrences(of: "|", with: "\\|")
+    static func escapeMarkdownTableCell(_ text: String) -> String {
+        text.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "|", with: "\\|")
             .replacingOccurrences(of: "\n", with: " ")
     }
 }

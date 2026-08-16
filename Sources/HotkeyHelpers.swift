@@ -56,6 +56,25 @@ func hotkeyHasRequiredModifiers(_ modifiers: Int) -> Bool {
     (modifiers & Int(cmdKey | optionKey | controlKey | shiftKey)) != 0
 }
 
+/// 把用户设置的键码/修饰键安全转为 UInt32（RegisterEventHotKey 参数类型）。
+/// 负数/超范围值会被夹到合法区间，避免 `UInt32(负值)` 运行时崩溃。
+func sanitizeHotkeyCode(_ value: Int) -> UInt32 {
+    UInt32(clamping: value)
+}
+
+/// 从「本次新录制的热键」列表中收集命中已知系统快捷键冲突的项（用于保存前二次确认）。
+/// keyCode 为 nil 表示未录制，跳过；命中 `checkSystemHotkeyConflict` 的返回其键名 + 冲突描述。
+func collectHotkeyConflicts(_ recorded: [(keyCode: Int?, modifiers: Int)]) -> [(display: String, reason: String)] {
+    var conflicts: [(display: String, reason: String)] = []
+    for (keyCode, modifiers) in recorded {
+        guard let kc = keyCode else { continue }
+        if let reason = checkSystemHotkeyConflict(modifiers: modifiers, keyCode: kc) {
+            conflicts.append((display: hotkeyDisplayString(keyCode: kc, modifiers: modifiers), reason: reason))
+        }
+    }
+    return conflicts
+}
+
 /// 检测与 macOS 常见系统快捷键的冲突
 /// 返回冲突提示字符串，无冲突返回 nil
 func checkSystemHotkeyConflict(modifiers: Int, keyCode: Int) -> String? {

@@ -62,68 +62,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let ref = selectionHotkeyRef { UnregisterEventHotKey(ref); selectionHotkeyRef = nil }
         if let ref = hoverHotkeyRef { UnregisterEventHotKey(ref); hoverHotkeyRef = nil }
 
+        // 收集注册失败的热键：不再降级、不覆盖用户偏好，改为提示用户去修改
+        var failures: [(name: String, display: String, reason: String)] = []
+
         // ---- 截图翻译热键（id=1） ----
-        var hotkeyID1 = EventHotKeyID(signature: 0x534E5452, id: 1)  // "SNTR"
+        let hotkeyID1 = EventHotKeyID(signature: 0x534E5452, id: 1)  // "SNTR"
         let keyCode = settings.hotkeyKeyCode
         let modifiers = settings.hotkeyModifiers
-        let s1 = RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers), hotkeyID1,
+        let s1 = RegisterEventHotKey(sanitizeHotkeyCode(keyCode), sanitizeHotkeyCode(modifiers), hotkeyID1,
                                       GetApplicationEventTarget(), 0, &hotkeyRef)
         if s1 != noErr {
-            hotkeyID1.id = 2
-            let fbStatus = RegisterEventHotKey(0x78, UInt32(controlKey), hotkeyID1,
-                                                GetApplicationEventTarget(), 0, &hotkeyRef)
-            if fbStatus == noErr {
-                settings.hotkeyKeyCode = 0x78; settings.hotkeyModifiers = Int(controlKey)
-                settings.hotkeyDisplay = "⌃F2"
-                logi("截图快捷键降级为 Ctrl+F2")
-            } else { loge("截图快捷键注册失败") }
+            failures.append((name: "截图翻译",
+                             display: hotkeyDisplayString(keyCode: keyCode, modifiers: modifiers),
+                             reason: checkSystemHotkeyConflict(modifiers: modifiers, keyCode: keyCode) ?? "该键已被其他程序占用"))
+            loge("截图快捷键注册失败")
         } else {
             settings.hotkeyDisplay = hotkeyDisplayString(keyCode: keyCode, modifiers: modifiers)
             logi("截图快捷键: \(settings.hotkeyDisplay)")
         }
 
         // ---- 划词翻译热键（id=10） ----
-        var hotkeyID10 = EventHotKeyID(signature: 0x534E5452, id: 10)
+        let hotkeyID10 = EventHotKeyID(signature: 0x534E5452, id: 10)
         let selKeyCode = settings.selectionHotkeyKeyCode
         let selMods = settings.selectionHotkeyModifiers
-        let s10 = RegisterEventHotKey(UInt32(selKeyCode), UInt32(selMods), hotkeyID10,
+        let s10 = RegisterEventHotKey(sanitizeHotkeyCode(selKeyCode), sanitizeHotkeyCode(selMods), hotkeyID10,
                                        GetApplicationEventTarget(), 0, &selectionHotkeyRef)
         if s10 == noErr {
             settings.selectionHotkeyDisplay = hotkeyDisplayString(keyCode: selKeyCode, modifiers: selMods)
             logi("划词快捷键: \(settings.selectionHotkeyDisplay)")
         } else {
-            // 降级：Ctrl+Shift+F2
-            hotkeyID10.id = 11
-            let fb2 = RegisterEventHotKey(0x78, UInt32(controlKey | shiftKey), hotkeyID10,
-                                           GetApplicationEventTarget(), 0, &selectionHotkeyRef)
-            if fb2 == noErr {
-                settings.selectionHotkeyKeyCode = 0x78
-                settings.selectionHotkeyModifiers = Int(controlKey | shiftKey)
-                settings.selectionHotkeyDisplay = "⇧⌃F2"
-                logi("划词快捷键降级为 ⇧⌃F2")
-            } else { loge("划词快捷键注册失败") }
+            failures.append((name: "划词翻译",
+                             display: hotkeyDisplayString(keyCode: selKeyCode, modifiers: selMods),
+                             reason: checkSystemHotkeyConflict(modifiers: selMods, keyCode: selKeyCode) ?? "该键已被其他程序占用"))
+            loge("划词快捷键注册失败")
         }
 
         // ---- 悬停翻译热键（id=20） ----
-        var hotkeyID20 = EventHotKeyID(signature: 0x534E5452, id: 20)
+        let hotkeyID20 = EventHotKeyID(signature: 0x534E5452, id: 20)
         let hoverKeyCode = settings.hoverHotkeyKeyCode
         let hoverMods = settings.hoverHotkeyModifiers
-        let s20 = RegisterEventHotKey(UInt32(hoverKeyCode), UInt32(hoverMods), hotkeyID20,
+        let s20 = RegisterEventHotKey(sanitizeHotkeyCode(hoverKeyCode), sanitizeHotkeyCode(hoverMods), hotkeyID20,
                                        GetApplicationEventTarget(), 0, &hoverHotkeyRef)
         if s20 == noErr {
             settings.hoverHotkeyDisplay = hotkeyDisplayString(keyCode: hoverKeyCode, modifiers: hoverMods)
             logi("悬停快捷键: \(settings.hoverHotkeyDisplay)")
         } else {
-            // 降级：Ctrl+Option+F2
-            hotkeyID20.id = 21
-            let fb3 = RegisterEventHotKey(0x78, UInt32(controlKey | optionKey), hotkeyID20,
-                                           GetApplicationEventTarget(), 0, &hoverHotkeyRef)
-            if fb3 == noErr {
-                settings.hoverHotkeyKeyCode = 0x78
-                settings.hoverHotkeyModifiers = Int(controlKey | optionKey)
-                settings.hoverHotkeyDisplay = "⌃⌥F2"
-                logi("悬停快捷键降级为 ⌃⌥F2")
-            } else { loge("悬停快捷键注册失败") }
+            failures.append((name: "悬停翻译",
+                             display: hotkeyDisplayString(keyCode: hoverKeyCode, modifiers: hoverMods),
+                             reason: checkSystemHotkeyConflict(modifiers: hoverMods, keyCode: hoverKeyCode) ?? "该键已被其他程序占用"))
+            loge("悬停快捷键注册失败")
         }
 
         // 事件处理器 — 先移除旧的再安装新的，防止重复累积
@@ -158,6 +145,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return noErr
         }, 1, &eventSpec, nil, &eventHandlerRef)
+
+        // 注册失败时提示用户去设置修改（启动与保存设置时均触发）
+        if !failures.isEmpty {
+            presentHotkeyConflictAlert(failures)
+        }
+    }
+
+    /// 弹出「快捷键注册失败」汇总提示，引导用户去设置修改，不静默降级、不覆盖用户偏好
+    private func presentHotkeyConflictAlert(_ failures: [(name: String, display: String, reason: String)]) {
+        let details = failures.map { "\($0.name)「\($0.display)」：\($0.reason)" }.joined(separator: "\n")
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = "快捷键注册失败"
+            alert.informativeText = "以下快捷键无法使用：\n\n\(details)\n\n请前往 设置 → 快捷键，修改为其他组合。"
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "知道了")
+            alert.window.level = .floating
+            alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            NSApp.activate(ignoringOtherApps: true)
+            alert.runModal()
+        }
     }
 
     @objc func screenshotTranslate() {

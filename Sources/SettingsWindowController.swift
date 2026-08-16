@@ -67,7 +67,6 @@ final class SettingsWindowController: NSObject {
 
     // Tab 3: 翻译模板
     private var templateTextView: NSTextView?
-    private var templatePreviewWebView: WKWebView?
 
     func show() {
         if let w = window { w.close(); window = nil }
@@ -314,10 +313,15 @@ final class SettingsWindowController: NSObject {
             y -= 40
         }
 
-        // 确保卡片高度足够
-        if y < 0 {
-            v.frame.size.height += abs(y) + 20
+        // 修复负 y 布局：非翻转视图原点在左下，负 y 子视图会被裁剪不可见。
+        // 把所有子视图上移使最小 y >= 0，并按内容顶高扩展卡片高度。
+        let minY = v.subviews.map { $0.frame.minY }.min() ?? 0
+        if minY < 0 {
+            let shift = -minY
+            for sv in v.subviews { sv.frame.origin.y += shift }
         }
+        let maxTop = v.subviews.map { $0.frame.maxY }.max() ?? 0
+        v.frame.size.height = max(v.frame.size.height, maxTop + 20)
 
         return v
     }
@@ -336,6 +340,16 @@ final class SettingsWindowController: NSObject {
             hidden.isHidden = false
             eye.title = "👁️"
         }
+    }
+
+    /// 解析「测试连接」实际应使用的 endpoint 与 model：
+    /// 优先用输入框键入的值（用户刚改、尚未保存），为空才回退到 provider 默认（provider.endpoint/defaultModel 已含已保存的自定义值）。
+    static func resolveConnectionTarget(endpointInput: String?, modelInput: String?, provider: AIProvider) -> (endpoint: String, model: String) {
+        let ep = endpointInput?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let endpoint = (ep?.isEmpty == false) ? ep! : provider.endpoint
+        let md = modelInput?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = (md?.isEmpty == false) ? md! : provider.defaultModel
+        return (endpoint, model)
     }
 
     @objc private func testAPIKeyConnection() {
@@ -358,7 +372,13 @@ final class SettingsWindowController: NSObject {
         testStatusLabel?.stringValue = "测试中..."
         testStatusLabel?.textColor = .secondaryLabelColor
 
-        guard let url = URL(string: provider.endpoint) else {
+        let target = Self.resolveConnectionTarget(
+            endpointInput: customEndpointField?.stringValue,
+            modelInput: customModelField?.stringValue,
+            provider: provider
+        )
+
+        guard let url = URL(string: target.endpoint) else {
             testStatusLabel?.stringValue = "无效的 API 地址"
             testStatusLabel?.textColor = .systemRed
             return
@@ -368,7 +388,7 @@ final class SettingsWindowController: NSObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 10
-        let body: [String: Any] = ["model": provider.defaultModel, "messages": [["role": "user", "content": "hi"]], "max_tokens": 1]
+        let body: [String: Any] = ["model": target.model, "messages": [["role": "user", "content": "hi"]], "max_tokens": 1]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         switch provider {
@@ -433,7 +453,7 @@ final class SettingsWindowController: NSObject {
         screenshotRecorder.recordBtn = recordBtn
 
         let statusLabel = NSTextField(labelWithString: "点击上方按钮开始录制新快捷键")
-        statusLabel.frame = NSRect(x: 210, y: y0 - 70, width: w - 230, height: 30)
+        statusLabel.frame = NSRect(x: 210, y: y0 - 88, width: w - 230, height: 48)
         statusLabel.font = .systemFont(ofSize: 12)
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.lineBreakMode = .byWordWrapping
@@ -462,7 +482,7 @@ final class SettingsWindowController: NSObject {
         selectionRecorder.recordBtn = selRecordBtn
 
         let selStatus = NSTextField(labelWithString: "点击上方按钮开始录制新快捷键")
-        selStatus.frame = NSRect(x: 210, y: selY - 70, width: w - 230, height: 30)
+        selStatus.frame = NSRect(x: 210, y: selY - 88, width: w - 230, height: 48)
         selStatus.font = .systemFont(ofSize: 12)
         selStatus.textColor = .secondaryLabelColor
         selStatus.lineBreakMode = .byWordWrapping
@@ -491,7 +511,7 @@ final class SettingsWindowController: NSObject {
         hoverRecorder.recordBtn = hoverRecordBtn
 
         let hoverStatus = NSTextField(labelWithString: "点击上方按钮开始录制新快捷键")
-        hoverStatus.frame = NSRect(x: 210, y: hoverY - 70, width: w - 230, height: 30)
+        hoverStatus.frame = NSRect(x: 210, y: hoverY - 88, width: w - 230, height: 48)
         hoverStatus.font = .systemFont(ofSize: 12)
         hoverStatus.textColor = .secondaryLabelColor
         hoverStatus.lineBreakMode = .byWordWrapping
@@ -537,7 +557,7 @@ final class SettingsWindowController: NSObject {
         closePanelRecorder.recordBtn = closePanelBtn
 
         let escStatus = NSTextField(labelWithString: "点击上方按钮开始录制新快捷键")
-        escStatus.frame = NSRect(x: 210, y: escY - 60, width: w - 230, height: 30)
+        escStatus.frame = NSRect(x: 210, y: escY - 78, width: w - 230, height: 48)
         escStatus.font = .systemFont(ofSize: 12)
         escStatus.textColor = .secondaryLabelColor
         escStatus.lineBreakMode = .byWordWrapping
@@ -565,7 +585,7 @@ final class SettingsWindowController: NSObject {
         togglePanelRecorder.recordBtn = togglePanelBtn
 
         let toggleStatus = NSTextField(labelWithString: "点击上方按钮开始录制新快捷键")
-        toggleStatus.frame = NSRect(x: 210, y: toggleY - 60, width: w - 230, height: 30)
+        toggleStatus.frame = NSRect(x: 210, y: toggleY - 78, width: w - 230, height: 48)
         toggleStatus.font = .systemFont(ofSize: 12)
         toggleStatus.textColor = .secondaryLabelColor
         toggleStatus.lineBreakMode = .byWordWrapping
@@ -595,14 +615,7 @@ final class SettingsWindowController: NSObject {
     @objc private func saveAllSettings() {
         let settings = SettingsManager.shared
 
-        let keyStr = activeApiKeyFieldValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        logi("保存设置: provider=\(settings.apiProvider.rawValue), keyLen=\(keyStr.count)")
-        if !keyStr.isEmpty {
-            settings.setApiKey(keyStr, for: settings.apiProvider)
-        } else {
-            settings.setApiKey(nil, for: settings.apiProvider)
-        }
-
+        // 先校验自定义 endpoint（若有输入），避免 API Key 已保存、其余设置却因无效地址被丢弃的半保存状态
         if let ep = customEndpointField?.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), !ep.isEmpty {
             guard AIProvider.isValidEndpoint(ep) else {
                 let alert = NSAlert()
@@ -613,6 +626,37 @@ final class SettingsWindowController: NSObject {
                 alert.runModal()
                 return
             }
+        }
+
+        // 二次确认：本次新录制的翻译热键若命中已知系统快捷键冲突，先让用户确认再保存
+        let recorded: [(keyCode: Int?, modifiers: Int)] = [
+            (screenshotRecorder.recordedKeyCode, screenshotRecorder.recordedModifiers),
+            (selectionRecorder.recordedKeyCode, selectionRecorder.recordedModifiers),
+            (hoverRecorder.recordedKeyCode, hoverRecorder.recordedModifiers),
+        ]
+        let conflicts = collectHotkeyConflicts(recorded)
+        if !conflicts.isEmpty {
+            let details = conflicts.map { "「\($0.display)」：\($0.reason)" }.joined(separator: "\n")
+            let alert = NSAlert()
+            alert.messageText = "快捷键可能与系统冲突"
+            alert.informativeText = "以下快捷键在大多数应用中是常用功能：\n\n\(details)\n\n全局注册后，这些应用内按此键将触发翻译而非原功能。确定要使用吗？"
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "确定")
+            alert.addButton(withTitle: "取消")
+            if alert.runModal() != .alertFirstButtonReturn {
+                return
+            }
+        }
+
+        let keyStr = activeApiKeyFieldValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        logi("保存设置: provider=\(settings.apiProvider.rawValue), keyLen=\(keyStr.count)")
+        if !keyStr.isEmpty {
+            settings.setApiKey(keyStr, for: settings.apiProvider)
+        } else {
+            settings.setApiKey(nil, for: settings.apiProvider)
+        }
+
+        if let ep = customEndpointField?.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), !ep.isEmpty {
             settings.customEndpoint = ep
         }
         if let mdl = customModelField?.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), !mdl.isEmpty {
@@ -720,6 +764,11 @@ final class SettingsWindowController: NSObject {
         hoverRecorder.reset()
         closePanelRecorder.reset()
         togglePanelRecorder.reset()
+
+        // 恢复默认后需重新注册全局热键，否则仍沿用重置前的旧热键
+        DispatchQueue.main.async {
+            (NSApp.delegate as? AppDelegate)?.reregisterHotkey()
+        }
     }
 
     // MARK: - 提供商切换
@@ -778,8 +827,8 @@ final class SettingsWindowController: NSObject {
         descLabel.textColor = .secondaryLabelColor
         v.addSubview(descLabel)
 
-        let tvH = size.height - 260
-        let scrollView = NSScrollView(frame: NSRect(x: 20, y: 190, width: w - 40, height: tvH))
+        let tvH = size.height - 80
+        let scrollView = NSScrollView(frame: NSRect(x: 20, y: 20, width: w - 40, height: tvH))
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.borderType = .bezelBorder
@@ -791,51 +840,18 @@ final class SettingsWindowController: NSObject {
         textView.isRichText = false
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
-        textView.delegate = self
         textView.string = SettingsManager.shared.systemPrompt
         scrollView.documentView = textView
         v.addSubview(scrollView)
         templateTextView = textView
 
-        let previewTitle = NSTextField(labelWithString: "实时预览：")
-        previewTitle.frame = NSRect(x: 20, y: 170, width: 200, height: 18)
-        previewTitle.font = .systemFont(ofSize: 12, weight: .semibold)
-        v.addSubview(previewTitle)
-
-        let config = WKWebViewConfiguration()
-        let wv = WKWebView(frame: NSRect(x: 20, y: 10, width: w - 40, height: 155), configuration: config)
-        wv.loadHTMLString(templatePreviewHTML(), baseURL: nil)
-        wv.layer?.borderWidth = 1
-        wv.layer?.borderColor = NSColor.separatorColor.cgColor
-        v.addSubview(wv)
-        templatePreviewWebView = wv
-
         return v
-    }
-
-    private func templatePreviewHTML() -> String {
-        """
-        <html><head><style>
-        body{font-family:-apple-system;padding:12px;color:#ddd;background:#1e1e1e;margin:0;}
-        h2{font-size:14px;margin-top:8px;margin-bottom:4px;color:#6cf;}
-        p{margin:2px 0;}
-        strong{color:#f9a;}
-        </style></head><body><p style='color:#999;font-size:11px;'>
-        提示词将在翻译时附加到 AI 请求中...</p></body></html>
-        """
     }
 }
 
 extension SettingsWindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         window = nil
-    }
-}
-
-extension SettingsWindowController: NSTextViewDelegate {
-    func textDidChange(_ notification: Notification) {
-        guard let tv = notification.object as? NSTextView, tv == templateTextView else { return }
-        templatePreviewWebView?.loadHTMLString(templatePreviewHTML(), baseURL: nil)
     }
 }
 
@@ -848,6 +864,7 @@ final class HotkeyRecorder: NSObject {
     var recordedKeyCode: Int? = nil
     var recordedModifiers = 0
     private var monitor: Any?
+    private var timeoutWorkItem: DispatchWorkItem?
 
     let allowedSoloKeyCodes: Set<Int>
     let soloKeyHint: String
@@ -875,10 +892,13 @@ final class HotkeyRecorder: NSObject {
             return nil
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+        // 10 秒超时：存为 workItem，结束录制时取消，避免旧超时误杀新的一次录制
+        let timeout = DispatchWorkItem { [weak self] in
             guard let self = self, self.isRecording else { return }
             self.cancel()
         }
+        timeoutWorkItem = timeout
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: timeout)
     }
 
     private func record(event: NSEvent) {
@@ -898,6 +918,9 @@ final class HotkeyRecorder: NSObject {
         recordedKeyCode = keyCode
         recordedModifiers = carbonModifiers
         isRecording = false
+
+        timeoutWorkItem?.cancel()
+        timeoutWorkItem = nil
 
         if let m = monitor {
             NSEvent.removeMonitor(m)
@@ -921,6 +944,8 @@ final class HotkeyRecorder: NSObject {
 
     private func cancel() {
         isRecording = false
+        timeoutWorkItem?.cancel()
+        timeoutWorkItem = nil
         if let m = monitor {
             NSEvent.removeMonitor(m)
             monitor = nil
@@ -933,6 +958,8 @@ final class HotkeyRecorder: NSObject {
 
     func reset() {
         isRecording = false
+        timeoutWorkItem?.cancel()
+        timeoutWorkItem = nil
         if let m = monitor {
             NSEvent.removeMonitor(m)
             monitor = nil

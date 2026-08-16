@@ -74,4 +74,35 @@ func runTableExtractorTests() {
         ]
         try assertNil(TableExtractor.tableMarkdown(blocks))
     }
+
+    // ━━━ 审计修复：Tab 分隔转 Markdown 表格必须转义单元格内的管道符/换行 ━━━
+
+    test("detectAndConvertTabSeparated escapes literal pipe in cell") {
+        let input = "H1\tH2\nA\tB|C"
+        let result = TableExtractor.detectAndConvertTabSeparated(input)
+        try assertTrue(result.contains("| H1 | H2 |"), "表头")
+        try assertTrue(result.contains("| A | B\\|C |"), "数据行单元格含 | 应被转义")
+        try assertFalse(result.contains("B|C |"), "未转义的 | 不应出现在单元格分隔之外")
+    }
+
+    test("detectAndConvertTabSeparated escapes pipe in header") {
+        let input = "Title|Subtitle\tNotes\nA\tB"
+        let result = TableExtractor.detectAndConvertTabSeparated(input)
+        try assertTrue(result.contains("| Title\\|Subtitle | Notes |"), "表头单元格含 | 应被转义")
+    }
+
+    test("detectAndConvertTabSeparated without pipe is unchanged") {
+        let input = "H1\tH2\nA\tB"
+        let result = TableExtractor.detectAndConvertTabSeparated(input)
+        try assertTrue(result.contains("| A | B |"), "普通单元格不应被改动")
+    }
+
+    test("escapeMarkdownTableCell escapes pipe and newline") {
+        try assertEqual(TableExtractor.escapeMarkdownTableCell("a|b"), "a\\|b")
+        try assertEqual(TableExtractor.escapeMarkdownTableCell("a\nb"), "a b")
+    }
+
+    test("escapeMarkdownTableCell escapes backslash first") {
+        try assertEqual(TableExtractor.escapeMarkdownTableCell("a\\|b"), "a\\\\\\|b")
+    }
 }

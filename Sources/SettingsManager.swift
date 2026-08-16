@@ -116,11 +116,15 @@ final class SettingsManager {
         return defaults.string(forKey: account)
     }
 
-    /// 迁移单个 provider：save 成功才移除 UserDefaults 明文，避免 Keychain 写失败丢 key
-    static func migrateKey(value: String, udKey: String, save: (String, String) -> Bool, remove: () -> Void) {
-        if save(value, udKey) {
+    /// 迁移单个 provider：save 成功才移除 UserDefaults 明文，避免 Keychain 写失败丢 key。
+    /// 返回 save 是否成功，供调用方判断迁移是否全部完成（失败则不标记已迁移，下次启动重试）。
+    @discardableResult
+    static func migrateKey(value: String, udKey: String, save: (String, String) -> Bool, remove: () -> Void) -> Bool {
+        let ok = save(value, udKey)
+        if ok {
             remove()
         }
+        return ok
     }
 
     /// 一次性迁移：将之前误存到 UserDefaults 的 API Key 迁移到 Keychain 安全存储
@@ -128,16 +132,24 @@ final class SettingsManager {
         let migrated = "snaptranslate.keychain_migrated_v2"
         if defaults.bool(forKey: migrated) { return }
 
+        var allMigrated = true
         for provider in AIProvider.allCases {
             let udKey = Self.apiKeyUDKey(for: provider)
             if let value = defaults.string(forKey: udKey), !value.isEmpty {
-                Self.migrateKey(value: value, udKey: udKey, save: { KeychainHelper.save(key: $0, account: $1) }, remove: {
+                let ok = Self.migrateKey(value: value, udKey: udKey, save: { KeychainHelper.save(key: $0, account: $1) }, remove: {
                     self.defaults.removeObject(forKey: udKey)
                     logi("迁移：\(provider.displayName) Key 从 UserDefaults → Keychain")
                 })
+                if !ok {
+                    logi("迁移失败：\(provider.displayName) Key 保留在 UserDefaults，下次启动重试")
+                    allMigrated = false
+                }
             }
         }
-        defaults.set(true, forKey: migrated)
+        // 仅当全部迁移成功才标记，避免写失败的明文 Key 因 flag 而永久留在 UserDefaults
+        if allMigrated {
+            defaults.set(true, forKey: migrated)
+        }
     }
 
     // MARK: 自定义配置（OpenAI-Compatible & Ollama）
