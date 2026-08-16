@@ -1,5 +1,18 @@
 import Foundation
 
+// 返回 needle 在 haystack 中首次出现的字符偏移，未找到返回 nil
+func htmlOffset(_ needle: String, in haystack: String) -> Int? {
+    guard let r = haystack.range(of: needle) else { return nil }
+    return haystack.distance(from: haystack.startIndex, to: r.lowerBound)
+}
+
+// 提取 minified CSS 中的单条规则（selector{ ... }），未找到返回 nil
+func cssRule(_ selector: String, in html: String) -> String? {
+    guard let open = html.range(of: "\(selector){") else { return nil }
+    guard let close = html.range(of: "}", range: open.upperBound..<html.endIndex) else { return nil }
+    return String(html[open.lowerBound...close.lowerBound])
+}
+
 func runHTMLRendererTests() {
     print("\n--- HTMLRenderer Tests ---")
 
@@ -94,5 +107,115 @@ func runHTMLRendererTests() {
         let markdown = "## 中文翻译\n\n| 单列引用 |\n\n这是正文"
         let html = HTMLRenderer.render(markdown: markdown, originalText: "原文", isDark: false)
         try assertFalse(html.contains("<table>"), "无分隔行的 | 不应转成表格")
+    }
+
+    // MARK: - 原文锁定（sticky 首行）布局测试
+
+    test("render wraps translation body in content container") {
+        let markdown = "## 中文翻译\n\n你好世界"
+        let html = HTMLRenderer.render(markdown: markdown, originalText: "Hello world", isDark: false)
+        let contentOpen = try assertNotNil(htmlOffset("<div class=\"content\">", in: html), "应存在 content 容器")
+        let h2Translation = try assertNotNil(htmlOffset("<h2>中文翻译</h2>", in: html), "应存在译文标题")
+        try assertTrue(contentOpen < h2Translation, "译文标题应位于 content 容器内")
+    }
+
+    test("render keeps footer inside content container") {
+        let markdown = "## 中文翻译\n\n你好世界"
+        let html = HTMLRenderer.render(markdown: markdown, originalText: "Hello world", isDark: false)
+        let contentOpen = try assertNotNil(htmlOffset("<div class=\"content\">", in: html), "应存在 content 容器")
+        let poweredBy = try assertNotNil(htmlOffset("Powered by", in: html), "应存在 footer")
+        try assertTrue(contentOpen < poweredBy, "footer 应位于 content 容器内")
+    }
+
+    test("render handles empty markdown with content container") {
+        let html = HTMLRenderer.render(markdown: "", originalText: "Hi", isDark: false)
+        try assertTrue(html.contains("<div class=\"content\">"), "空 markdown 也应生成 content 容器")
+    }
+
+    test("render handles empty original text") {
+        let html = HTMLRenderer.render(markdown: "## 中文翻译\n\n你好", originalText: "", isDark: false)
+        try assertTrue(html.contains("original-box"), "原文盒应存在")
+        try assertTrue(html.contains("<div class=\"content\">"), "content 容器应存在")
+    }
+
+    test("render removes body default padding") {
+        let html = HTMLRenderer.render(markdown: "## 中文翻译\n\n你好", originalText: "Hi", isDark: false)
+        try assertTrue(html.contains("padding:0"), "body 应无默认 padding")
+        try assertFalse(html.contains("padding:20px 24px"), "不应残留旧的 20px 24px padding")
+    }
+
+    test("render makes original box sticky") {
+        let html = HTMLRenderer.render(markdown: "## 中文翻译\n\n你好", originalText: "Hello", isDark: false)
+        try assertTrue(html.contains("position:sticky"), "原文盒应 sticky")
+        try assertTrue(html.contains("top:0"), "原文盒应贴顶")
+        try assertTrue(html.contains("z-index:10"), "原文盒应有 z-index 覆盖滚动内容")
+    }
+
+    test("render light mode original box background") {
+        let html = HTMLRenderer.render(markdown: "## 中文翻译\n\n你好", originalText: "Hi", isDark: false)
+        try assertTrue(html.contains("body.light .original-box{background:#e8f0fe"), "light 模式原文盒应有浅蓝背景")
+    }
+
+    test("render dark mode original box background") {
+        let html = HTMLRenderer.render(markdown: "## 中文翻译\n\n你好", originalText: "Hi", isDark: true)
+        try assertTrue(html.contains("body class=\"dark\""), "dark 模式 body class")
+        try assertTrue(html.contains("body.dark .original-box{background:#1c1c1e"), "dark 模式原文盒背景")
+    }
+
+    test("render empty original still sticky with label") {
+        let html = HTMLRenderer.render(markdown: "## 中文翻译\n\n你好", originalText: "", isDark: false)
+        try assertTrue(html.contains("📝 原文："), "原文标签应存在")
+        try assertTrue(html.contains("position:sticky"), "空原文时原文盒仍 sticky")
+    }
+
+    test("render escapes special chars in original text") {
+        let html = HTMLRenderer.render(markdown: "## 中文翻译\n\n你好", originalText: "A < B & C", isDark: false)
+        try assertTrue(html.contains("&lt;"), "原文 < 应转义")
+        try assertTrue(html.contains("&amp;"), "原文 & 应转义")
+    }
+
+    test("render adds max-height safeguard to original box") {
+        let html = HTMLRenderer.render(markdown: "## 中文翻译\n\n你好", originalText: "Hi", isDark: false)
+        let rule = try assertNotNil(cssRule(".original-box", in: html), "应存在 .original-box 规则")
+        try assertTrue(rule.contains("max-height:50vh"), "原文盒应有最大高度上限")
+        try assertTrue(rule.contains("overflow-y:auto"), "原文盒超长应内部滚动")
+    }
+
+    test("render scopes max-height to original box not content") {
+        let html = HTMLRenderer.render(markdown: "## 中文翻译\n\n你好", originalText: "Hi", isDark: false)
+        let obRule = try assertNotNil(cssRule(".original-box", in: html), "应存在 .original-box 规则")
+        try assertTrue(obRule.contains("max-height:50vh"), "max-height 应挂在 .original-box")
+        try assertTrue(obRule.contains("overflow-y:auto"), "overflow-y 应挂在 .original-box")
+        let cRule = try assertNotNil(cssRule(".content", in: html), "应存在 .content 规则")
+        try assertFalse(cRule.contains("overflow-y"), ".content 不应含 overflow-y")
+    }
+
+    test("render handles very long original text without crashing") {
+        let long = "First line. " + String(repeating: "x", count: 5000) + "\n\nSecond paragraph."
+        let html = HTMLRenderer.render(markdown: "## 中文翻译\n\n你好", originalText: long, isDark: false)
+        try assertTrue(html.contains("original-box"), "长原文应正常渲染原文盒")
+        try assertTrue(html.contains("<br><br>"), "多段落原文应保留段落分隔")
+    }
+
+    // MARK: - 顺序与回归测试
+
+    test("render orders original box before translation before vocab before phrases") {
+        let markdown = "## 中文翻译\n\n翻译\n\n## 重要词汇\n\n- **word** ｜ n ｜ 词\n\n## 常用短语与习语\n\n- phrase：短语"
+        let html = HTMLRenderer.render(markdown: markdown, originalText: "Original", isDark: false)
+        let ob = try assertNotNil(htmlOffset("original-box", in: html), "应存在原文盒")
+        let t = try assertNotNil(htmlOffset("<h2>中文翻译</h2>", in: html), "应存在译文标题")
+        let v = try assertNotNil(htmlOffset("<h2>重要词汇</h2>", in: html), "应存在词汇标题")
+        let p = try assertNotNil(htmlOffset("<h2>常用短语与习语</h2>", in: html), "应存在短语标题")
+        try assertTrue(ob < t && t < v && v < p, "顺序应为 原文 < 译文 < 词汇 < 短语")
+    }
+
+    test("render keeps vocab phrases and check inside content") {
+        let markdown = "## 中文翻译\n\n翻译\n\n## 重要词汇\n\n- **word**\n\n## 常用短语与习语\n\n- phrase\n\n## 核查\n\n准确"
+        let html = HTMLRenderer.render(markdown: markdown, originalText: "Original", isDark: false)
+        let contentOpen = try assertNotNil(htmlOffset("<div class=\"content\">", in: html), "应存在 content 容器")
+        let v = try assertNotNil(htmlOffset("<h2>重要词汇</h2>", in: html), "应存在词汇标题")
+        let p = try assertNotNil(htmlOffset("<h2>常用短语与习语</h2>", in: html), "应存在短语标题")
+        let c = try assertNotNil(htmlOffset("<h2>核查</h2>", in: html), "应存在核查标题")
+        try assertTrue(v > contentOpen && p > contentOpen && c > contentOpen, "词汇/短语/核查应在 content 容器内")
     }
 }

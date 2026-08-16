@@ -278,12 +278,13 @@ final class HTMLRenderer {
         <!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
         <style>
             :root{color-scheme:light dark}*{box-sizing:border-box;margin:0;padding:0}
-            body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.7;padding:20px 24px}
+            body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.7;padding:0}
             body.light{color:#1d1d1f;background:#fff}
             body.dark{color:#e5e5e7;background:#1c1c1e}
-            .original-box{border:1px solid;border-radius:10px;padding:14px 18px;margin-bottom:18px;font-size:15px;font-style:italic}
-            body.light .original-box{background:#e8f0fe;border-color:#b8d4fe;color:#1a3a6b}
-            body.dark .original-box{background:#1c1c1e;border-color:#3a3a3c;color:#e5e5e7}
+            .original-box{position:sticky;top:0;z-index:10;border-bottom:1px solid;padding:14px 24px;font-size:15px;font-style:italic;max-height:50vh;overflow-y:auto;overflow-wrap:break-word}
+            body.light .original-box{background:#e8f0fe;border-bottom-color:#b8d4fe;color:#1a3a6b}
+            body.dark .original-box{background:#1c1c1e;border-bottom-color:#3a3a3c;color:#e5e5e7}
+            .content{padding:18px 24px 20px}
             h2{font-size:17px;font-weight:600;margin:20px 0 12px;padding-bottom:8px;border-bottom:2px solid #0071e3}
             body.dark h2{color:#fff;border-bottom-color:#0a84ff}
             code{padding:2px 6px;border-radius:4px;font-family:"SF Mono",Menlo,monospace;font-size:13px}
@@ -303,8 +304,10 @@ final class HTMLRenderer {
         </style>
         </head><body class="\(themeClass)">
         <div class="original-box"><strong>📝 原文：</strong><br>\(escaped)</div>
+        <div class="content">
         \(html)
         <div class="footer">Powered by \(SettingsManager.shared.apiProvider.shortName) AI · ELTA — 截图即译，精读利器</div>
+        </div>
         </body></html>
         """
     }
