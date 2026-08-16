@@ -122,7 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             eventClass: OSType(kEventClassKeyboard),
             eventKind: OSType(kEventHotKeyPressed)
         )
-        InstallEventHandler(GetApplicationEventTarget(),
+        let installStatus = InstallEventHandler(GetApplicationEventTarget(),
         { (_, evt, _) -> OSStatus in
             var hkID = EventHotKeyID()
             let err = GetEventParameter(evt, EventParamName(kEventParamDirectObject),
@@ -145,6 +145,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return noErr
         }, 1, &eventSpec, nil, &eventHandlerRef)
+        if installStatus != noErr {
+            loge("键盘事件处理器安装失败: OSStatus=\(installStatus)")
+            failures.append((name: "键盘事件处理器", display: "", reason: "安装失败 OSStatus=\(installStatus)"))
+        }
 
         // 注册失败时提示用户去设置修改（启动与保存设置时均触发）
         if !failures.isEmpty {

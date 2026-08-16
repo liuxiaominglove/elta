@@ -121,7 +121,12 @@ enum AIProvider: String, CaseIterable {
 
     private static func isPrivateOrLocalhost(_ host: String) -> Bool {
         if host == "localhost" || host == "127.0.0.1" || host == "::1" { return true }
-        if host.hasPrefix("192.168.") { return true }
+        // 192.168.x.x 私有网段 — 必须为纯数字 IP，排除 192.168.example.com 类域名
+        if host.hasPrefix("192.168.") {
+            let tail = String(host.dropFirst(8))
+            let isNumericIP = !tail.isEmpty && tail.allSatisfy { $0.isNumber || $0 == "." }
+            if isNumericIP { return true }
+        }
         // 10.x.x.x 私有网段 — 必须为纯数字 IP，排除 10.example.com 类域名
         if host.hasPrefix("10.") {
             let tail = String(host.dropFirst(3))

@@ -37,7 +37,7 @@ func runSettingsManagerTests() {
 
     test("hotkeyModifiers has valid default (non-zero)") {
         let mod = SettingsManager.shared.hotkeyModifiers
-        try assertTrue(mod >= 0, "Modifiers should be >= 0")
+        try assertTrue(mod != 0, "Modifiers should be non-zero")
     }
 
     test("setting hotkey keyCode works") {

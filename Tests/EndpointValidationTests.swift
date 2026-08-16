@@ -63,6 +63,14 @@ func runEndpointValidationTests() {
         try assertFalse(AIProvider.isValidEndpoint("http://10.evil.com/api"))
     }
 
+    test("192.168.x.x private IP passes") {
+        try assertTrue(AIProvider.isValidEndpoint("http://192.168.1.1:8080/api"))
+    }
+
+    test("192.168.evil.com domain rejected") {
+        try assertFalse(AIProvider.isValidEndpoint("http://192.168.evil.com/api"))
+    }
+
     test("172.16.x.x private IP should pass") {
         // 172.16.0.0/12 is also a private range but we don't cover it yet
         // This documents the limitation

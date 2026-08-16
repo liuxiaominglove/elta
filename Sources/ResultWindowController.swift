@@ -8,7 +8,8 @@ final class ResultWebView: WKWebView {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.type == .keyDown else { return super.performKeyEquivalent(with: event) }
         let f = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        guard f == .command else { return super.performKeyEquivalent(with: event) }
+        let realModifiers: NSEvent.ModifierFlags = [.command, .shift, .control, .option]
+        guard f.intersection(realModifiers) == .command else { return super.performKeyEquivalent(with: event) }
 
         let sel: Selector?
         switch event.charactersIgnoringModifiers?.lowercased() {
@@ -19,6 +20,8 @@ final class ResultWebView: WKWebView {
         default:  sel = nil
         }
         guard let s = sel else { return super.performKeyEquivalent(with: event) }
+        // 先沿 WebView 自身响应链转发（覆盖浮动非激活面板非 key 的情况），失败再走全局 first responder
+        if self.tryToPerform(s, with: self) { return true }
         if NSApp.sendAction(s, to: nil, from: self) { return true }
         return super.performKeyEquivalent(with: event)
     }
@@ -75,15 +78,13 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             if keyCode != Int64(settings.closePanelHotkeyKeyCode) { return Unmanaged.passRetained(event) }
 
             let expectedModifiers = settings.closePanelHotkeyModifiers
-            if expectedModifiers != 0 {
-                let flags = event.flags
-                var actualModifiers = 0
-                if flags.contains(.maskCommand) { actualModifiers |= Int(cmdKey) }
-                if flags.contains(.maskShift) { actualModifiers |= Int(shiftKey) }
-                if flags.contains(.maskControl) { actualModifiers |= Int(controlKey) }
-                if flags.contains(.maskAlternate) { actualModifiers |= Int(optionKey) }
-                if actualModifiers != expectedModifiers { return Unmanaged.passRetained(event) }
-            }
+            let flags = event.flags
+            var actualModifiers = 0
+            if flags.contains(.maskCommand) { actualModifiers |= Int(cmdKey) }
+            if flags.contains(.maskShift) { actualModifiers |= Int(shiftKey) }
+            if flags.contains(.maskControl) { actualModifiers |= Int(controlKey) }
+            if flags.contains(.maskAlternate) { actualModifiers |= Int(optionKey) }
+            if actualModifiers != expectedModifiers { return Unmanaged.passRetained(event) }
 
             DispatchQueue.main.async { ctrl.panel?.close() }
             return nil
@@ -136,15 +137,13 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             if keyCode != Int64(settings.togglePanelHotkeyKeyCode) { return Unmanaged.passRetained(event) }
 
             let expectedModifiers = settings.togglePanelHotkeyModifiers
-            if expectedModifiers != 0 {
-                let flags = event.flags
-                var actualModifiers = 0
-                if flags.contains(.maskCommand) { actualModifiers |= Int(cmdKey) }
-                if flags.contains(.maskShift) { actualModifiers |= Int(shiftKey) }
-                if flags.contains(.maskControl) { actualModifiers |= Int(controlKey) }
-                if flags.contains(.maskAlternate) { actualModifiers |= Int(optionKey) }
-                if actualModifiers != expectedModifiers { return Unmanaged.passRetained(event) }
-            }
+            let flags = event.flags
+            var actualModifiers = 0
+            if flags.contains(.maskCommand) { actualModifiers |= Int(cmdKey) }
+            if flags.contains(.maskShift) { actualModifiers |= Int(shiftKey) }
+            if flags.contains(.maskControl) { actualModifiers |= Int(controlKey) }
+            if flags.contains(.maskAlternate) { actualModifiers |= Int(optionKey) }
+            if actualModifiers != expectedModifiers { return Unmanaged.passRetained(event) }
 
             DispatchQueue.main.async { ctrl.togglePanelPosition() }
             return nil

@@ -24,8 +24,9 @@ final class TranslationEngine {
                 NSApp.activate(ignoringOtherApps: true)
                 if alert.runModal() == .alertFirstButtonReturn {
                     SettingsWindowController.shared.show()
+                } else {
+                    NSApp.deactivate()
                 }
-                NSApp.deactivate()
             }
             completion(nil)
             return
@@ -85,30 +86,33 @@ final class TranslationEngine {
         logi("调用 \(provider.displayName) API...")
 
         let task = URLSession.shared.dataTask(with: request) { data, response, error in
-            if let e = error {
-                loge("API 失败: 网络: \(e.localizedDescription)")
-                completion(nil)
-                return
-            }
-            guard let http = response as? HTTPURLResponse else {
-                loge("API 失败: 无效响应")
-                completion(nil)
-                return
-            }
-            guard let data = data else {
-                loge("API 失败: 无数据")
-                completion(nil)
-                return
-            }
-            if http.statusCode != 200 {
-                loge("API 失败: HTTP \(http.statusCode), 响应体长度=\(data.count) 字节")
-                completion(nil)
-                return
-            }
+            // 回调统一切主线程：completion 会被调用方用于更新 UI，避免后台线程触达 AppKit
+            DispatchQueue.main.async {
+                if let e = error {
+                    loge("API 失败: 网络: \(e.localizedDescription)")
+                    completion(nil)
+                    return
+                }
+                guard let http = response as? HTTPURLResponse else {
+                    loge("API 失败: 无效响应")
+                    completion(nil)
+                    return
+                }
+                guard let data = data else {
+                    loge("API 失败: 无数据")
+                    completion(nil)
+                    return
+                }
+                if http.statusCode != 200 {
+                    loge("API 失败: HTTP \(http.statusCode), 响应体长度=\(data.count) 字节")
+                    completion(nil)
+                    return
+                }
 
-            let result = ResponseParser.parse(data: data, provider: provider)
-            logi("API 返回 \(result?.count ?? 0) 字符")
-            completion(result)
+                let result = ResponseParser.parse(data: data, provider: provider)
+                logi("API 返回 \(result?.count ?? 0) 字符")
+                completion(result)
+            }
         }
         task.resume()
     }

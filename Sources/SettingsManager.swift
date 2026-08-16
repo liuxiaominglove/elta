@@ -82,20 +82,24 @@ final class SettingsManager {
         return defaults.string(forKey: account)
     }
 
-    func setApiKey(_ key: String?, for provider: AIProvider) {
+    @discardableResult
+    func setApiKey(_ key: String?, for provider: AIProvider) -> Bool {
         let account = Self.apiKeyUDKey(for: provider)
         if let key = key, !key.isEmpty {
             logi("Keychain 写入: provider=\(provider.rawValue), len=\(key.count)")
             let ok = KeychainHelper.save(key: key, account: account)
             if ok {
                 defaults.removeObject(forKey: account)
+                return true
             } else {
-                logi("Keychain 写入失败: provider=\(provider.rawValue)")
+                loge("Keychain 写入失败: provider=\(provider.rawValue) — 新 key 未被保存，旧 key 仍生效")
+                return false
             }
         } else {
             logi("Keychain 删除: provider=\(provider.rawValue)")
             _ = KeychainHelper.delete(account: account)
             defaults.removeObject(forKey: account)
+            return true
         }
     }
 
@@ -206,11 +210,8 @@ final class SettingsManager {
         defaults.set(true, forKey: migrated)
     }
 
-    // 旧版兼容：迁移旧的单一 apiKey → deepseek
-    var apiKey: String? {
-        get { activeApiKey }
-        set { setApiKey(newValue, for: .deepseek) }
-    }
+    // MARK: 旧版兼容：迁移旧的单一 apiKey → deepseek
+    // 注：旧 `apiKey` 读写不一致（getter 返回当前 provider 的 key、setter 写死 deepseek），且已无调用方，故移除。
 
     var systemPrompt: String {
         get {

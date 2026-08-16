@@ -317,6 +317,7 @@ final class SettingsWindowController: NSObject {
         y -= 16
 
         // --- 自定义 Endpoint（OpenAI-Compatible 和 Ollama） ---
+        self.customEndpointField = nil  // 先复位，避免切到非自定义 provider 时残留旧引用
         if provider.needsCustomEndpoint {
             let epTitle = NSTextField(labelWithString: "API 地址（Endpoint）：")
             epTitle.frame = NSRect(x: 4, y: y, width: w - 8, height: 18)
@@ -411,7 +412,15 @@ final class SettingsWindowController: NSObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 10
-        let body: [String: Any] = ["model": target.model, "messages": [["role": "user", "content": "hi"]], "max_tokens": 1]
+        let body: [String: Any]
+        switch provider {
+        case .googleAI:
+            body = ["contents": [["parts": [["text": "hi"]]]], "generationConfig": ["maxOutputTokens": 1]]
+        case .anthropic:
+            body = ["model": target.model, "max_tokens": 1, "messages": [["role": "user", "content": "hi"]]]
+        default:
+            body = ["model": target.model, "messages": [["role": "user", "content": "hi"]], "max_tokens": 1]
+        }
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         switch provider {
@@ -679,8 +688,13 @@ final class SettingsWindowController: NSObject {
             settings.setApiKey(nil, for: settings.apiProvider)
         }
 
-        if let ep = customEndpointField?.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), !ep.isEmpty {
-            settings.customEndpoint = ep
+        if let field = customEndpointField {
+            let ep = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !ep.isEmpty {
+                settings.customEndpoint = ep
+            } else {
+                settings.customEndpoint = nil
+            }
         }
         settings.setModelOverride(activeModelValue, for: settings.apiProvider)
 
@@ -743,6 +757,7 @@ final class SettingsWindowController: NSObject {
 
         let settings = SettingsManager.shared
         settings.systemPrompt = settings.defaultPrompt
+        templateTextView?.string = settings.defaultPrompt
         settings.hotkeyKeyCode = DEFAULT_HOTKEY_KEYCODE
         settings.hotkeyModifiers = Int(controlKey)
         settings.hotkeyDisplay = "⌃T"
@@ -798,6 +813,8 @@ final class SettingsWindowController: NSObject {
         let currentKey = activeApiKeyFieldValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if !currentKey.isEmpty {
             settings.setApiKey(currentKey, for: settings.apiProvider)
+        } else {
+            settings.setApiKey(nil, for: settings.apiProvider)
         }
 
         if let ep = customEndpointField?.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), !ep.isEmpty {
@@ -808,6 +825,7 @@ final class SettingsWindowController: NSObject {
             }
         }
         settings.setModelOverride(activeModelValue, for: settings.apiProvider)
+        settings.apiProvider = newProvider
 
         guard let scrollView = providerCardView?.enclosingScrollView else { return }
         let cardWidth = scrollView.contentSize.width
@@ -818,7 +836,6 @@ final class SettingsWindowController: NSObject {
         card.frame.size.height = max(card.frame.height, scrollView.contentSize.height)
         scrollView.documentView = card
 
-        settings.apiProvider = newProvider
         loadKey(for: newProvider)
     }
     // MARK: - Tab 3: 翻译模板
@@ -863,6 +880,12 @@ final class SettingsWindowController: NSObject {
 extension SettingsWindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         window = nil
+        // 关闭窗口时清理未完成的录制，避免本地 keyDown monitor 残留
+        screenshotRecorder.reset()
+        selectionRecorder.reset()
+        hoverRecorder.reset()
+        closePanelRecorder.reset()
+        togglePanelRecorder.reset()
     }
 }
 

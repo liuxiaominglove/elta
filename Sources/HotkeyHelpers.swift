@@ -91,7 +91,7 @@ func checkSystemHotkeyConflict(modifiers: Int, keyCode: Int) -> String? {
         case 0x0F: return "⌘R 刷新/运行"
         case 0x10: return "⌘Y 历史/重做"
         case 0x11: return "⌘T 新建标签页"
-        case 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19:
+        case 0x12, 0x13, 0x14, 0x15, 0x17, 0x16, 0x1A, 0x1C, 0x19:
             return "⌘1-9 切换标签/窗口"
         case 0x00: return "⌘A 全选"
         case 0x01: return "⌘S 保存"
@@ -125,9 +125,9 @@ func checkSystemHotkeyConflict(modifiers: Int, keyCode: Int) -> String? {
         switch keyCode {
         case 0x14: return "⇧⌘3 全屏截图（系统强占）"
         case 0x15: return "⇧⌘4 区域截图（系统强占）"
-        case 0x16: return "⇧⌘5 截屏工具（系统强占）"
+        case 0x17: return "⇧⌘5 截屏工具（系统强占）"
         case 0x0D: return "⇧⌘W 关闭全部窗口"
-        case 0x26: return "⇧⌘M 最小化所有"
+        case 0x2E: return "⇧⌘M 最小化所有"
         case 0x31: return "⇧⌘Space 切换输入法（系统强占）"
         default: break
         }

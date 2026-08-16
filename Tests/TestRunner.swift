@@ -42,7 +42,7 @@ func assertNotNil<T>(_ value: T?, _ msg: String = "Expected non-nil") throws -> 
     return v
 }
 
-func assertNil(_ value: Any?, _ msg: String = "Expected nil") throws {
+func assertNil<T>(_ value: T?, _ msg: String = "Expected nil") throws {
     if value != nil { throw TestFailure(msg) }
 }
 
