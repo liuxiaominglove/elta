@@ -20,7 +20,7 @@ Single-binary macOS menu bar app. Entrypoint: `Sources/main.swift` → `AppDeleg
 | `Sources/` | macOS app (16 Swift files, flat structure) |
 | `Tests/` | Custom mini test framework (`TestRunner.swift`) + test suites |
 | `Resources/` | `Info.plist`, `AppIcon.icns` |
-| `website/` | Vercel static site + serverless functions (`api/`) |
+| `website/` | 官网（静态站，双部署：腾讯云主站 + Vercel 备用，见「部署」节） |
 | `build/` | Build output (gitignored) |
 
 Key modules: `AppDelegate` (lifecycle + hotkey registration), `StatusBarController` (menu bar UI), `TranslationPipeline` (screenshot/OCR/translate orchestration), `SettingsManager` (UserDefaults-based config), `OCREngine` (Apple Vision).
@@ -84,3 +84,50 @@ The app requires macOS **Screen Recording** and **Accessibility** permissions (T
 
 - `run_tests.sh` 需要和 `build.sh` **同样的** `-target` 参数（当前：`macosx13.0`）
 - 新增源文件依赖时，`run_tests.sh` 的 `SRC_FILES` 数组需要同步更新
+
+## 部署（双部署：腾讯云主站 + Vercel 备用）
+
+官网是**两套独立部署**，`git push` 只会更新 Vercel 备用站，**不会**更新腾讯云主站。改完 `website/` 后要记得手动更新主站。
+
+| 项目 | 平台 | 地址 | 更新方式 |
+|------|------|------|---------|
+| **主站** | 腾讯云服务器（nginx） | `autoelta.com`（IP `106.53.167.38`，SSH 用户 `root`，密钥已配置 `~/.ssh/id_ed25519`） | 手动跑脚本 |
+| 备用 | Vercel | `elta-seven.vercel.app` | 从 GitHub `main` 自动部署 |
+
+- **DNS**：DNSPod，当前域名指向腾讯云（未切 Vercel）。
+- **策略**：腾讯云为主站，Vercel 备用。备案风险：Vercel 是海外服务商，切过去可能被抽查注销备案，故**保持腾讯云为主站**。
+
+### 更新主站（autoelta.com）
+
+```bash
+ssh root@106.53.167.38 '/root/update-elta-website.sh'
+```
+
+回滚：`ssh root@106.53.167.38 '/root/rollback-elta-website.sh'`（交互式选备份）
+
+### 服务器关键路径
+
+| 用途 | 路径 |
+|------|------|
+| 网站文件 | `/var/www/elta-website/` |
+| 备份 | `/var/backups/` |
+| 代码仓库 | `/opt/elta-repo/`（sparse checkout） |
+| 部署日志 | `/var/log/elta-deploy.log` |
+
+### 部署脚本内部步骤（`/root/update-elta-website.sh`）
+
+1. 预发布备份 → `/var/backups/elta-website-时间戳.tar.gz`
+2. `git pull origin main`（在 `/opt/elta-repo/`，60s 超时，`http.lowSpeedLimit=1000`）
+3. `rsync -av --delete` 同步到 `/var/www/elta-website/`
+4. 域名本地化：`sed 's|elta-seven\.vercel\.app|autoelta.com|g'`
+5. 恢复百度验证文件 `baidu_verify_codeva-5FripuB9n4.html`
+6. 删除敏感/无用文件：`vercel.json`、`admin.html`、`api/admin.js`
+7. 隐藏反馈区：`feedback.html` 的 `featured-feedback` 注入 `display:none`
+8. `nginx -t` 校验 + `systemctl reload nginx`（失败熔断）
+9. 清理备份：只保留最近 5 个
+10. commit hash 写入 `/var/log/elta-deploy.log`
+
+### 其他备注
+
+- `website/api/admin.js` 的 `ALLOWED_ORIGIN_HOSTS` 同时认 `autoelta.com` 与 `elta-seven.vercel.app`。
+- 版本发布是完整流程：改 `Resources/Info.plist` 版本 + `CHANGELOG.md` + 官网文案/版本号 + `git tag vX.Y.Z` 并推送（触发 GitHub Actions 构建 DMG 发 release），**缺一步都算没发完**。
