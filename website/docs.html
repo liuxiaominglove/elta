@@ -47,7 +47,7 @@
   <main class="doc-main">
 
     <h1>使用文档</h1>
-    <p class="doc-intro">ELTA 是一款专为英语精读设计的 macOS 划词/截图翻译工具。以下文档帮助你快速上手。</p>
+    <p class="doc-intro">ELTA 是一款专为英语精读设计的 macOS 截图/划词/悬停翻译工具。以下文档帮助你快速上手。</p>
 
     <!-- 安装说明 -->
     <section id="install">
@@ -132,6 +132,15 @@
       </ol>
       <p>💡 <strong>对比：</strong>截图翻译适合图片/PDF 中的不可选文字；划词翻译适合网页/文档中可选中的文字。</p>
 
+      <h3>悬停翻译（免截图/划词）</h3>
+      <ol>
+        <li>将鼠标移到目标段落的<strong>右下角</strong>（无需点击、无需选中文字）</li>
+        <li>按下快捷键 <kbd>⌥⌘T</kbd>（Option+Cmd+T）</li>
+        <li>ELTA 自动识别鼠标上方约半屏内容并翻译；可在 <strong>偏好设置 → 快捷键</strong> 选择「内容范围」：<code>双栏</code>（左右分页，取鼠标左侧半屏宽）或 <code>整栏</code>（全屏单栏，取整屏宽）</li>
+        <li>窗口内的表格会自动转为 Markdown 表格，AI 逐格翻译、保持表格结构</li>
+      </ol>
+      <p>💡 <strong>适用场景：</strong>阅读双栏电子书、带目录/侧栏的网页时，悬停翻译能自动避开目录栏与浏览器 chrome，只翻译正文。</p>
+
       <h3>重复翻译</h3>
       <p>再次按下 <kbd>⌃T</kbd> 可以使用相同区域重复翻译（适合对比不同翻译结果）。</p>
     </section>
@@ -146,11 +155,12 @@
         <tbody>
           <tr><td><kbd>⌃T</kbd>（可自定义）</td><td>截图翻译</td><td>全局可用，框选屏幕区域 → 自动 OCR + 翻译</td></tr>
           <tr><td><kbd>⇧⌃T</kbd>（可自定义）</td><td>划词翻译</td><td>选中文本后使用，跳过 OCR 直接翻译</td></tr>
+          <tr><td><kbd>⌥⌘T</kbd>（可自定义）</td><td>悬停翻译</td><td>鼠标移到段落右下角，自动识别该段并翻译（免截图/划词）</td></tr>
           <tr><td><kbd>`</kbd>（可自定义）</td><td>切换弹窗位置</td><td>翻译弹窗可见时，一键切换弹窗到屏幕另一侧</td></tr>
           <tr><td><kbd>Esc</kbd>（可自定义）</td><td>关闭</td><td>关闭翻译结果浮动面板，可在偏好设置中修改</td></tr>
         </tbody>
       </table>
-      <p>你可以在 <strong>偏好设置 → 快捷键</strong> 中自定义截图、划词、切换弹窗以及关闭面板的快捷键。</p>
+      <p>你可以在 <strong>偏好设置 → 快捷键</strong> 中自定义截图、划词、悬停、切换弹窗以及关闭面板的快捷键。</p>
     </section>
 
     <!-- 翻译模板 -->
@@ -317,7 +327,7 @@
       <a href="/feedback">反馈</a>
       <a href="https://github.com/liuxiaominglove/elta" target="_blank" rel="noopener">GitHub</a>
     </div>
-    <p class="footer-copy">ELTA v5.1.33 · 完全免费 · macOS 13.0+</p>
+    <p class="footer-copy">ELTA v5.2.0 · 完全免费 · macOS 13.0+</p>
   </div>
   <div class="footer-beian">
     <a href="https://beian.mps.gov.cn/#/query/webSearch?code=13112802000330" rel="noreferrer" target="_blank">
