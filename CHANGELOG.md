@@ -2,9 +2,10 @@
 
 All notable changes to ELTA will be documented in this file.
 
-## [Unreleased]
+## [v5.2.1] — 2026-08-16
 
 ### Fixed
+- 修复 DeepSeek V4（`deepseek-v4-flash`/`deepseek-v4-pro`）默认开启思考模式导致翻译慢约 6.7 倍、多烧约 7 倍 token（请求显式传 `thinking: disabled` 关闭思考）
 - DeepSeek 默认模型从已停用的 `deepseek-chat` 迁移至 `deepseek-v4-flash`（旧模型名已于 2026-07-24 停用，此前 DeepSeek 翻译会直接报错）
 - Google Gemini 默认模型从已停用的 `gemini-2.0-flash` 迁移至 `gemini-2.5-flash`（旧模型已于 2026-06-01 停用）
 - Anthropic 默认模型从 `claude-3-5-sonnet-20241022` 迁移至 `claude-sonnet-4-6`
