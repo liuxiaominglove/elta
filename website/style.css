@@ -118,10 +118,12 @@ kbd {
 .btn-primary:hover { background: var(--accent-h); color: #fff; transform: translateY(-1px); }
 .btn-primary:active { transform: translateY(0); }
 
-.version-text {
+.version-list {
   margin-top: 14px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
   font-size: 13px; color: var(--muted);
 }
+.version-list p { margin: 0; }
 .version-link { color: var(--accent); opacity: 0.85; }
 .version-link:hover { opacity: 1; }
 
