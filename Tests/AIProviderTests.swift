@@ -36,8 +36,9 @@ func runAIProviderTests() {
         try assertEqual(AIProvider.deepseek.endpoint, "https://api.deepseek.com/chat/completions")
     }
 
-    test("gemini endpoint is correct") {
-        let ep = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+    test("gemini endpoint follows defaultModel") {
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.model.google_ai")
+        let ep = "https://generativelanguage.googleapis.com/v1beta/models/\(AIProvider.googleAI.defaultModel):generateContent"
         try assertEqual(AIProvider.googleAI.endpoint, ep)
     }
 
@@ -45,20 +46,50 @@ func runAIProviderTests() {
         try assertEqual(AIProvider.ollama.endpoint, "http://localhost:11434/v1/chat/completions")
     }
 
-    test("deepseek defaultModel is 'deepseek-chat'") {
-        try assertEqual(AIProvider.deepseek.defaultModel, "deepseek-chat")
+    test("deepseek defaultModel is 'deepseek-v4-flash'") {
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.model.deepseek")
+        try assertEqual(AIProvider.deepseek.defaultModel, "deepseek-v4-flash")
     }
 
     test("openai defaultModel is 'gpt-4o-mini'") {
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.model.openai")
         try assertEqual(AIProvider.openai.defaultModel, "gpt-4o-mini")
     }
 
-    test("gemini defaultModel is 'gemini-2.0-flash'") {
-        try assertEqual(AIProvider.googleAI.defaultModel, "gemini-2.0-flash")
+    test("gemini defaultModel is 'gemini-2.5-flash'") {
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.model.google_ai")
+        try assertEqual(AIProvider.googleAI.defaultModel, "gemini-2.5-flash")
     }
 
     test("qwen defaultModel is 'qwen-plus'") {
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.model.qwen")
         try assertEqual(AIProvider.qwen.defaultModel, "qwen-plus")
+    }
+
+    test("anthropic defaultModel is 'claude-sonnet-4-6'") {
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.model.anthropic")
+        try assertEqual(AIProvider.anthropic.defaultModel, "claude-sonnet-4-6")
+    }
+
+    test("deepseek availableModels are v4 flash/pro") {
+        try assertEqual(AIProvider.deepseek.availableModels, ["deepseek-v4-flash", "deepseek-v4-pro"])
+    }
+
+    test("openAICompatible availableModels is nil (free input)") {
+        try assertNil(AIProvider.openAICompatible.availableModels as Any?)
+    }
+
+    test("ollama availableModels is nil (free input)") {
+        try assertNil(AIProvider.ollama.availableModels as Any?)
+    }
+
+    test("preset providers have non-empty availableModels containing defaultModel") {
+        for p in [AIProvider.openai, .anthropic, .googleAI, .qwen] {
+            let list = try assertNotNil(p.availableModels)
+            try assertTrue(!list.isEmpty, "availableModels should not be empty for \(p.rawValue)")
+            UserDefaults.standard.removeObject(forKey: "snaptranslate.model.\(p.rawValue)")
+            try assertTrue(list.contains(p.defaultModel), "defaultModel \(p.defaultModel) should be in \(p.rawValue) availableModels")
+        }
     }
 
     test("deepseek registerURL is correct") {

@@ -2,6 +2,19 @@
 
 All notable changes to ELTA will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- DeepSeek 默认模型从已停用的 `deepseek-chat` 迁移至 `deepseek-v4-flash`（旧模型名已于 2026-07-24 停用，此前 DeepSeek 翻译会直接报错）
+- Google Gemini 默认模型从已停用的 `gemini-2.0-flash` 迁移至 `gemini-2.5-flash`（旧模型已于 2026-06-01 停用）
+- Anthropic 默认模型从 `claude-3-5-sonnet-20241022` 迁移至 `claude-sonnet-4-6`
+- Google Gemini 的 API 地址改为随所选模型动态拼接，消除「测试连接」与「翻译」两处模型名不一致
+
+### Added
+- 所有 AI 提供商支持**模型选择**：官方模型（DeepSeek/OpenAI/Anthropic/Gemini/千问）在设置页显示下拉框预设，本地/第三方（Ollama/OpenAI-Compatible）保留自由输入
+- 旧 `customModel` / `ollamaModel` 存储自动迁移至统一的每-provider 模型覆盖存储
+- 修复「清空模型名保存后旧值残留」：清空模型输入框并保存会清除覆盖，回退到默认模型
+
 ## [v5.2.0] — 2026-08-16
 
 ### Added

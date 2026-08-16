@@ -291,4 +291,69 @@ func runSettingsManagerTests() {
         r.reset()
         try assertFalse(r.isRecording, "reset 后 isRecording 应为 false")
     }
+
+    // ━━━ 模型选择：modelOverride 统一存储 ━━━
+
+    test("modelOverride roundtrip via setModelOverride") {
+        SettingsManager.shared.setModelOverride("deepseek-v4-pro", for: .deepseek)
+        try assertEqual(SettingsManager.shared.modelOverride(for: .deepseek), "deepseek-v4-pro")
+        SettingsManager.shared.setModelOverride(nil, for: .deepseek)
+    }
+
+    test("setModelOverride empty string clears override") {
+        SettingsManager.shared.setModelOverride("x", for: .deepseek)
+        SettingsManager.shared.setModelOverride("", for: .deepseek)
+        try assertNil(SettingsManager.shared.modelOverride(for: .deepseek) as Any?)
+    }
+
+    test("setModelOverride nil clears override") {
+        SettingsManager.shared.setModelOverride("x", for: .deepseek)
+        SettingsManager.shared.setModelOverride(nil, for: .deepseek)
+        try assertNil(SettingsManager.shared.modelOverride(for: .deepseek) as Any?)
+    }
+
+    test("modelOverride does not leak across providers") {
+        SettingsManager.shared.setModelOverride("a", for: .deepseek)
+        SettingsManager.shared.setModelOverride("b", for: .openai)
+        try assertEqual(SettingsManager.shared.modelOverride(for: .deepseek), "a")
+        try assertEqual(SettingsManager.shared.modelOverride(for: .openai), "b")
+        SettingsManager.shared.setModelOverride(nil, for: .deepseek)
+        SettingsManager.shared.setModelOverride(nil, for: .openai)
+    }
+
+    test("defaultModel reflects override when set") {
+        SettingsManager.shared.setModelOverride("deepseek-v4-pro", for: .deepseek)
+        try assertEqual(AIProvider.deepseek.defaultModel, "deepseek-v4-pro")
+        SettingsManager.shared.setModelOverride(nil, for: .deepseek)
+    }
+
+    test("defaultModel falls back to hardcoded when override empty") {
+        SettingsManager.shared.setModelOverride("", for: .deepseek)
+        try assertEqual(AIProvider.deepseek.defaultModel, "deepseek-v4-flash")
+    }
+
+    test("migrateModelOverride moves legacy customModel to openAICompatible") {
+        let ud = UserDefaults.standard
+        ud.set("legacy-custom", forKey: "snaptranslate.customModel")
+        SettingsManager.migrateModelOverride(fromLegacy: "snaptranslate.customModel", to: .openAICompatible, defaults: ud)
+        try assertEqual(SettingsManager.shared.modelOverride(for: .openAICompatible), "legacy-custom")
+        try assertNil(ud.string(forKey: "snaptranslate.customModel") as Any?)
+        SettingsManager.shared.setModelOverride(nil, for: .openAICompatible)
+    }
+
+    test("migrateModelOverride moves legacy ollamaModel to ollama") {
+        let ud = UserDefaults.standard
+        ud.set("legacy-ollama", forKey: "snaptranslate.ollamaModel")
+        SettingsManager.migrateModelOverride(fromLegacy: "snaptranslate.ollamaModel", to: .ollama, defaults: ud)
+        try assertEqual(SettingsManager.shared.modelOverride(for: .ollama), "legacy-ollama")
+        try assertNil(ud.string(forKey: "snaptranslate.ollamaModel") as Any?)
+        SettingsManager.shared.setModelOverride(nil, for: .ollama)
+    }
+
+    test("migrateModelOverride no-op when legacy key absent") {
+        let ud = UserDefaults.standard
+        ud.removeObject(forKey: "snaptranslate.customModel")
+        let moved = SettingsManager.migrateModelOverride(fromLegacy: "snaptranslate.customModel", to: .openAICompatible, defaults: ud)
+        try assertFalse(moved, "无旧值时不应迁移")
+    }
 }

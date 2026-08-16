@@ -40,21 +40,40 @@ enum AIProvider: String, CaseIterable {
         case .openai:            return "https://api.openai.com/v1/chat/completions"
         case .anthropic:         return "https://api.anthropic.com/v1/messages"
         case .openAICompatible:  return SettingsManager.shared.customEndpoint ?? "https://your-api.com/v1/chat/completions"
-        case .googleAI:          return "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+        case .googleAI:          return "https://generativelanguage.googleapis.com/v1beta/models/\(defaultModel):generateContent"
         case .ollama:            return "http://localhost:11434/v1/chat/completions"
         case .qwen:              return "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
         }
     }
 
     var defaultModel: String {
+        if let override = SettingsManager.shared.modelOverride(for: self), !override.isEmpty {
+            return override
+        }
+        return hardcodedDefaultModel
+    }
+
+    private var hardcodedDefaultModel: String {
         switch self {
-        case .deepseek:          return "deepseek-chat"
+        case .deepseek:          return "deepseek-v4-flash"
         case .openai:            return "gpt-4o-mini"
-        case .anthropic:         return "claude-3-5-sonnet-20241022"
-        case .openAICompatible:  return SettingsManager.shared.customModel ?? "gpt-3.5-turbo"
-        case .googleAI:          return "gemini-2.0-flash"
-        case .ollama:            return SettingsManager.shared.ollamaModel ?? "llama3.2"
+        case .anthropic:         return "claude-sonnet-4-6"
+        case .openAICompatible:  return "gpt-3.5-turbo"
+        case .googleAI:          return "gemini-2.5-flash"
+        case .ollama:            return "llama3.2"
         case .qwen:              return "qwen-plus"
+        }
+    }
+
+    /// 预设模型列表（用于下拉框）；返回 nil 表示自由输入（Ollama 本地 / OpenAI-Compatible 第三方）
+    var availableModels: [String]? {
+        switch self {
+        case .deepseek:          return ["deepseek-v4-flash", "deepseek-v4-pro"]
+        case .openai:            return ["gpt-4o-mini", "gpt-4o"]
+        case .anthropic:         return ["claude-sonnet-4-6", "claude-opus-4-7", "claude-haiku-4-5"]
+        case .googleAI:          return ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.5-flash"]
+        case .qwen:              return ["qwen-turbo", "qwen-plus", "qwen-max"]
+        case .openAICompatible, .ollama: return nil
         }
     }
 

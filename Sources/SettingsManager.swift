@@ -47,6 +47,7 @@ final class SettingsManager {
 
     private init() {
         migrateAPIKeysToKeychain()
+        migrateModelOverrides()
     }
 
     // MARK: AI 提供商
@@ -166,28 +167,43 @@ final class SettingsManager {
         }
     }
 
-    var customModel: String? {
-        get {
-            lock.lock(); defer { lock.unlock() }
-            return defaults.string(forKey: Keys.customModel)
-        }
-        set {
-            lock.lock()
-            defaults.set(newValue, forKey: Keys.customModel)
-            lock.unlock()
-        }
+    // MARK: 模型选择（所有 provider 统一）
+
+    private static func modelOverrideUDKey(for provider: AIProvider) -> String {
+        "snaptranslate.model.\(provider.rawValue)"
     }
 
-    var ollamaModel: String? {
-        get {
-            lock.lock(); defer { lock.unlock() }
-            return defaults.string(forKey: Keys.ollamaModel)
+    func modelOverride(for provider: AIProvider) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        return defaults.string(forKey: Self.modelOverrideUDKey(for: provider))
+    }
+
+    func setModelOverride(_ value: String?, for provider: AIProvider) {
+        lock.lock()
+        if let v = value, !v.isEmpty {
+            defaults.set(v, forKey: Self.modelOverrideUDKey(for: provider))
+        } else {
+            defaults.removeObject(forKey: Self.modelOverrideUDKey(for: provider))
         }
-        set {
-            lock.lock()
-            defaults.set(newValue, forKey: Keys.ollamaModel)
-            lock.unlock()
-        }
+        lock.unlock()
+    }
+
+    /// 迁移旧 key → 新 provider override（返回是否发生迁移）
+    @discardableResult
+    static func migrateModelOverride(fromLegacy legacyKey: String, to provider: AIProvider, defaults: UserDefaults) -> Bool {
+        guard let v = defaults.string(forKey: legacyKey), !v.isEmpty else { return false }
+        defaults.set(v, forKey: Self.modelOverrideUDKey(for: provider))
+        defaults.removeObject(forKey: legacyKey)
+        return true
+    }
+
+    /// 一次性迁移：旧 customModel（openAICompatible）/ ollamaModel（ollama）→ 统一 modelOverride
+    private func migrateModelOverrides() {
+        let migrated = "snaptranslate.model_migrated_v1"
+        if defaults.bool(forKey: migrated) { return }
+        Self.migrateModelOverride(fromLegacy: Keys.customModel, to: .openAICompatible, defaults: defaults)
+        Self.migrateModelOverride(fromLegacy: Keys.ollamaModel, to: .ollama, defaults: defaults)
+        defaults.set(true, forKey: migrated)
     }
 
     // 旧版兼容：迁移旧的单一 apiKey → deepseek
