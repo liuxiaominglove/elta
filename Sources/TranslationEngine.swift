@@ -74,13 +74,7 @@ final class TranslationEngine {
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-            body = [
-                "model": provider.defaultModel,
-                "messages": messages,
-                "temperature": 0.1,
-                "max_tokens": 4096,
-                "stream": false
-            ]
+            body = Self.chatBody(provider: provider, model: provider.defaultModel, messages: messages)
         }
 
         request.timeoutInterval = 120
@@ -117,5 +111,21 @@ final class TranslationEngine {
             completion(result)
         }
         task.resume()
+    }
+
+    /// 构造 OpenAI 兼容 Chat Completions 请求体。
+    /// DeepSeek V4 默认开启思考模式（先生成长思维链再输出，显著变慢），此处显式关闭。
+    static func chatBody(provider: AIProvider, model: String, messages: [[String: Any]]) -> [String: Any] {
+        var body: [String: Any] = [
+            "model": model,
+            "messages": messages,
+            "temperature": 0.1,
+            "max_tokens": 4096,
+            "stream": false
+        ]
+        if provider == .deepseek {
+            body["thinking"] = ["type": "disabled"]
+        }
+        return body
     }
 }
