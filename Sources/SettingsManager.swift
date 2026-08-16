@@ -97,9 +97,12 @@ final class SettingsManager {
             }
         } else {
             logi("Keychain 删除: provider=\(provider.rawValue)")
-            _ = KeychainHelper.delete(account: account)
+            let deleted = KeychainHelper.delete(account: account)
             defaults.removeObject(forKey: account)
-            return true
+            if !deleted {
+                loge("Keychain 删除失败: provider=\(provider.rawValue) — 旧 key 可能仍残留")
+            }
+            return deleted
         }
     }
 

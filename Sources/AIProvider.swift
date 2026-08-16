@@ -121,18 +121,19 @@ enum AIProvider: String, CaseIterable {
 
     private static func isPrivateOrLocalhost(_ host: String) -> Bool {
         if host == "localhost" || host == "127.0.0.1" || host == "::1" { return true }
-        // 192.168.x.x 私有网段 — 必须为纯数字 IP，排除 192.168.example.com 类域名
-        if host.hasPrefix("192.168.") {
-            let tail = String(host.dropFirst(8))
-            let isNumericIP = !tail.isEmpty && tail.allSatisfy { $0.isNumber || $0 == "." }
-            if isNumericIP { return true }
-        }
-        // 10.x.x.x 私有网段 — 必须为纯数字 IP，排除 10.example.com 类域名
-        if host.hasPrefix("10.") {
-            let tail = String(host.dropFirst(3))
-            let isNumericIP = !tail.isEmpty && tail.allSatisfy { $0.isNumber || $0 == "." }
-            if isNumericIP { return true }
-        }
+        // 先确认是合法 IPv4（四段 0-255 数字），排除 192.168.evil.com 及 192.168.1. / 192.168.1..2 之类畸形串
+        guard isNumericIPv4(host) else { return false }
+        if host.hasPrefix("192.168.") { return true }
+        if host.hasPrefix("10.") { return true }
         return false
+    }
+
+    /// 校验是否为合法 IPv4（四段、每段非空纯数字 0-255）
+    private static func isNumericIPv4(_ s: String) -> Bool {
+        let parts = s.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else { return false }
+        return parts.allSatisfy { part in
+            !part.isEmpty && part.allSatisfy { $0.isNumber } && (Int(part) ?? 256) <= 255
+        }
     }
 }

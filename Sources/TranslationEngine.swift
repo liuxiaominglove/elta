@@ -27,8 +27,8 @@ final class TranslationEngine {
                 } else {
                     NSApp.deactivate()
                 }
+                completion(nil)
             }
-            completion(nil)
             return
         }
 

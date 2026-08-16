@@ -166,7 +166,7 @@ struct KeychainHelper {
         ]
         let status = SecItemDelete(query as CFDictionary)
         if status != errSecSuccess && status != errSecItemNotFound { loge("Keychain 删除失败: status=\(status), account=\(account)") }
-        return status == errSecSuccess
+        return status == errSecSuccess || status == errSecItemNotFound
     }
 }
 

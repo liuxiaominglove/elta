@@ -71,6 +71,18 @@ func runEndpointValidationTests() {
         try assertFalse(AIProvider.isValidEndpoint("http://192.168.evil.com/api"))
     }
 
+    test("malformed 192.168.1. rejected") {
+        try assertFalse(AIProvider.isValidEndpoint("http://192.168.1./api"))
+    }
+
+    test("malformed 192.168.1..2 rejected") {
+        try assertFalse(AIProvider.isValidEndpoint("http://192.168.1..2/api"))
+    }
+
+    test("out-of-range 192.168.999.1 rejected") {
+        try assertFalse(AIProvider.isValidEndpoint("http://192.168.999.1/api"))
+    }
+
     test("172.16.x.x private IP should pass") {
         // 172.16.0.0/12 is also a private range but we don't cover it yet
         // This documents the limitation

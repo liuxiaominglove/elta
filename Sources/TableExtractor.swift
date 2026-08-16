@@ -270,7 +270,7 @@ final class TableExtractor {
 
     private static func flatText(from blocks: [OCRBlock]) -> String {
         let sorted = blocks.sorted {
-            if $0.boundingBox.minY != $1.boundingBox.minY {
+            if abs($0.boundingBox.minY - $1.boundingBox.minY) > 0.5 {
                 return $0.boundingBox.minY < $1.boundingBox.minY
             }
             return $0.boundingBox.minX < $1.boundingBox.minX
