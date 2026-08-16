@@ -65,4 +65,34 @@ func runHTMLRendererTests() {
         try assertTrue(html.contains("<strong>"), "Bold markdown should still be converted")
         try assertTrue(html.contains("<h2>中文翻译</h2>"), "Heading should still be converted")
     }
+
+    // MARK: - Markdown 表格 → HTML 表格
+
+    test("render converts two-column markdown table to HTML table") {
+        let markdown = "## 中文翻译\n\n| 列A | 列B |\n|---|---|\n| 1 | 2 |"
+        let html = HTMLRenderer.render(markdown: markdown, originalText: "原文", isDark: false)
+        try assertTrue(html.contains("<table>"), "应生成 <table>")
+        try assertTrue(html.contains("<thead>"), "应生成 <thead>")
+        try assertTrue(html.contains("<th>列A</th>"), "表头应含列A")
+        try assertTrue(html.contains("<th>列B</th>"), "表头应含列B")
+        try assertTrue(html.contains("<tbody>"), "应生成 <tbody>")
+        try assertTrue(html.contains("<td>1</td>"), "数据行应含 1")
+        try assertTrue(html.contains("<td>2</td>"), "数据行应含 2")
+        try assertTrue(html.contains("</table>"), "应闭合 </table>")
+    }
+
+    test("render converts three-column markdown table") {
+        let markdown = "| 结构 | 名称 | 比喻 |\n|---|---|---|\n| 外皮层 | 人脑 | 车夫 |\n| 内皮层 | 猴脑 | 白马 |"
+        let html = HTMLRenderer.render(markdown: markdown, originalText: "原文", isDark: false)
+        try assertTrue(html.contains("<th>结构</th>"), "表头应含结构")
+        try assertTrue(html.contains("<th>比喻</th>"), "表头应含比喻")
+        try assertTrue(html.contains("<td>车夫</td>"), "数据行应含车夫")
+        try assertTrue(html.contains("<td>白马</td>"), "数据行应含白马")
+    }
+
+    test("render does not convert pipe line without separator to table") {
+        let markdown = "## 中文翻译\n\n| 单列引用 |\n\n这是正文"
+        let html = HTMLRenderer.render(markdown: markdown, originalText: "原文", isDark: false)
+        try assertFalse(html.contains("<table>"), "无分隔行的 | 不应转成表格")
+    }
 }
