@@ -87,17 +87,26 @@ The app requires macOS **Screen Recording** and **Accessibility** permissions (T
 
 ## 部署（双部署：腾讯云主站 + Vercel 备用）
 
-官网是**两套独立部署**，`git push` 只会更新 Vercel 备用站，**不会**更新腾讯云主站。改完 `website/` 后要记得手动更新主站。
+官网是**两套独立部署**，`git push` 只会更新 Vercel 备用站。腾讯云主站由**服务器 cron 每 5 分钟自动同步**（见下），**改完 `website/` 后 `git push` 即可，无需手动部署**。
 
 | 项目 | 平台 | 地址 | 更新方式 |
 |------|------|------|---------|
-| **主站** | 腾讯云服务器（nginx） | `autoelta.com`（IP `106.53.167.38`，SSH 用户 `root`，密钥已配置 `~/.ssh/id_ed25519`） | 手动跑脚本 |
+| **主站** | 腾讯云服务器（nginx） | `autoelta.com`（IP `106.53.167.38`，SSH 用户 `root`，密钥已配置 `~/.ssh/id_ed25519`） | 服务器 cron 自动同步（≤5 分钟延迟） |
 | 备用 | Vercel | `elta-seven.vercel.app` | 从 GitHub `main` 自动部署 |
 
 - **DNS**：DNSPod，当前域名指向腾讯云（未切 Vercel）。
 - **策略**：腾讯云为主站，Vercel 备用。备案风险：Vercel 是海外服务商，切过去可能被抽查注销备案，故**保持腾讯云为主站**。
 
-### 更新主站（autoelta.com）
+### 主站自动同步（服务器 cron）
+
+服务器上 `crontab` 每 5 分钟跑 `/root/auto-sync.sh`，做两件事：
+
+1. `/root/sync-elta-release.sh` — 拉取 GitHub 最新 release 的 `.dmg` 到 `/var/www/elta-downloads/`，更新 `latest.dmg` 软链（国内直链）
+2. 检查 `/opt/elta-repo` 的 `origin/main` 是否有新 commit，有则跑 `/root/update-elta-website.sh` 部署网站
+
+所以 `git push` 后 ≤5 分钟，主站与国内直链自动更新。日志：`/var/log/elta-release-sync.log`、`/var/log/elta-auto-sync.log`。
+
+### 手动更新主站（兜底，一般用不到）
 
 ```bash
 ssh root@106.53.167.38 '/root/update-elta-website.sh'
@@ -110,6 +119,8 @@ ssh root@106.53.167.38 '/root/update-elta-website.sh'
 | 用途 | 路径 |
 |------|------|
 | 网站文件 | `/var/www/elta-website/` |
+| DMG 下载目录 | `/var/www/elta-downloads/`（独立于网站目录，`rsync --delete` 不碰；nginx `location /download/` alias 到此） |
+| 自动同步脚本 | `/root/auto-sync.sh`（cron 入口）、`/root/sync-elta-release.sh`（拉取 DMG） |
 | 备份 | `/var/backups/` |
 | 代码仓库 | `/opt/elta-repo/`（sparse checkout） |
 | 部署日志 | `/var/log/elta-deploy.log` |
@@ -130,4 +141,5 @@ ssh root@106.53.167.38 '/root/update-elta-website.sh'
 ### 其他备注
 
 - `website/api/admin.js` 的 `ALLOWED_ORIGIN_HOSTS` 同时认 `autoelta.com` 与 `elta-seven.vercel.app`。
-- 版本发布是完整流程：改 `Resources/Info.plist` 版本 + `CHANGELOG.md` + 官网文案/版本号 + `git tag vX.Y.Z` 并推送（触发 GitHub Actions 构建 DMG 发 release），**缺一步都算没发完**。
+- **DMG 国内直链**：`https://autoelta.com/download/latest.dmg` 指向 `/var/www/elta-downloads/latest.dmg` 软链，由服务器 cron 自动从 GitHub release 拉取，无需手动上传、无需改官网版本号。
+- 版本发布是完整流程：改 `Resources/Info.plist` 版本 + `CHANGELOG.md` + 官网文案/版本号 + `git tag vX.Y.Z` 并推送（触发 GitHub Actions 构建 DMG 发 release）。推送后主站与国内直链由服务器 cron 自动更新（≤5 分钟），**只需 `git push --tags`，其余全自动**。

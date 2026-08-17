@@ -70,6 +70,22 @@
       color: #166534;
     }
     .github-tip strong { color: #14532d; }
+    .download-actions {
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+    }
+    .btn-secondary {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 28px;
+      background: transparent; color: var(--accent);
+      border: 1px solid var(--accent);
+      font-size: 15px; font-weight: 600;
+      border-radius: var(--radius);
+      transition: background 0.2s;
+    }
+    .btn-secondary:hover { background: var(--accent); color: #fff; }
+    .download-hint {
+      margin-top: 14px; font-size: 13px; color: var(--muted);
+    }
   </style>
 </head>
 <body>
@@ -91,18 +107,25 @@
 <header class="download-hero">
   <h1>下载 ELTA</h1>
   <p>支持 macOS 13.0+ · Intel / Apple Silicon 通用 · 完全免费</p>
-  <a href="https://github.com/liuxiaominglove/elta/releases/latest" class="btn-primary" target="_blank" rel="noopener">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-    前往 GitHub 下载
-  </a>
+  <div class="download-actions">
+    <a href="/download/latest.dmg" class="btn-primary">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      国内直链下载（推荐）
+    </a>
+    <a href="https://github.com/liuxiaominglove/elta/releases/latest" class="btn-secondary" target="_blank" rel="noopener">
+      GitHub 下载（海外备用）
+    </a>
+  </div>
+  <p class="download-hint">国内用户请用上方直链；GitHub 打不开属网络正常现象，无需代理。</p>
 </header>
 
 <section class="download-steps">
   <div class="step-card">
     <div class="step-num">1</div>
     <div>
-      <h3>点击上方蓝色按钮，进入 GitHub 下载页</h3>
-      <p>进入页面后，找到页面下方的 <strong>Assets</strong>（资产）区域，点击展开。</p>
+      <h3>选择下载方式</h3>
+      <p><strong>国内用户</strong>：点击上方蓝色「国内直链下载」按钮，直接从本站服务器下载。</p>
+      <p><strong>海外用户</strong>：点击「GitHub 下载」，进入 GitHub Releases 页。</p>
     </div>
   </div>
 
@@ -110,9 +133,9 @@
     <div class="step-num">2</div>
     <div>
       <h3>下载 <code>.dmg</code> 文件</h3>
-      <p>在 Assets 列表中，找到名字里带 <code>.dmg</code> 的文件（例如 <code>ELTA.v5.2.1.dmg</code>），点击它即可下载。</p>
+      <p>国内直链会直接下载 <code>latest.dmg</code>；GitHub 则需在页面下方 <strong>Assets</strong> 区域找到带 <code>.dmg</code> 的文件（例如 <code>ELTA.v5.2.1.dmg</code>）。</p>
       <div class="github-tip">
-        <strong>小提示：</strong>如果 Assets 区域被折叠，点击 <strong>Assets ▼</strong> 即可展开。列表里通常会有源代码文件（<code>Source code</code>），不要点，只点 <code>.dmg</code> 结尾的安装包。
+        <strong>小提示：</strong>如果 GitHub 打不开，是境外站点网络原因，直接用国内直链即可；若 Assets 区域被折叠，点击 <strong>Assets ▼</strong> 展开，只点 <code>.dmg</code> 结尾的安装包，不要点 <code>Source code</code>。
       </div>
     </div>
   </div>
