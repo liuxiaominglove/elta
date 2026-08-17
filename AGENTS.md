@@ -59,31 +59,37 @@ security find-generic-password -s "com.elta.snaptranslate" -w >/dev/null 2>&1 &&
 
 The app requires macOS **Screen Recording** and **Accessibility** permissions (TCC). These are requested at first use in `TranslationPipeline.primePermissionsIfNeeded()`. Both must be granted for all features to work.
 
-## TDD 与安全修复纪律
+## Swift & CF 安全规则
 
-以下规则来自真实踩坑经验，适用于本项目和全局：
+> **元规则（最高优先级，先于下面所有规则）**：规则必须基于实测/验证过的因果，而非"崩溃代码里刚好有它"的相关性。写任何技术规则前先自问三件事：① 这个因果验证过吗（跑过最小复现确认"因为 A 所以 B"，而不是只看到"A 和 B 同时出现"就归因）？② 能全局适用吗（是不是把本项目的特定场景坑拔高成了普适规律）？③ 会不会误导未来的开发者（禁止某 API 前，先查官方文档确认它是否本来就安全推荐）。——反例（已发生）：把剪贴板 `writeObjects` 崩溃误归因于 `CFGetTypeID`，进而写下"CFGetTypeID 一律禁止"，后经官方文档 + 实测证伪。
 
-### ⚠️ CFTypeRef 强制转换规则
+### 规则 1：AX API 的 CFTypeRef 类型转换（macOS 特定）
 
-- ❌ **禁止** `CFGetTypeID(xxx) == AXUIElementGetTypeID()` 作类型判断——会 SIGSEGV
-- ❌ **禁止** `as? AXUIElement`——编译器 warning "will always succeed" 是误报，实际走的是 CF 桥接，不检查 typeID
-- ✅ **正确**：信任 AX API 契约，`as! AXUIElement` 直接强制转换。AX API 返回的对象契约上是 AXUIElement 类型。**编译通过即可，不要为消除 warning 引入更危险的代码。**
+范围限定：只针对 macOS **AX（Accessibility）API** 场景（`AXUIElementCopyAttributeValue` 返回 `CFTypeRef?` 时）。**不适用于**其他 CF 类型（CGImage、SecKey 等）或 NSObject 子类的向下转型。
 
-### ⚠️ 同步/异步转换规则
+实测事实：
+1. `AXUIElementCopyAttributeValue` 返回 `CFTypeRef?`（桥接为 `AnyObject?`），需转成具体类型。
+2. `as? AXUIElement` → 编译器报 **error** "conditional downcast will always succeed"。编译器 note 建议改用 CFTypeID 比较。
+3. `CFGetTypeID(obj)` 对有效 CF 对象**完全安全**，返回正确 typeID（实测，无崩溃）。
+4. `as! AXUIElement` 做无条件 cast，不做类型检查，不因"类型不匹配"崩溃（仅当对象为 nil 时才崩，需先 guard 非 nil）。
 
-- **改同步函数为异步前，必须先 grep 所有调用方**，确认调用方不依赖同步返回语义
-- 热键处理器、C 回调函数中的同步函数**不可**改成异步
-- 如需减少主线程阻塞，用 `RunLoop.current.run(mode: .default, before: Date(...))` 代替 `usleep`
+ELTA 的选择：当 AX API 契约明确承诺返回类型时，用 `as!` 最简洁。**但这不代表其他做法是错的**：`CFGetTypeID` 是官方推荐的类型判断方式，在"返回类型不确定"的场景它是正确选择。⚠️ 曾错误地写"CFGetTypeID 一律禁止"（基于误诊），已证伪——**SIGSEGV 真正来源是无效指针/悬垂引用，与 CFGetTypeID 无关**。
 
-### ⚠️ NSScrollView documentView 遍历规则
+### 规则 2：同步/异步语义转换
 
-- `documentView.superview` 返回 `NSClipView`，**不是** `NSScrollView`
-- 要获取 scrollView 必须用 `enclosingScrollView` 或 `superview?.superview`
+改同步函数为异步前，**必须**：① `grep` 找到所有调用方（含 C 回调、事件处理器、通知观察者）② 逐一确认调用方不依赖同步返回（不依赖返回后状态已变更、不依赖返回值做后续判断）。以下场景**不可**改为异步：Carbon `EventHotKey` 回调、`CGEventTap` 回调、`NSEvent` 本地/全局 monitor 回调、`NSApplicationDelegate` 生命周期方法内直接调用的路径。如需让事件循环不冻住但保持同步语义，用 `RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: delay))` 替代 `usleep`。
 
-### ⚠️ Swift 编译配置
+### 规则 3：NSScrollView 视图层级
 
-- `run_tests.sh` 需要和 `build.sh` **同样的** `-target` 参数（当前：`macosx13.0`）
-- 新增源文件依赖时，`run_tests.sh` 的 `SRC_FILES` 数组需要同步更新
+当使用 `NSScrollView` 的 `documentView` 时：`documentView.superview` 返回 **`NSClipView`**，不是 `NSScrollView`；`(documentView.superview as? NSScrollView)` **永远为 nil**。要获取 scrollView 用 `documentView.enclosingScrollView` 或 `documentView.superview?.superview as? NSScrollView`。
+
+### 规则 4：swiftc 编译参数一致性
+
+本项目用 `swiftc` 直接编译（非 Xcode project）：`run_tests.sh` 与 `build.sh` 必须用**相同的** `-target` 参数（当前 `macosx13.0`）；`run_tests.sh` 的 `SRC_FILES` 数组需包含被测模块的所有传递依赖源文件；`build.sh` 有 `-framework Xxx` 时测试脚本同样需要。
+
+### 规则 5：修复前必须读懂调用链与数据流
+
+以下回归都源于"没读懂上下文就动手"：改同步为 `asyncAfter` → 引入 race（没检查调用方是否依赖同步返回）；"恢复剪贴板"改用 `writeObjects(旧对象)` → 引入 NSException（`pasteboardItems` 是懒加载引用，`clearContents` 后失效）；移按钮改 TabView 高度 → 布局重叠；误诊崩溃根因（writeObjects 崩溃归因 CFGetTypeID）→ 写出错误规则。**动手改代码前，必须依次确认**：① 这个函数被谁调用（`grep` 所有调用点）② 读写哪些共享状态（剪贴板/Keychain/UserDefaults/全局单例/静态变量）③ 这些状态的生命周期（何时失效、是否懒加载、是否跨线程共享）④ 改动影响哪些"看起来无关"的东西。核心一句话：**修一个 bug 前，先证明自己理解了 bug 周边的完整上下文，再动手。**
 
 ## 部署（双部署：腾讯云主站 + Vercel 备用）
 
