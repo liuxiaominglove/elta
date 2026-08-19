@@ -93,7 +93,16 @@ ELTA 的选择：当 AX API 契约明确承诺返回类型时，用 `as!` 最简
 
 ## 部署（双部署：腾讯云主站 + Vercel 备用）
 
-官网是**两套独立部署**，`git push` 只会更新 Vercel 备用站。腾讯云主站由**服务器 cron 每 5 分钟自动同步**（见下），**改完 `website/` 后 `git push` 即可，无需手动部署**。
+> ### ⚡ 触发词：`push` / `更新网站` / `更新官网`
+> 用户在本项目说这些词，就执行「更新两个网站」流程：
+> 1. `git status` 看有没有未提交的 `website/` 改动（有则先提交）
+> 2. `git push origin main`
+> 3. 两个站随后**自动更新**，无需手动操作：
+>    - Vercel 备用站（`elta-seven.vercel.app`）：GitHub main 自动部署
+>    - 腾讯云主站（`autoelta.com`）：服务器 cron ≤5 分钟自动同步
+> 4. 若 push 后 >5 分钟主站还没更新，手动兜底：`ssh root@106.53.167.38 '/root/update-elta-website.sh'`
+
+官网是**两套独立部署**，`git push` 触发 Vercel 备用站自动部署，腾讯云主站由**服务器 cron 每 5 分钟自动同步**（见下），**改完 `website/` 后 `git push` 即可，无需手动部署**。
 
 | 项目 | 平台 | 地址 | 更新方式 |
 |------|------|------|---------|
@@ -108,7 +117,7 @@ ELTA 的选择：当 AX API 契约明确承诺返回类型时，用 `as!` 最简
 服务器上 `crontab` 每 5 分钟跑 `/root/auto-sync.sh`，做两件事：
 
 1. `/root/sync-elta-release.sh` — 拉取 GitHub 最新 release 的 `.dmg` 到 `/var/www/elta-downloads/`，更新 `latest.dmg` 软链（国内直链）
-2. 检查 `/opt/elta-repo` 的 `origin/main` 是否有新 commit，有则跑 `/root/update-elta-website.sh` 部署网站
+2. 用 GitHub API 查最新 commit SHA，与 `/root/.elta-deployed-sha` 对比，有变化则跑 `/root/update-elta-website.sh` 部署网站
 
 所以 `git push` 后 ≤5 分钟，主站与国内直链自动更新。日志：`/var/log/elta-release-sync.log`、`/var/log/elta-auto-sync.log`。
 
@@ -128,21 +137,24 @@ ssh root@106.53.167.38 '/root/update-elta-website.sh'
 | DMG 下载目录 | `/var/www/elta-downloads/`（独立于网站目录，`rsync --delete` 不碰；nginx `location /download/` alias 到此） |
 | 自动同步脚本 | `/root/auto-sync.sh`（cron 入口）、`/root/sync-elta-release.sh`（拉取 DMG） |
 | 备份 | `/var/backups/` |
-| 代码仓库 | `/opt/elta-repo/`（sparse checkout） |
+| 代码仓库 | `/opt/elta-repo/`（已废弃，部署改用 tarball 下载，不再用 git） |
 | 部署日志 | `/var/log/elta-deploy.log` |
 
 ### 部署脚本内部步骤（`/root/update-elta-website.sh`）
 
+> ⚠️ 官网部署**不用 git 协议**（服务器访问 github.com 的 git 协议被墙，会卡死），改用 **codeload tarball + GitHub API**。**不要改回 `git pull`。**
+
 1. 预发布备份 → `/var/backups/elta-website-时间戳.tar.gz`
-2. `git pull origin main`（在 `/opt/elta-repo/`，60s 超时，`http.lowSpeedLimit=1000`）
-3. `rsync -av --delete` 同步到 `/var/www/elta-website/`
-4. 域名本地化：`sed 's|elta-seven\.vercel\.app|autoelta.com|g'`
-5. 恢复百度验证文件 `baidu_verify_codeva-5FripuB9n4.html`
-6. 删除敏感/无用文件：`vercel.json`、`admin.html`、`api/admin.js`
-7. 隐藏反馈区：`feedback.html` 的 `featured-feedback` 注入 `display:none`
-8. `nginx -t` 校验 + `systemctl reload nginx`（失败熔断）
-9. 清理备份：只保留最近 5 个
-10. commit hash 写入 `/var/log/elta-deploy.log`
+2. 用 API 查最新 commit SHA（`api.github.com/repos/liuxiaominglove/elta/commits/main`）
+3. 下载源码 tarball（`codeload.github.com/.../tar.gz`，`--retry 3 --max-time 180`）→ 校验体积 → 解压 → 校验 `website/index.html` 存在（防 `rsync --delete` 误删护栏）
+4. `rsync -av --delete` 同步到 `/var/www/elta-website/`
+5. 域名本地化：`sed 's|elta-seven\.vercel\.app|autoelta.com|g'`
+6. 恢复百度验证文件 `baidu_verify_codeva-5FripuB9n4.html`
+7. 删除敏感/无用文件：`vercel.json`、`admin.html`、`api/admin.js`
+8. 隐藏反馈区：`feedback.html` 的 `featured-feedback` 注入 `display:none`
+9. `/usr/sbin/nginx -t` 校验 + `systemctl reload nginx`（`set -o pipefail` 保证失败能正确熔断）
+10. 记录已部署 SHA 到 `/root/.elta-deployed-sha`
+11. 清理备份：只保留最近 5 个
 
 ### 其他备注
 
