@@ -2,6 +2,15 @@
 
 All notable changes to ELTA will be documented in this file.
 
+## [v5.2.2] — 2026-08-19
+
+### Changed
+- 应用改用 **Developer ID 签名 + 公证（notarization）**：从官网/GitHub 下载后双击打开**不再出现「无法验证」安全弹窗**
+- 官网下载页支持**国内直链下载**（腾讯云服务器直出，国内用户无需 VPN 也能下载）
+
+### Fixed
+- 修复审计确认的安全与稳定性问题：192.168 端点校验（SSRF）、热键 keyCode 0 哨兵冲突、CapsLock 复制粘贴、Keychain 静默丢弃、重置模板残留、主线程卡顿、浮点 epsilon 等
+
 ## [v5.2.1] — 2026-08-16
 
 ### Fixed
