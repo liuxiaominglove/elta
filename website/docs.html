@@ -22,6 +22,7 @@
     </a>
     <div class="nav-links">
       <a href="/">首页</a>
+      <a href="/tutorial">使用教程</a>
       <a href="/docs" class="active">使用文档</a>
       <a href="/feedback">反馈</a>
       <a href="https://github.com/liuxiaominglove/elta" target="_blank" rel="noopener">GitHub</a>
@@ -57,15 +58,8 @@
       <ol>
         <li>前往 <a href="/download">下载页面</a>，按提示下载最新版 ELTA.dmg</li>
         <li>双击打开 DMG，将 <strong>ELTA.app</strong> 拖入 <strong>Applications</strong> 文件夹</li>
-        <li>首次打开时，可能提示"无法验证"，可通过以下任一方式解决：
-          <ul>
-            <li><strong>方式一（终端）</strong>：打开终端，输入以下命令后回车，再双击 ELTA 即可正常打开：
-              <pre class="code-inline">xattr -cr /Applications/ELTA.app</pre>
-            </li>
-            <li><strong>方式二（系统设置）</strong>：前往 <strong>系统设置 → 隐私与安全性</strong>，在页面最底部找到 ELTA 的提示（"已阻止 'ELTA' 保护 Mac"），点击 <strong>"仍要打开"</strong>。</li>
-          </ul>
-        </li>
-        <li>如若仍然无法打开，请查看页面底部<a href="#faq">常见问题</a>。</li>
+        <li>在启动台或「应用程序」文件夹中双击 <strong>ELTA</strong> 即可打开（应用已通过 Apple 公证，不会出现「无法验证」安全弹窗）</li>
+        <li>如遇其他问题，请查看页面底部<a href="#faq">常见问题</a>。</li>
       </ol>
 
       <div class="doc-note">
@@ -276,9 +270,7 @@
       <h2>常见问题</h2>
 
       <h3>Q: 打开 App 时提示"无法验证开发者"？</h3>
-      <p>因为 ELTA 未加入 Apple 开发者计划。系统可能会提示：<br>
-      <em>"Apple无法验证"ELTA"是否包含可能危害Mac安全或泄漏隐私的恶意软件。"</em><br>
-      请前往 <strong>系统设置 → 隐私与安全性</strong>，在页面最底部找到 ELTA 的提示，例如：<em>"已阻止 'ELTA' 保护 Mac"</em>，点击 <strong>"仍要打开"</strong>。</p>
+      <p>从 v5.2.2 起，ELTA 已使用 Apple Developer ID 签名并通过公证（notarization），从官网或 GitHub 下载后直接双击即可打开，<strong>不会再出现「无法验证」弹窗</strong>。若你使用的是旧版本（v5.2.1 及更早），前往 <a href="/download">下载页面</a> 升级到最新版即可解决。</p>
 
       <h3>Q: OCR 识别不出文字？</h3>
       <ul>
@@ -336,6 +328,7 @@
   <div class="footer-inner">
     <div class="footer-links">
       <a href="/">首页</a>
+      <a href="/tutorial">使用教程</a>
       <a href="/docs">使用文档</a>
       <a href="/LICENSE">ISC 许可证</a>
       <a href="/privacy">隐私政策</a>
