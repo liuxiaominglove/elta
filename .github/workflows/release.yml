@@ -54,9 +54,26 @@ jobs:
           if [ -f Resources/AppIcon.icns ]; then
             cp Resources/AppIcon.icns build/ELTA.app/Contents/Resources/
           fi
-          codesign --force --sign - build/ELTA.app
         shell: bash
-      
+
+      - name: Import Developer ID certificate
+        run: |
+          echo "${{ secrets.DEVELOPER_ID_CERT }}" | base64 --decode > /tmp/DeveloperID.p12
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import /tmp/DeveloperID.p12 -k build.keychain -P "${{ secrets.CERT_PASSWORD }}" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+        shell: bash
+
+      - name: Sign app (Hardened Runtime)
+        run: |
+          codesign --force --options runtime \
+            --sign "${{ secrets.DEVELOPER_ID_NAME }}" \
+            --entitlements Resources/ELTA.entitlements \
+            build/ELTA.app
+        shell: bash
+
       - name: Install create-dmg
         run: npm install -g create-dmg
         shell: bash
@@ -65,6 +82,30 @@ jobs:
         run: |
           APP_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
           bash scripts/package-dmg.sh "$APP_VERSION" build build/ELTA.app
+        shell: bash
+
+      - name: Sign DMG
+        run: |
+          APP_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
+          codesign --force --sign "${{ secrets.DEVELOPER_ID_NAME }}" "build/ELTA.v${APP_VERSION}.dmg"
+        shell: bash
+
+      - name: Notarize DMG
+        run: |
+          APP_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
+          echo "${{ secrets.NOTARY_KEY }}" > /tmp/AuthKey.p8
+          xcrun notarytool submit "build/ELTA.v${APP_VERSION}.dmg" \
+            --key /tmp/AuthKey.p8 \
+            --key-id "${{ secrets.NOTARY_KEY_ID }}" \
+            --issuer "${{ secrets.NOTARY_ISSUER_ID }}" \
+            --wait
+        shell: bash
+
+      - name: Staple DMG
+        run: |
+          APP_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
+          xcrun stapler staple "build/ELTA.v${APP_VERSION}.dmg"
+          xcrun stapler validate "build/ELTA.v${APP_VERSION}.dmg"
         shell: bash
       
       - name: Upload to Release

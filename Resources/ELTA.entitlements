@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- ELTA 使用 TCC 权限（辅助功能/录屏/输入监听）与 WKWebView，
+         均无需 Hardened Runtime 豁免。若 WKWebView 在加固模式下崩溃，
+         补充：com.apple.security.cs.allow-unsigned-executable-memory -->
+</dict>
+</plist>
