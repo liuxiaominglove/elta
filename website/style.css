@@ -233,6 +233,7 @@ kbd {
 }
 .footer-beian a:hover { color: var(--accent); }
 .footer-beian img { height: 14px; width: auto; }
+.footer-beian { display: flex; align-items: center; justify-content: space-between; }
 
 /* ============================================
    文档页 (docs.html)
