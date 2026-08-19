@@ -117,6 +117,24 @@ kbd {
 }
 .btn-primary:hover { background: var(--accent-h); color: #fff; transform: translateY(-1px); }
 .btn-primary:active { transform: translateY(0); }
+.btn-secondary {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 28px;
+  background: transparent; color: var(--accent);
+  border: 1px solid var(--accent);
+  font-size: 15px; font-weight: 600;
+  border-radius: var(--radius);
+  transition: background 0.2s;
+}
+.btn-secondary:hover { background: var(--accent); color: #fff; }
+.download-actions {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  margin: 24px 0 8px;
+}
+.download-hint {
+  font-size: 13px; color: var(--muted); text-align: center;
+  margin: 12px 0 24px; line-height: 1.7;
+}
 
 .version-list {
   margin-top: 14px;
