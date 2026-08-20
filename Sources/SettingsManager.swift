@@ -39,6 +39,10 @@ final class SettingsManager {
         static let togglePanelHotkeyKeyCode   = "snaptranslate.togglePanelHotkeyKeyCode"
         static let togglePanelHotkeyModifiers = "snaptranslate.togglePanelHotkeyModifiers"
         static let togglePanelHotkeyDisplay   = "snaptranslate.togglePanelHotkeyDisplay"
+        // 拆分翻译快捷键（弹窗内整段/拆分切换）
+        static let splitHotkeyKeyCode   = "snaptranslate.splitHotkeyKeyCode"
+        static let splitHotkeyModifiers = "snaptranslate.splitHotkeyModifiers"
+        static let splitHotkeyDisplay   = "snaptranslate.splitHotkeyDisplay"
         static let customEndpoint   = "snaptranslate.customEndpoint"
         static let customModel      = "snaptranslate.customModel"
         static let ollamaModel      = "snaptranslate.ollamaModel"
@@ -384,6 +388,34 @@ final class SettingsManager {
     var togglePanelHotkeyDisplay: String {
         get { defaults.string(forKey: Keys.togglePanelHotkeyDisplay) ?? "`" }
         set { defaults.set(newValue, forKey: Keys.togglePanelHotkeyDisplay) }
+    }
+
+    // 拆分翻译快捷键（默认 ⌃D，keyCode 0x02）
+    var splitHotkeyKeyCode: Int {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return defaults.object(forKey: Keys.splitHotkeyKeyCode) as? Int ?? DEFAULT_SPLIT_HOTKEY_KEYCODE
+        }
+        set {
+            lock.lock()
+            defaults.set(newValue, forKey: Keys.splitHotkeyKeyCode)
+            lock.unlock()
+        }
+    }
+    var splitHotkeyModifiers: Int {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return defaults.object(forKey: Keys.splitHotkeyModifiers) as? Int ?? Int(controlKey)
+        }
+        set {
+            lock.lock()
+            defaults.set(newValue, forKey: Keys.splitHotkeyModifiers)
+            lock.unlock()
+        }
+    }
+    var splitHotkeyDisplay: String {
+        get { defaults.string(forKey: Keys.splitHotkeyDisplay) ?? "⌃D" }
+        set { defaults.set(newValue, forKey: Keys.splitHotkeyDisplay) }
     }
 
     // MARK: 窗口

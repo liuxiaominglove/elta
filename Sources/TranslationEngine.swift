@@ -6,6 +6,15 @@ import Foundation
 final class TranslationEngine {
     static let shared = TranslationEngine()
 
+    /// 当前进行中的翻译请求（用于 ESC 取消）
+    private var currentTask: URLSessionDataTask?
+
+    /// 取消当前翻译请求
+    func cancelCurrentTask() {
+        currentTask?.cancel()
+        currentTask = nil
+    }
+
     func translate(text: String, completion: @escaping (String?) -> Void) {
         let settings = SettingsManager.shared
         let provider = settings.apiProvider
@@ -85,9 +94,11 @@ final class TranslationEngine {
 
         logi("调用 \(provider.displayName) API...")
 
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+        var task: URLSessionDataTask?
+        task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             // 回调统一切主线程：completion 会被调用方用于更新 UI，避免后台线程触达 AppKit
             DispatchQueue.main.async {
+                if let t = task, self?.currentTask === t { self?.currentTask = nil }
                 if let e = error {
                     loge("API 失败: 网络: \(e.localizedDescription)")
                     completion(nil)
@@ -114,7 +125,8 @@ final class TranslationEngine {
                 completion(result)
             }
         }
-        task.resume()
+        self.currentTask = task
+        task?.resume()
     }
 
     /// 构造 OpenAI 兼容 Chat Completions 请求体。

@@ -218,4 +218,182 @@ func runHTMLRendererTests() {
         let c = try assertNotNil(htmlOffset("<h2>核查</h2>", in: html), "应存在核查标题")
         try assertTrue(v > contentOpen && p > contentOpen && c > contentOpen, "词汇/短语/核查应在 content 容器内")
     }
+
+    // MARK: - 拆分翻译视图
+
+    test("parseSections splits markdown into heading/body sections") {
+        let markdown = "## 中文翻译\n\n你好世界\n\n## 重要词汇\n\n- **word**\n\n## 核查\n\n准确"
+        let sections = HTMLRenderer.parseSections(markdown)
+        try assertEqual(sections.count, 3)
+        try assertEqual(sections[0].heading ?? "", "中文翻译")
+        try assertEqual(sections[0].body, "你好世界")
+        try assertEqual(sections[1].heading ?? "", "重要词汇")
+        try assertEqual(sections[2].heading ?? "", "核查")
+    }
+
+    test("renderSplit produces split-pair with original and translation") {
+        let markdown = "## 中文翻译\n\n这是第一句。这是第二句。\n\n## 核查\n\n准确"
+        let html = HTMLRenderer.renderSplit(markdown: markdown, originalText: "First. Second.", isDark: false)
+        try assertTrue(html.contains("class=\"split-list\""), "应存在 split-list 容器")
+        try assertTrue(html.contains("class=\"split-pair\""), "应存在 split-pair")
+        try assertTrue(html.contains("class=\"split-original\""), "应存在 split-original")
+        try assertTrue(html.contains("class=\"split-translation\""), "应存在 split-translation")
+        try assertTrue(html.contains("1. First."), "首句原文应带序号")
+        try assertTrue(html.contains("这是第一句。"), "应含首句译文")
+    }
+
+    test("renderSplit hides original box in split mode") {
+        let markdown = "## 中文翻译\n\n你好世界。这是第二句。"
+        let html = HTMLRenderer.renderSplit(markdown: markdown, originalText: "Hello. Second.", isDark: false)
+        try assertFalse(html.contains("<div class=\"original-box\">"), "拆分模式不应显示原文盒（原文已内联）")
+        try assertTrue(html.contains("<h2>中文翻译</h2>"), "应保留译文标题")
+        try assertTrue(html.contains("Powered by"), "应保留 footer")
+    }
+
+    test("renderSplit keeps vocab phrases and check sections") {
+        let markdown = "## 中文翻译\n\n你好。世界。\n\n## 重要词汇\n\n- **word**\n\n## 常用短语与习语\n\n- phrase\n\n## 核查\n\n准确"
+        let html = HTMLRenderer.renderSplit(markdown: markdown, originalText: "Hello. World.", isDark: false)
+        try assertTrue(html.contains("<h2>重要词汇</h2>"), "拆分模式应保留词汇标题")
+        try assertTrue(html.contains("<h2>常用短语与习语</h2>"), "拆分模式应保留短语标题")
+        try assertTrue(html.contains("<h2>核查</h2>"), "拆分模式应保留核查标题")
+    }
+
+    test("renderSplit escapes original and translation text") {
+        let markdown = "## 中文翻译\n\n包含 <b> 标签。第二句。"
+        let html = HTMLRenderer.renderSplit(markdown: markdown, originalText: "A <script> B. Second.", isDark: false)
+        try assertFalse(html.contains("<script>"), "原文脚本标签应转义")
+        try assertTrue(html.contains("&lt;script&gt;"), "原文应转义为实体")
+        try assertFalse(html.contains("<b>"), "译文标签应转义")
+    }
+
+    test("renderSplit falls back to whole mode when no 中文翻译 section") {
+        let markdown = "## 重要词汇\n\n- **word**"
+        let html = HTMLRenderer.renderSplit(markdown: markdown, originalText: "Hello", isDark: false)
+        try assertTrue(html.contains("<div class=\"original-box\">"), "无中文翻译章节时应回退整段渲染（含原文盒）")
+        try assertFalse(html.contains("<div class=\"split-list\">"), "回退整段渲染不应含 split-list 容器")
+    }
+
+    test("renderSplit falls back to whole mode when translation empty") {
+        let markdown = "## 中文翻译\n\n\n\n## 核查\n\n准确"
+        let html = HTMLRenderer.renderSplit(markdown: markdown, originalText: "", isDark: false)
+        try assertTrue(html.contains("<div class=\"original-box\">"), "译文为空时应回退整段渲染")
+    }
+
+    // MARK: - canSplit 可行性判断
+
+    test("canSplit returns false for table translation") {
+        let markdown = "## 中文翻译\n\n| 列A | 列B |\n|---|---|\n| 1 | 2 |"
+        let ok = HTMLRenderer.canSplit(markdown: markdown, originalText: "First. Second.")
+        try assertFalse(ok, "表格译文不可拆分")
+    }
+
+    test("canSplit returns false for single sentence") {
+        let markdown = "## 中文翻译\n\n你好世界。"
+        let ok = HTMLRenderer.canSplit(markdown: markdown, originalText: "Hello.")
+        try assertFalse(ok, "单句不可拆分")
+    }
+
+    test("canSplit returns true for multiple sentences") {
+        let markdown = "## 中文翻译\n\n你好。世界。"
+        let ok = HTMLRenderer.canSplit(markdown: markdown, originalText: "Hello. World.")
+        try assertTrue(ok, "多句可拆分")
+    }
+
+    test("canSplit returns false for empty markdown") {
+        let ok = HTMLRenderer.canSplit(markdown: "", originalText: "Hello. World.")
+        try assertFalse(ok, "空 markdown 不可拆分")
+    }
+
+    test("canSplit returns false when no 中文翻译 section") {
+        let markdown = "## 重要词汇\n\n- **word**"
+        let ok = HTMLRenderer.canSplit(markdown: markdown, originalText: "Hello. World.")
+        try assertFalse(ok, "无中文翻译章节不可拆分")
+    }
+
+    // MARK: - renderSplit 表格回退
+
+    test("renderSplit falls back to whole mode for table translation") {
+        let markdown = "## 中文翻译\n\n| 列A | 列B |\n|---|---|\n| 1 | 2 |"
+        let html = HTMLRenderer.renderSplit(markdown: markdown, originalText: "First. Second.", isDark: false)
+        try assertTrue(html.contains("<div class=\"original-box\">"), "表格译文应回退整段渲染")
+        try assertFalse(html.contains("<div class=\"split-list\">"), "表格译文不应生成 split-list")
+    }
+
+    // MARK: - 句子级富文本（inlineMarkdownToHTML）
+
+    test("inlineMarkdownToHTML converts bold") {
+        let html = HTMLRenderer.inlineMarkdownToHTML("这是 **重点** 内容")
+        try assertTrue(html.contains("<strong>重点</strong>"), "应转加粗")
+        try assertFalse(html.contains("**"), "不应残留星号")
+    }
+
+    test("inlineMarkdownToHTML converts inline code") {
+        let html = HTMLRenderer.inlineMarkdownToHTML("看 `code` 这里")
+        try assertTrue(html.contains("<code>code</code>"), "应转行内代码")
+    }
+
+    test("inlineMarkdownToHTML escapes script") {
+        let html = HTMLRenderer.inlineMarkdownToHTML("<script>x</script>")
+        try assertFalse(html.contains("<script>"), "应转义脚本标签")
+        try assertTrue(html.contains("&lt;script&gt;"), "应转义为实体")
+    }
+
+    test("inlineMarkdownToHTML handles empty string") {
+        try assertEqual(HTMLRenderer.inlineMarkdownToHTML(""), "")
+    }
+
+    test("inlineMarkdownToHTML handles unclosed bold") {
+        let html = HTMLRenderer.inlineMarkdownToHTML("a **b")
+        try assertTrue(html.contains("**b"), "未闭合加粗应原样保留")
+    }
+
+    test("renderSplit converts bold in translation sentence") {
+        let markdown = "## 中文翻译\n\n这是 **重点**。第二句。"
+        let html = HTMLRenderer.renderSplit(markdown: markdown, originalText: "One. Two.", isDark: false)
+        try assertTrue(html.contains("<strong>重点</strong>"), "拆分模式译文应转加粗")
+    }
+
+    // MARK: - parseSections 前导内容
+
+    test("parseSections preserves preamble") {
+        let sections = HTMLRenderer.parseSections("前言\n\n## 中文翻译\n\n你好")
+        try assertEqual(sections.count, 2)
+        try assertNil(sections[0].heading)
+        try assertEqual(sections[0].body, "前言")
+        try assertEqual(sections[1].heading ?? "", "中文翻译")
+    }
+
+    test("renderSplit renders preamble") {
+        let markdown = "以下是翻译：\n\n## 中文翻译\n\n你好。世界。"
+        let html = HTMLRenderer.renderSplit(markdown: markdown, originalText: "Hello. World.", isDark: false)
+        try assertTrue(html.contains("以下是翻译："), "拆分模式应渲染前导内容")
+    }
+
+    test("parseSections no preamble regression") {
+        let sections = HTMLRenderer.parseSections("## 中文翻译\n\n你好")
+        try assertEqual(sections.count, 1)
+        try assertEqual(sections[0].heading ?? "", "中文翻译")
+    }
+
+    test("parseSections only preamble") {
+        let sections = HTMLRenderer.parseSections("只有前言")
+        try assertEqual(sections.count, 1)
+        try assertNil(sections[0].heading)
+        try assertEqual(sections[0].body, "只有前言")
+    }
+
+    // MARK: - 句数不一致提示条
+
+    test("renderSplit shows mismatch warning when sentence counts differ") {
+        let markdown = "## 中文翻译\n\n第一句。第二句。"
+        let html = HTMLRenderer.renderSplit(markdown: markdown, originalText: "One. Two. Three.", isDark: false)
+        try assertTrue(html.contains("句数不一致"), "句数不一致应显示提示条")
+        try assertTrue(html.contains("split-warning"), "提示条应有 split-warning 样式")
+    }
+
+    test("renderSplit no warning when sentence counts match") {
+        let markdown = "## 中文翻译\n\n第一句。第二句。"
+        let html = HTMLRenderer.renderSplit(markdown: markdown, originalText: "One. Two.", isDark: false)
+        try assertFalse(html.contains("句数不一致"), "句数一致不应显示提示条")
+    }
 }

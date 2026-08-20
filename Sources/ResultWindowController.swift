@@ -41,6 +41,12 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
     private var escRunLoopSource: CFRunLoopSource?
     private var togglePanelTap: CFMachPort?
     private var togglePanelRunLoopSource: CFRunLoopSource?
+    private var splitTap: CFMachPort?
+    private var splitRunLoopSource: CFRunLoopSource?
+    private var splitControl: NSSegmentedControl?
+    private var currentMarkdown = ""
+    private var currentOriginalText = ""
+    private var isSplitMode = false
 
     /// 共享 CGEventTap 创建与安装逻辑，消除 installEscTap / installToggleTap 的重复代码
     private func createAndInstallTap(
@@ -164,10 +170,83 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
         logi("TogglePanel tap: 已移除")
     }
 
+    /// 拆分翻译快捷键（面板可见时生效，默认 ⌃D）
+    private func installSplitTap() {
+        guard splitTap == nil else { return }
+        let callback: CGEventTapCallBack = { (proxy, type, event, info) -> Unmanaged<CGEvent>? in
+            guard let info = info else { return Unmanaged.passRetained(event) }
+            let ctrl = Unmanaged<ResultWindowController>.fromOpaque(info).takeUnretainedValue()
+            guard ctrl.panel != nil else { return Unmanaged.passRetained(event) }
+
+            let settings = SettingsManager.shared
+            let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+            if keyCode != Int64(settings.splitHotkeyKeyCode) { return Unmanaged.passRetained(event) }
+
+            let expectedModifiers = settings.splitHotkeyModifiers
+            let flags = event.flags
+            var actualModifiers = 0
+            if flags.contains(.maskCommand) { actualModifiers |= Int(cmdKey) }
+            if flags.contains(.maskShift) { actualModifiers |= Int(shiftKey) }
+            if flags.contains(.maskControl) { actualModifiers |= Int(controlKey) }
+            if flags.contains(.maskAlternate) { actualModifiers |= Int(optionKey) }
+            if actualModifiers != expectedModifiers { return Unmanaged.passRetained(event) }
+
+            DispatchQueue.main.async { ctrl.toggleSplitMode() }
+            return nil
+        }
+        let (tap, source) = createAndInstallTap(callback: callback, tag: "SplitMode")
+        splitTap = tap
+        splitRunLoopSource = source
+    }
+
+    private func removeSplitTap() {
+        guard let tap = splitTap else { return }
+        CGEvent.tapEnable(tap: tap, enable: false)
+        if let source = splitRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
+        }
+        splitTap = nil
+        splitRunLoopSource = nil
+        logi("SplitMode tap: 已移除")
+    }
+
+    /// 切换「整段 / 拆分」显示（供按钮与快捷键共用）
+    func toggleSplitMode() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, let seg = self.splitControl else { return }
+            // 内容不适合拆分时忽略切换
+            guard HTMLRenderer.canSplit(markdown: self.currentMarkdown, originalText: self.currentOriginalText) else { return }
+            seg.selectedSegment = self.isSplitMode ? 0 : 1
+            self.isSplitMode = (seg.selectedSegment == 1)
+            self.reloadWebView()
+        }
+    }
+
+    @objc private func splitModeChanged(_ sender: NSSegmentedControl) {
+        isSplitMode = (sender.selectedSegment == 1)
+        reloadWebView()
+    }
+
+    private func reloadWebView() {
+        guard let wv = webView else { return }
+        let isDark = NSApp.effectiveAppearance.name == .darkAqua
+        let html: String
+        if isSplitMode {
+            html = HTMLRenderer.renderSplit(markdown: currentMarkdown, originalText: currentOriginalText, isDark: isDark)
+        } else {
+            html = HTMLRenderer.render(markdown: currentMarkdown, originalText: currentOriginalText, isDark: isDark)
+        }
+        wv.loadHTMLString(html, baseURL: nil)
+    }
+
     func show(markdown: String, originalText: String, screenshotRect: NSRect) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.panel?.close()
+            self.currentMarkdown = markdown
+            self.currentOriginalText = originalText
+            self.isSplitMode = false
+
             let frame = self.computeFrame(avoidRect: screenshotRect)
 
             let panel = NSPanel(contentRect: frame,
@@ -183,13 +262,33 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
 
             let config = WKWebViewConfiguration()
             config.defaultWebpagePreferences.allowsContentJavaScript = false
-            let wv = ResultWebView(frame: NSRect(x: 0, y: 0, width: frame.width, height: frame.height),
+
+            // 顶部工具栏：整段 / 拆分 切换
+            let toolbarHeight: CGFloat = 36
+            let container = NSView(frame: NSRect(x: 0, y: 0, width: frame.width, height: frame.height))
+            let toolbar = NSView(frame: NSRect(x: 0, y: frame.height - toolbarHeight, width: frame.width, height: toolbarHeight))
+            toolbar.autoresizingMask = [.width, .minYMargin]
+
+            let seg = NSSegmentedControl(labels: ["整段", "拆分"], trackingMode: .selectOne,
+                                         target: self, action: #selector(self.splitModeChanged(_:)))
+            seg.frame = NSRect(x: 12, y: 6, width: 150, height: 24)
+            seg.segmentStyle = .rounded
+            seg.selectedSegment = 0
+            // 内容不适合拆分（表格/单词/单句）时禁用「拆分」段
+            seg.setEnabled(HTMLRenderer.canSplit(markdown: markdown, originalText: originalText), forSegment: 1)
+            toolbar.addSubview(seg)
+            self.splitControl = seg
+
+            let wv = ResultWebView(frame: NSRect(x: 0, y: 0, width: frame.width, height: frame.height - toolbarHeight),
                                    configuration: config)
             wv.autoresizingMask = [.width, .height]
             wv.setValue(false, forKey: "drawsBackground")
             let isDark = NSApp.effectiveAppearance.name == .darkAqua
             wv.loadHTMLString(HTMLRenderer.render(markdown: markdown, originalText: originalText, isDark: isDark), baseURL: nil)
-            panel.contentView = wv
+
+            container.addSubview(wv)
+            container.addSubview(toolbar)
+            panel.contentView = container
             panel.makeKeyAndOrderFront(nil)
 
             self.panel = panel
@@ -199,6 +298,8 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             self.installEscTap()
             // 安装切换弹窗位置快捷键
             self.installToggleTap()
+            // 安装拆分翻译快捷键
+            self.installSplitTap()
         }
     }
 
@@ -208,6 +309,8 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             self.panel?.close()
             self.panel = nil
             self.webView = nil
+            self.splitControl = nil
+            self.isSplitMode = false
         }
     }
 
@@ -234,8 +337,11 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
         guard let win = notification.object as? NSWindow, win == panel else { return }
         removeEscTap()
         removeToggleTap()
+        removeSplitTap()
         panel = nil
         webView = nil
+        splitControl = nil
+        isSplitMode = false
     }
 
     func windowDidMove(_ notification: Notification) {
@@ -246,10 +352,80 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
 
 // MARK: - HTML 渲染器
 
+/// Markdown "## 章节" 的结构化表示
+struct MarkdownSection {
+    let heading: String?   // nil 表示无标题的前导内容
+    let body: String
+}
+
 final class HTMLRenderer {
     static func render(markdown: String, originalText: String, isDark: Bool) -> String {
+        let body = markdownBodyToHTML(markdown)
+        return shell(body: body, originalBox: originalBoxHTML(originalText), isDark: isDark)
+    }
+
+    /// 拆分翻译视图：把「中文翻译」章节按句拆分，与原文逐句对照；其余章节（词汇/短语/核查）原样保留。
+    /// 不重新请求 AI；若译文无「中文翻译」章节（自定义模板）或拆分结果为空，则回退整段渲染。
+    static func renderSplit(markdown: String, originalText: String, isDark: Bool) -> String {
+        guard canSplit(markdown: markdown, originalText: originalText) else {
+            return render(markdown: markdown, originalText: originalText, isDark: isDark)
+        }
+        let sections = parseSections(markdown)
+        guard let transSection = sections.first(where: { $0.heading?.contains("中文翻译") == true }) else {
+            return render(markdown: markdown, originalText: originalText, isDark: isDark)
+        }
+        let pairs = SentenceSplitter.pair(original: originalText, translation: transSection.body)
+
+        // 前导内容（无标题），渲染在最前
+        let preambleHTML = sections
+            .filter { $0.heading == nil }
+            .map { markdownBodyToHTML($0.body) }
+            .joined()
+
+        var splitHTML = preambleHTML
+        if !SentenceSplitter.sentenceCountsMatch(original: originalText, translation: transSection.body) {
+            splitHTML += "<div class=\"split-warning\">⚠️ 原文与译文句数不一致，逐句对照可能错位</div>"
+        }
+        splitHTML += "<h2>中文翻译</h2>"
+        splitHTML += "<div class=\"split-list\">"
+        for (idx, pair) in pairs.enumerated() {
+            splitHTML += "<div class=\"split-pair\">"
+            if !pair.original.isEmpty {
+                splitHTML += "<div class=\"split-original\">\(idx + 1). \(inlineMarkdownToHTML(pair.original))</div>"
+            }
+            if !pair.translation.isEmpty {
+                splitHTML += "<div class=\"split-translation\">\(inlineMarkdownToHTML(pair.translation))</div>"
+            }
+            splitHTML += "</div>"
+        }
+        splitHTML += "</div>"
+
+        let otherSections = sections.filter { $0.heading != nil && $0.heading?.contains("中文翻译") != true }
+        let otherMarkdown = otherSections.map { "## \($0.heading!)\n\($0.body)" }.joined(separator: "\n\n")
+        let otherHTML = otherMarkdown.isEmpty ? "" : markdownBodyToHTML(otherMarkdown)
+
+        return shell(body: splitHTML + otherHTML, originalBox: nil, isDark: isDark)
+    }
+
+    /// 判定当前内容是否适合拆分翻译：有「中文翻译」章节、非表格、且能拆出 ≥2 句
+    static func canSplit(markdown: String, originalText: String) -> Bool {
+        let sections = parseSections(markdown)
+        guard let transSection = sections.first(where: { $0.heading?.contains("中文翻译") == true }) else {
+            return false
+        }
+        guard !isTableBody(transSection.body) else { return false }
+        let pairs = SentenceSplitter.pair(original: originalText, translation: transSection.body)
+        return pairs.count >= 2
+    }
+
+    /// 判断译文正文是否包含 Markdown 表格分隔行（|----|），含则视为表格内容
+    private static func isTableBody(_ body: String) -> Bool {
+        body.components(separatedBy: "\n").contains { isTableSeparatorLine($0) }
+    }
+
+    /// Markdown 正文 → HTML（转义 + 标题/加粗/行内代码/表格/段落）
+    private static func markdownBodyToHTML(_ markdown: String) -> String {
         var html = escapeHTML(markdown)
-        // MD 标题 → HTML 标题
         for keyword in ["中文翻译", "重要词汇", "常用短语与习语", "核查"] {
             html = html.replacingOccurrences(of: "## \(keyword)", with: "<h2>\(keyword)</h2>")
         }
@@ -264,15 +440,24 @@ final class HTMLRenderer {
         html = "<p>" + html + "</p>"
         html = html.replacingOccurrences(of: "<p></p>", with: "")
         html = html.replacingOccurrences(of: "<p><br></p>", with: "")
+        return html
+    }
 
+    /// 原文盒 HTML（拆分模式下不显示，原文已逐句内联）
+    private static func originalBoxHTML(_ originalText: String) -> String {
         let normalized = TextNormalizer.normalizeLineBreaks(originalText)
         let escaped = normalized
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\n\n", with: "<br><br>")
+        return "<strong>📝 原文：</strong><br>\(escaped)"
+    }
 
+    /// 公共 HTML 外壳（head/CSS/body 结构 + footer）
+    private static func shell(body: String, originalBox: String?, isDark: Bool) -> String {
         let themeClass = isDark ? "dark" : "light"
+        let originalBoxHTML = originalBox.map { "<div class=\"original-box\">\($0)</div>" } ?? ""
         return """
         <!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
         <style>
@@ -294,6 +479,19 @@ final class HTMLRenderer {
             blockquote{border-left:4px solid;padding:10px 16px;margin:8px 0 12px;border-radius:0 8px 8px 0;font-size:15px}
             body.light blockquote{background:#f9f9fb;border-left-color:#0071e3;color:#3a3a3c}
             body.dark blockquote{background:#2c2c2e;border-left-color:#0a84ff;color:#c0c0c5}
+            .split-list{display:flex;flex-direction:column;gap:10px;margin:8px 0 4px}
+            .split-pair{border:1px solid;border-radius:8px;padding:10px 14px}
+            body.light .split-pair{background:#f5f5f7;border-color:#e5e5e7}
+            body.dark .split-pair{background:#2c2c2e;border-color:#3a3a3c}
+            .split-original{font-style:italic;margin-bottom:4px;overflow-wrap:break-word}
+            body.light .split-original{color:#1a3a6b}
+            body.dark .split-original{color:#8ab4f8}
+            .split-translation{overflow-wrap:break-word}
+            body.light .split-translation{color:#1d1d1f}
+            body.dark .split-translation{color:#e5e5e7}
+            .split-warning{padding:10px 14px;margin:0 0 8px;border-radius:8px;font-size:13px;border:1px solid}
+            body.light .split-warning{background:#fff3cd;color:#8a6d3b;border-color:#ffe08a}
+            body.dark .split-warning{background:#3a2f00;color:#ffd75e;border-color:#5c4a00}
             table{width:100%;border-collapse:collapse;margin:10px 0 16px;font-size:13px}th{padding:10px 12px;text-align:left;font-weight:600}td{padding:8px 12px;border-bottom:1px solid;vertical-align:top}
             body.light th{background:#f5f5f7;color:#1d1d1f}body.light td{border-color:#e5e5e7;color:#1d1d1f}
             body.dark th{background:#2c2c2e;color:#fff}body.dark td{border-color:#3a3a3c;color:#e5e5e7}
@@ -302,13 +500,40 @@ final class HTMLRenderer {
             body.dark .footer{border-top-color:#3a3a3c;color:#8e8e93}
         </style>
         </head><body class="\(themeClass)">
-        <div class="original-box"><strong>📝 原文：</strong><br>\(escaped)</div>
+        \(originalBoxHTML)
         <div class="content">
-        \(html)
+        \(body)
         <div class="footer">Powered by \(SettingsManager.shared.apiProvider.shortName) AI · ELTA — 截图即译，精读利器</div>
         </div>
         </body></html>
         """
+    }
+
+    /// 解析 Markdown 的 "## 章节" 结构为 [标题, 正文]
+    static func parseSections(_ markdown: String) -> [MarkdownSection] {
+        var sections: [MarkdownSection] = []
+        let lines = markdown.components(separatedBy: "\n")
+        var currentHeading: String?
+        var currentBody: [String] = []
+
+        func flush() {
+            let body = currentBody.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !body.isEmpty {
+                sections.append(MarkdownSection(heading: currentHeading, body: body))
+            }
+            currentBody = []
+        }
+
+        for line in lines {
+            if line.hasPrefix("## ") {
+                flush()
+                currentHeading = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+            } else {
+                currentBody.append(line)
+            }
+        }
+        flush()
+        return sections
     }
 
     static func escapeHTML(_ text: String) -> String {
@@ -316,6 +541,14 @@ final class HTMLRenderer {
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\"", with: "&quot;")
+    }
+
+    /// 句子级 Markdown 富文本 → HTML：转义 + 加粗 + 行内代码（不做标题/表格/段落，句子已是单行）
+    static func inlineMarkdownToHTML(_ text: String) -> String {
+        var html = escapeHTML(text)
+        html = html.replacingOccurrences(of: #"\*\*(.+?)\*\*"#, with: "<strong>$1</strong>", options: .regularExpression)
+        html = html.replacingOccurrences(of: "`([^`]+)`", with: "<code>$1</code>", options: .regularExpression)
+        return html
     }
 
     // MARK: - Markdown 表格 → HTML 表格

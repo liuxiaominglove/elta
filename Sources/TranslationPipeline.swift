@@ -8,6 +8,11 @@ final class TranslationPipeline {
 
     private var loadingPanel: NSPanel?
 
+    /// 翻译任务代号：每次新任务 +1，用于 ESC 取消后丢弃旧任务结果
+    private var currentTaskGeneration = 0
+    private var loadingEscTap: CFMachPort?
+    private var loadingEscRunLoopSource: CFRunLoopSource?
+
     /// 划词翻译触发时，记录前台应用的 PID，用于通过 Accessibility API 读取该应用的选中文本
     var selectionSourcePID: pid_t?
 
@@ -58,6 +63,8 @@ final class TranslationPipeline {
             return
         }
         primePermissionsIfNeeded()
+        currentTaskGeneration += 1
+        let generation = currentTaskGeneration
         ScreenshotEngine.shared.start { [weak self] rect, cgImage in
             guard let cgImage = cgImage, rect != .zero else {
                 logi("截图取消或失败"); return
@@ -80,15 +87,19 @@ final class TranslationPipeline {
                 let isTable = text.contains("| -")
                 logi("表格检测: \(isTable ? "是表格" : "纯文本"), \(blocks.count) 块文本")
 
+                // ESC 已取消则不再发起翻译
+                guard generation == self?.currentTaskGeneration else { return }
+
                 // 翻译
                 logi("[Step 3] AI 翻译...")
                 TranslationEngine.shared.translate(text: text) { [weak self] result in
+                    guard let self = self, generation == self.currentTaskGeneration else { return }
                     guard let result = result else {
-                        self?.hideLoading()
-                        self?.showError("AI 翻译失败。\nOCR 已识别文本：\n\(text.prefix(200))")
+                        self.hideLoading()
+                        self.showError("AI 翻译失败。\nOCR 已识别文本：\n\(text.prefix(200))")
                         return
                     }
-                    self?.hideLoading()
+                    self.hideLoading()
                     ResultWindowController.shared.show(markdown: result, originalText: text, screenshotRect: rect)
                     NotificationManager.shared.show(title: APP_DISPLAY_NAME, body: "翻译完成，点击查看结果")
                     logi("流水线完成")
@@ -218,6 +229,8 @@ final class TranslationPipeline {
             return
         }
         primePermissionsIfNeeded()
+        currentTaskGeneration += 1
+        let generation = currentTaskGeneration
 
         // 0. 记录触发时的鼠标位置（用于弹窗左右判断）
         let mouseLocation = NSEvent.mouseLocation
@@ -263,12 +276,13 @@ final class TranslationPipeline {
         // 5. 直接翻译
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             TranslationEngine.shared.translate(text: processedText) { [weak self] result in
+                guard let self = self, generation == self.currentTaskGeneration else { return }
                 guard let result = result else {
-                    self?.hideLoading()
-                    self?.showError("AI 翻译失败。\n选中文本长度：\(text.count)")
+                    self.hideLoading()
+                    self.showError("AI 翻译失败。\n选中文本长度：\(text.count)")
                     return
                 }
-                self?.hideLoading()
+                self.hideLoading()
                 let mouseRect = NSRect(x: mouseLocation.x - 5, y: mouseLocation.y - 5, width: 10, height: 10)
                 ResultWindowController.shared.show(markdown: result, originalText: text, screenshotRect: mouseRect)
                 NotificationManager.shared.show(title: APP_DISPLAY_NAME, body: "划词翻译完成，点击查看结果")
@@ -288,6 +302,8 @@ final class TranslationPipeline {
             return
         }
         primePermissionsIfNeeded()
+        currentTaskGeneration += 1
+        let generation = currentTaskGeneration
 
         // 0. 记录触发时的鼠标位置（用于弹窗定位 + 屏幕/段落锚定）
         let mouseLocation = NSEvent.mouseLocation
@@ -340,13 +356,17 @@ final class TranslationPipeline {
             }
             logi("悬停提取窗口文本: len=\(text.count)")
 
+            // ESC 已取消则不再发起翻译
+            guard generation == self?.currentTaskGeneration else { return }
+
             TranslationEngine.shared.translate(text: text) { [weak self] result in
+                guard let self = self, generation == self.currentTaskGeneration else { return }
                 guard let result = result else {
-                    self?.hideLoading()
-                    self?.showError("AI 翻译失败。\n已识别段落：\n\(text.prefix(200))")
+                    self.hideLoading()
+                    self.showError("AI 翻译失败。\n已识别段落：\n\(text.prefix(200))")
                     return
                 }
-                self?.hideLoading()
+                self.hideLoading()
                 ResultWindowController.shared.show(markdown: result, originalText: text, screenshotRect: mouseRect)
                 NotificationManager.shared.show(title: APP_DISPLAY_NAME, body: "悬停翻译完成，点击查看结果")
                 logi("悬停翻译流水线完成")
@@ -435,8 +455,10 @@ final class TranslationPipeline {
 
     private func hideLoading() {
         DispatchQueue.main.async { [weak self] in
-            self?.loadingPanel?.close()
-            self?.loadingPanel = nil
+            guard let self = self else { return }
+            self.removeLoadingEscTap()
+            self.loadingPanel?.close()
+            self.loadingPanel = nil
         }
     }
 
@@ -468,6 +490,66 @@ final class TranslationPipeline {
 
         panel.contentView = v
         loadingPanel = panel
+        installLoadingEscTap()
+    }
+
+    /// 取消当前翻译：代号失效 + 取消网络请求 + 关闭 loading 面板
+    private func cancelCurrentTranslation() {
+        currentTaskGeneration += 1
+        TranslationEngine.shared.cancelCurrentTask()
+        hideLoading()
+        logi("用户 ESC 取消了翻译任务")
+    }
+
+    /// 安装 loading 期间的 ESC 拦截（裸 ESC，无修饰键）
+    private func installLoadingEscTap() {
+        guard loadingEscTap == nil else { return }
+        let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+        let callback: CGEventTapCallBack = { (proxy, type, event, info) -> Unmanaged<CGEvent>? in
+            guard let info = info else { return Unmanaged.passRetained(event) }
+            let pipeline = Unmanaged<TranslationPipeline>.fromOpaque(info).takeUnretainedValue()
+            guard pipeline.loadingPanel != nil else { return Unmanaged.passRetained(event) }
+
+            let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+            guard keyCode == 0x35 else { return Unmanaged.passRetained(event) }  // ESC
+
+            let flags = event.flags
+            if flags.contains(.maskCommand) || flags.contains(.maskControl)
+                || flags.contains(.maskAlternate) || flags.contains(.maskShift) {
+                return Unmanaged.passRetained(event)
+            }
+
+            DispatchQueue.main.async { pipeline.cancelCurrentTranslation() }
+            return nil
+        }
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
+            callback: callback,
+            userInfo: selfPtr
+        ) else {
+            logi("Loading ESC tap: 创建失败（可能缺少 Accessibility 权限）")
+            return
+        }
+        let runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        loadingEscTap = tap
+        loadingEscRunLoopSource = runLoopSource
+        logi("Loading ESC tap: 已安装")
+    }
+
+    private func removeLoadingEscTap() {
+        guard let tap = loadingEscTap else { return }
+        CGEvent.tapEnable(tap: tap, enable: false)
+        if let source = loadingEscRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
+        }
+        loadingEscTap = nil
+        loadingEscRunLoopSource = nil
+        logi("Loading ESC tap: 已移除")
     }
 
     private func loadingPanelOrigin(size: NSSize) -> NSPoint {

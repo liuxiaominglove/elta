@@ -65,6 +65,11 @@ final class SettingsWindowController: NSObject {
         soloKeyHint: "或直接按 ` 键",
         defaultDisplay: { SettingsManager.shared.togglePanelHotkeyDisplay }
     )
+    let splitRecorder = HotkeyRecorder(
+        allowedSoloKeyCodes: [],
+        soloKeyHint: "",
+        defaultDisplay: { SettingsManager.shared.splitHotkeyDisplay }
+    )
 
     // Tab 3: 翻译模板
     private var templateTextView: NSTextView?
@@ -460,9 +465,11 @@ final class SettingsWindowController: NSObject {
     // MARK: - Tab 2: Hotkeys
 
     private func buildHotkeysTab(size: NSSize) -> NSView {
-        let v = NSView(frame: NSRect(origin: .zero, size: size))
+        // 内容比可视区略高，外包 NSScrollView 以容纳新增的「拆分翻译」快捷键行
+        let contentHeight = size.height + 160
+        let v = NSView(frame: NSRect(x: 0, y: 0, width: size.width, height: contentHeight))
         let w = size.width
-        let y0 = size.height - 30
+        let y0 = contentHeight - 30
 
         // ---- 1. Screenshot hotkey ----
         let titleLabel = NSTextField(labelWithString: "📸 截图翻译快捷键")
@@ -624,6 +631,34 @@ final class SettingsWindowController: NSObject {
         v.addSubview(toggleStatus)
         togglePanelRecorder.statusLabel = toggleStatus
 
+        // ---- 6. Split translation hotkey ----
+        let splitY = toggleY - 120
+        let splitTitle = NSTextField(labelWithString: "🔀 拆分翻译")
+        splitTitle.frame = NSRect(x: 20, y: splitY, width: 300, height: 22)
+        splitTitle.font = .systemFont(ofSize: 15, weight: .semibold)
+        v.addSubview(splitTitle)
+
+        let splitDesc = NSTextField(labelWithString: "翻译浮动面板显示时，按快捷键在「整段 / 拆分」之间切换")
+        splitDesc.frame = NSRect(x: 20, y: splitY - 24, width: w - 40, height: 16)
+        splitDesc.font = .systemFont(ofSize: 11)
+        splitDesc.textColor = .secondaryLabelColor
+        v.addSubview(splitDesc)
+
+        let splitBtn = NSButton(title: "  \(SettingsManager.shared.splitHotkeyDisplay)  ", target: splitRecorder, action: #selector(HotkeyRecorder.start))
+        splitBtn.frame = NSRect(x: 20, y: splitY - 65, width: 180, height: 32)
+        splitBtn.font = .systemFont(ofSize: 18, weight: .medium)
+        splitBtn.bezelStyle = .rounded
+        v.addSubview(splitBtn)
+        splitRecorder.recordBtn = splitBtn
+
+        let splitStatus = NSTextField(labelWithString: "点击上方按钮开始录制新快捷键")
+        splitStatus.frame = NSRect(x: 210, y: splitY - 78, width: w - 230, height: 48)
+        splitStatus.font = .systemFont(ofSize: 12)
+        splitStatus.textColor = .secondaryLabelColor
+        splitStatus.lineBreakMode = .byWordWrapping
+        v.addSubview(splitStatus)
+        splitRecorder.statusLabel = splitStatus
+
         // ---- 统一提示 ----
         let infoLabel = NSTextField(labelWithString: """
         💡 提示：
@@ -632,14 +667,21 @@ final class SettingsWindowController: NSObject {
         • 悬停翻译：鼠标移到段落右下角 → 按快捷键 → 翻译鼠标上方半屏内容（内容范围可选「双栏 / 整栏」，自动分段，免截图/划词）
         • 关闭面板：翻译浮动面板显示时，按下自定义快捷键即可关闭
         • 切换弹窗：翻译浮动面板显示时，按下快捷键可在左右侧之间切换
+        • 拆分翻译：翻译浮动面板显示时，按快捷键可在「整段 / 拆分」之间切换
         """)
-        infoLabel.frame = NSRect(x: 20, y: 5, width: w - 40, height: 80)
+        infoLabel.frame = NSRect(x: 20, y: 10, width: w - 40, height: 96)
         infoLabel.font = .systemFont(ofSize: 11)
         infoLabel.textColor = .secondaryLabelColor
         infoLabel.lineBreakMode = .byWordWrapping
         v.addSubview(infoLabel)
 
-        return v
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: size.width, height: size.height))
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
+        scrollView.drawsBackground = false
+        scrollView.documentView = v
+        return scrollView
     }
 
     // MARK: - Save
@@ -732,6 +774,12 @@ final class SettingsWindowController: NSObject {
             settings.togglePanelHotkeyDisplay = hotkeyDisplayString(keyCode: kc, modifiers: togglePanelRecorder.recordedModifiers)
         }
 
+        if let kc = splitRecorder.recordedKeyCode {
+            settings.splitHotkeyKeyCode = kc
+            settings.splitHotkeyModifiers = splitRecorder.recordedModifiers
+            settings.splitHotkeyDisplay = hotkeyDisplayString(keyCode: kc, modifiers: splitRecorder.recordedModifiers)
+        }
+
         DispatchQueue.main.async {
             (NSApp.delegate as? AppDelegate)?.reregisterHotkey()
         }
@@ -780,6 +828,10 @@ final class SettingsWindowController: NSObject {
         settings.togglePanelHotkeyModifiers = 0
         settings.togglePanelHotkeyDisplay = "`"
 
+        settings.splitHotkeyKeyCode = DEFAULT_SPLIT_HOTKEY_KEYCODE
+        settings.splitHotkeyModifiers = Int(controlKey)
+        settings.splitHotkeyDisplay = "⌃D"
+
         screenshotRecorder.recordBtn?.title = "    ⌃T    "
         screenshotRecorder.statusLabel?.stringValue = "已恢复默认快捷键 ⌃T"
         selectionRecorder.recordBtn?.title = "    ⇧⌃T    "
@@ -790,12 +842,15 @@ final class SettingsWindowController: NSObject {
         closePanelRecorder.statusLabel?.stringValue = "已恢复默认快捷键 Esc"
         togglePanelRecorder.recordBtn?.title = "    `    "
         togglePanelRecorder.statusLabel?.stringValue = "已恢复默认快捷键 `"
+        splitRecorder.recordBtn?.title = "    ⌃D    "
+        splitRecorder.statusLabel?.stringValue = "已恢复默认快捷键 ⌃D"
 
         screenshotRecorder.reset()
         selectionRecorder.reset()
         hoverRecorder.reset()
         closePanelRecorder.reset()
         togglePanelRecorder.reset()
+        splitRecorder.reset()
 
         // 恢复默认后需重新注册全局热键，否则仍沿用重置前的旧热键
         DispatchQueue.main.async {
@@ -886,6 +941,7 @@ extension SettingsWindowController: NSWindowDelegate {
         hoverRecorder.reset()
         closePanelRecorder.reset()
         togglePanelRecorder.reset()
+        splitRecorder.reset()
     }
 }
 
@@ -1009,5 +1065,6 @@ final class HotkeyRecorder: NSObject {
             || ctrl.hoverRecorder.isRecording
             || ctrl.closePanelRecorder.isRecording
             || ctrl.togglePanelRecorder.isRecording
+            || ctrl.splitRecorder.isRecording
     }
 }

@@ -12,14 +12,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settings = SettingsManager.shared
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 后台应用模式（菜单栏运行）— 保障全局热键 + 全屏 Space 截图正常
-        NSApp.setActivationPolicy(.accessory)
-
-        // 稍后显示 Dock 图标（使用 kCurrentProcess 常量，避免已废弃的 GetCurrentProcess）
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            var psn = ProcessSerialNumber(highLongOfPSN: 0, lowLongOfPSN: UInt32(kCurrentProcess))
-            TransformProcessType(&psn, ProcessApplicationTransformState(kProcessTransformToForegroundApplication))
-        }
+        // 常规应用模式：有 Dock 图标 + 顶部菜单栏（退出通道可靠）
+        NSApp.setActivationPolicy(.regular)
+        buildMainMenu()
 
         // 注册通知
         _ = NotificationManager.shared
@@ -45,7 +40,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         UpdateChecker.shared.check()
     }
 
-    /// 点击 Dock 图标时弹出设置窗口（保持 .accessory，不切换策略）
+    /// 构建顶部菜单栏 App 菜单（含「退出」），确保常规退出通道可用
+    private func buildMainMenu() {
+        let mainMenu = NSMenu()
+        let appMenuItem = NSMenuItem()
+        mainMenu.addItem(appMenuItem)
+
+        let appMenu = NSMenu()
+        appMenuItem.submenu = appMenu
+        let appName = APP_DISPLAY_NAME
+        appMenu.addItem(withTitle: "关于 \(appName)",
+                        action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+                        keyEquivalent: "")
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "隐藏 \(appName)",
+                        action: #selector(NSApplication.hide(_:)),
+                        keyEquivalent: "h")
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "退出 \(appName)",
+                        action: #selector(NSApplication.terminate(_:)),
+                        keyEquivalent: "q")
+
+        NSApp.mainMenu = mainMenu
+    }
+
+    /// 点击 Dock 图标时弹出设置窗口
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         SettingsWindowController.shared.show()
         return true
