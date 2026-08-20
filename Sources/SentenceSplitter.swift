@@ -24,6 +24,11 @@ enum SentenceSplitter {
         "e.g", "i.e", "U.S", "U.K", "Ph.D", "M.D", "B.C", "A.D", "vs"
     ]
 
+    /// 含空格的多词缩写（如 "et al."），按「前一词 + 句点前词」整体匹配
+    private static let multiWordAbbreviations: Set<String> = [
+        "et al"
+    ]
+
     /// 匹配 Apple Books 引用元信息「摘录来自《书名》作者」（condenseCitation 压缩后的固定形状），拆分前整段剔除
     private static let citationRegex = try! NSRegularExpression(pattern: "摘录来自《[^》]+》[^\\n]*")
 
@@ -121,6 +126,18 @@ enum SentenceSplitter {
         }
         if abbreviations.contains(word) { return true }
 
+        // 多词缩写（含空格，如 "et al."）：回溯句点前的「前一词 + 空格 + 当前词」整体比对
+        if !word.isEmpty {
+            var m = k
+            while m >= 0, chars[m] == " " { m -= 1 }
+            var prev = ""
+            while m >= 0, chars[m].isLetter {
+                prev.insert(chars[m], at: prev.startIndex)
+                m -= 1
+            }
+            if multiWordAbbreviations.contains("\(prev) \(word)") { return true }
+        }
+
         // 单大写字母缩写："J." "K."
         if word.count == 1, let ch = word.first, ch.isUppercase { return true }
 
@@ -145,7 +162,7 @@ enum SentenceSplitter {
         return result
     }
 
-    /// 按句末标点（。！？；…）拆分中文，保留标点
+    /// 按句末标点（。！？…）拆分中文，保留标点（分号「；」表并列，不拆）
     private static func splitChineseSentences(_ text: String) -> [String] {
         let chars = Array(text)
         var sentences: [String] = []

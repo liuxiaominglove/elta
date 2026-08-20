@@ -328,7 +328,10 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
         let w: CGFloat = onLeftSide ? (vf.maxX - midline) : (midline - vf.minX)
 
         if let saved = SettingsManager.shared.windowFrame {
-            return NSRect(x: x, y: saved.origin.y, width: w, height: saved.height)
+            // 校验并夹紧保存的窗口位置/高度到当前可见区域，防止换显示器/分辨率后窗口跑到屏幕外
+            let height = min(max(saved.height, 400), vf.height)
+            let y = min(max(saved.origin.y, vf.minY), vf.maxY - height)
+            return NSRect(x: x, y: y, width: w, height: height)
         }
         return NSRect(x: x, y: vf.minY, width: w, height: vf.height)
     }
@@ -605,14 +608,57 @@ final class HTMLRenderer {
         }
     }
 
-    /// 解析单行表格为单元格数组
+    /// 解析单行表格为单元格数组（还原 TableExtractor 对单元格内 | 与 \ 的转义）
     private static func parseTableCells(_ line: String) -> [String] {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
-        var cells = trimmed.components(separatedBy: "|")
+        var cells = splitUnescapedPipes(trimmed)
         // 去除首尾空串（| 在收尾时产生）
         if cells.first?.trimmingCharacters(in: .whitespaces).isEmpty ?? false { cells.removeFirst() }
         if cells.last?.trimmingCharacters(in: .whitespaces).isEmpty ?? false { cells.removeLast() }
-        return cells.map { $0.trimmingCharacters(in: .whitespaces) }
+        return cells.map { unescapeMarkdownTableCell($0.trimmingCharacters(in: .whitespaces)) }
+    }
+
+    /// 按「未转义」的 | 切分单元格：TableExtractor 用 \| 转义单元格内的管道符，偶数个反斜杠后的 | 才是分隔符
+    private static func splitUnescapedPipes(_ line: String) -> [String] {
+        let chars = Array(line)
+        var cells: [String] = []
+        var current = ""
+        var i = 0
+        while i < chars.count {
+            if chars[i] == "\\" {
+                var slashCount = 0
+                var j = i
+                while j < chars.count, chars[j] == "\\" { slashCount += 1; j += 1 }
+                current.append(contentsOf: chars[i..<j])
+                if j < chars.count, chars[j] == "|" {
+                    if slashCount % 2 == 0 {
+                        cells.append(current)   // 偶数反斜杠：| 是分隔符
+                        current = ""
+                    } else {
+                        current.append("|")     // 奇数反斜杠：\| 是转义管道
+                    }
+                    i = j + 1
+                    continue
+                }
+                i = j
+                continue
+            }
+            if chars[i] == "|" {
+                cells.append(current)
+                current = ""
+            } else {
+                current.append(chars[i])
+            }
+            i += 1
+        }
+        cells.append(current)
+        return cells
+    }
+
+    /// 还原 TableExtractor 的单元格转义（\| → |，\\ → \）
+    private static func unescapeMarkdownTableCell(_ text: String) -> String {
+        text.replacingOccurrences(of: "\\|", with: "|")
+            .replacingOccurrences(of: "\\\\", with: "\\")
     }
 
     /// 将 Markdown 表格行数组转换为 HTML <table>

@@ -9,7 +9,8 @@ class PasteTextField: NSTextField {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.type == .keyDown else { return super.performKeyEquivalent(with: event) }
         let f = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        guard f == .command else { return super.performKeyEquivalent(with: event) }
+        let realModifiers: NSEvent.ModifierFlags = [.command, .shift, .control, .option]
+        guard f.intersection(realModifiers) == .command else { return super.performKeyEquivalent(with: event) }
 
         let sel: Selector?
         switch event.charactersIgnoringModifiers?.lowercased() {
@@ -30,7 +31,8 @@ final class PasteSecureTextField: NSSecureTextField {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.type == .keyDown else { return super.performKeyEquivalent(with: event) }
         let f = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        guard f == .command else { return super.performKeyEquivalent(with: event) }
+        let realModifiers: NSEvent.ModifierFlags = [.command, .shift, .control, .option]
+        guard f.intersection(realModifiers) == .command else { return super.performKeyEquivalent(with: event) }
 
         let sel: Selector?
         switch event.charactersIgnoringModifiers?.lowercased() {

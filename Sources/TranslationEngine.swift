@@ -18,7 +18,9 @@ final class TranslationEngine {
     func translate(text: String, completion: @escaping (String?) -> Void) {
         let settings = SettingsManager.shared
         let provider = settings.apiProvider
-        guard let key = settings.activeApiKey, !key.isEmpty else {
+        let key = settings.activeApiKey ?? ""
+        // Ollama 本地无需 API Key；其余提供商必须配置
+        if provider.needsAPIKey && key.isEmpty {
             logi("未配置 \(provider.displayName) API Key")
             DispatchQueue.main.async {
                 let alert = NSAlert()

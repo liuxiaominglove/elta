@@ -116,6 +116,16 @@ func runSentenceSplitterTests() {
         try assertEqual(result, ["Smith et al. (2020) found it."])
     }
 
+    test("splitEnglish does not split after et al. followed by year") {
+        let result = SentenceSplitter.splitEnglish("Smith et al. 2020 found it.")
+        try assertEqual(result, ["Smith et al. 2020 found it."])
+    }
+
+    test("splitEnglish does not split after et al. followed by uppercase") {
+        let result = SentenceSplitter.splitEnglish("Johnson et al. Nature published it.")
+        try assertEqual(result, ["Johnson et al. Nature published it."])
+    }
+
     test("splitEnglish does not split after single-letter initial") {
         let result = SentenceSplitter.splitEnglish("J. K. Rowling wrote it.")
         try assertEqual(result, ["J. K. Rowling wrote it."])

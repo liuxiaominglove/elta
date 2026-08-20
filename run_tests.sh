@@ -88,8 +88,11 @@ echo ""
 echo "[2/2] Running tests..."
 echo ""
 
+# 测试失败时也要执行清理，故此处临时关闭 set -e（否则测试非零退出会跳过下方 cleanup）
+set +e
 "$TEST_BIN"
 EXIT_CODE=$?
+set -e
 
 echo ""
 

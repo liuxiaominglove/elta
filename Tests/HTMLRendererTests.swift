@@ -109,6 +109,19 @@ func runHTMLRendererTests() {
         try assertFalse(html.contains("<table>"), "无分隔行的 | 不应转成表格")
     }
 
+    test("render reverses escaped pipe in table cells") {
+        let markdown = "## 中文翻译\n\n| 表达式 | 含义 |\n|---|---|\n| a\\|b | 管道 |"
+        let html = HTMLRenderer.render(markdown: markdown, originalText: "原文", isDark: false)
+        try assertTrue(html.contains("<td>a|b</td>"), "转义管道 \\| 应还原为 |")
+        try assertTrue(html.contains("<td>管道</td>"), "普通单元格应正常渲染")
+    }
+
+    test("render reverses escaped backslash in table cells") {
+        let markdown = "## 中文翻译\n\n| 路径 | 说明 |\n|---|---|\n| a\\\\b | 反斜杠 |"
+        let html = HTMLRenderer.render(markdown: markdown, originalText: "原文", isDark: false)
+        try assertTrue(html.contains("<td>a\\b</td>"), "转义反斜杠 \\\\ 应还原为 \\")
+    }
+
     // MARK: - 原文锁定（sticky 首行）布局测试
 
     test("render wraps translation body in content container") {

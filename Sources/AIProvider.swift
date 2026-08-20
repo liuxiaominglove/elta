@@ -125,6 +125,13 @@ enum AIProvider: String, CaseIterable {
         guard isNumericIPv4(host) else { return false }
         if host.hasPrefix("192.168.") { return true }
         if host.hasPrefix("10.") { return true }
+        // 172.16.0.0/12 私有网段（172.16.x – 172.31.x）
+        if host.hasPrefix("172.") {
+            let parts = host.split(separator: ".")
+            if parts.count == 4, let second = Int(parts[1]), second >= 16, second <= 31 {
+                return true
+            }
+        }
         return false
     }
 
