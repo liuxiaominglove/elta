@@ -47,12 +47,6 @@ final class SettingsWindowController: NSObject {
         soloKeyHint: "",
         defaultDisplay: { SettingsManager.shared.selectionHotkeyDisplay }
     )
-    let hoverRecorder = HotkeyRecorder(
-        allowedSoloKeyCodes: [],
-        soloKeyHint: "",
-        defaultDisplay: { SettingsManager.shared.hoverHotkeyDisplay }
-    )
-    var hoverLayoutControl: NSSegmentedControl?
     let closePanelRecorder = HotkeyRecorder(
         allowedSoloKeyCodes: [0x35],
         soloKeyHint: "或直接按 ESC",
@@ -450,55 +444,8 @@ final class SettingsWindowController: NSObject {
         v.addSubview(selStatus)
         selectionRecorder.statusLabel = selStatus
 
-        // ---- 3. Hover hotkey ----
-        let hoverY = selY - 140
-        let hTitle = NSTextField(labelWithString: "🎯 悬停翻译快捷键")
-        hTitle.frame = NSRect(x: 20, y: hoverY, width: 300, height: 22)
-        hTitle.font = .systemFont(ofSize: 15, weight: .semibold)
-        v.addSubview(hTitle)
-
-        let hDesc = NSTextField(labelWithString: "鼠标移到段落右下角 → 按快捷键 → 翻译鼠标上方半屏内容（内容范围可选「双栏 / 整栏」，自动分段，免截图/划词）")
-        hDesc.frame = NSRect(x: 20, y: hoverY - 24, width: w - 40, height: 16)
-        hDesc.font = .systemFont(ofSize: 11)
-        hDesc.textColor = .secondaryLabelColor
-        v.addSubview(hDesc)
-
-        let hoverDisplay = SettingsManager.shared.hoverHotkeyDisplay
-        let hoverRecordBtn = NSButton(title: "    \(hoverDisplay)    ", target: hoverRecorder, action: #selector(HotkeyRecorder.start))
-        hoverRecordBtn.frame = NSRect(x: 20, y: hoverY - 80, width: 180, height: 42)
-        hoverRecordBtn.bezelStyle = .rounded
-        hoverRecordBtn.font = .systemFont(ofSize: 20, weight: .medium)
-        v.addSubview(hoverRecordBtn)
-        hoverRecorder.recordBtn = hoverRecordBtn
-
-        let hoverStatus = NSTextField(labelWithString: "点击上方按钮开始录制新快捷键")
-        hoverStatus.frame = NSRect(x: 210, y: hoverY - 88, width: w - 230, height: 48)
-        hoverStatus.font = .systemFont(ofSize: 12)
-        hoverStatus.textColor = .secondaryLabelColor
-        hoverStatus.lineBreakMode = .byWordWrapping
-        v.addSubview(hoverStatus)
-        hoverRecorder.statusLabel = hoverStatus
-
-        // ---- 悬停翻译内容范围 ----
-        let rangeTitle = NSTextField(labelWithString: "悬停翻译内容范围：")
-        rangeTitle.frame = NSRect(x: 20, y: hoverY - 112, width: 200, height: 16)
-        rangeTitle.font = .systemFont(ofSize: 12, weight: .semibold)
-        v.addSubview(rangeTitle)
-
-        let rangeHint = NSTextField(labelWithString: "双栏=左右分页（取鼠标左侧半屏宽）；整栏=全屏单栏（取整屏宽）")
-        rangeHint.frame = NSRect(x: 210, y: hoverY - 112, width: w - 230, height: 16)
-        rangeHint.font = .systemFont(ofSize: 11)
-        rangeHint.textColor = .secondaryLabelColor
-        v.addSubview(rangeHint)
-
-        let rangeSeg = NSSegmentedControl(labels: ["双栏", "整栏"], trackingMode: .selectOne, target: self, action: nil)
-        rangeSeg.frame = NSRect(x: 20, y: hoverY - 138, width: 220, height: 24)
-        rangeSeg.selectedSegment = (SettingsManager.shared.hoverLayoutMode == .halfColumn) ? 0 : 1
-        v.addSubview(rangeSeg)
-        hoverLayoutControl = rangeSeg
-
-        // ---- 4. Close panel hotkey ----
-        let escY = hoverY - 175
+        // ---- 3. Close panel hotkey ----
+        let escY = selY - 175
         let escTitle = NSTextField(labelWithString: "🚪 关闭翻译面板")
         escTitle.frame = NSRect(x: 20, y: escY, width: 300, height: 22)
         escTitle.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -525,7 +472,7 @@ final class SettingsWindowController: NSObject {
         v.addSubview(escStatus)
         closePanelRecorder.statusLabel = escStatus
 
-        // ---- 5. Toggle panel position ----
+        // ---- 4. Toggle panel position ----
         let toggleY = escY - 120
         let toggleTitle = NSTextField(labelWithString: "↔️ 切换弹窗位置")
         toggleTitle.frame = NSRect(x: 20, y: toggleY, width: 300, height: 22)
@@ -553,7 +500,7 @@ final class SettingsWindowController: NSObject {
         v.addSubview(toggleStatus)
         togglePanelRecorder.statusLabel = toggleStatus
 
-        // ---- 6. Split translation hotkey ----
+        // ---- 5. Split translation hotkey ----
         let splitY = toggleY - 120
         let splitTitle = NSTextField(labelWithString: "🔀 拆分翻译")
         splitTitle.frame = NSRect(x: 20, y: splitY, width: 300, height: 22)
@@ -586,7 +533,6 @@ final class SettingsWindowController: NSObject {
         💡 提示：
         • 截图翻译：任意位置按下快捷键 → 框选区域 → 自动翻译
         • 划词翻译：先选中文字 → 按下快捷键 → 自动翻译（更快捷）
-        • 悬停翻译：鼠标移到段落右下角 → 按快捷键 → 翻译鼠标上方半屏内容（内容范围可选「双栏 / 整栏」，自动分段，免截图/划词）
         • 关闭面板：翻译浮动面板显示时，按下自定义快捷键即可关闭
         • 切换弹窗：翻译浮动面板显示时，按下快捷键可在左右侧之间切换
         • 拆分翻译：翻译浮动面板显示时，按快捷键可在「整段 / 拆分」之间切换
@@ -615,7 +561,6 @@ final class SettingsWindowController: NSObject {
         let recorded: [(keyCode: Int?, modifiers: Int)] = [
             (screenshotRecorder.recordedKeyCode, screenshotRecorder.recordedModifiers),
             (selectionRecorder.recordedKeyCode, selectionRecorder.recordedModifiers),
-            (hoverRecorder.recordedKeyCode, hoverRecorder.recordedModifiers),
         ]
         let conflicts = collectHotkeyConflicts(recorded)
         if !conflicts.isEmpty {
@@ -651,16 +596,6 @@ final class SettingsWindowController: NSObject {
             settings.selectionHotkeyKeyCode = kc
             settings.selectionHotkeyModifiers = selectionRecorder.recordedModifiers
             settings.selectionHotkeyDisplay = hotkeyDisplayString(keyCode: kc, modifiers: selectionRecorder.recordedModifiers)
-        }
-
-        if let kc = hoverRecorder.recordedKeyCode {
-            settings.hoverHotkeyKeyCode = kc
-            settings.hoverHotkeyModifiers = hoverRecorder.recordedModifiers
-            settings.hoverHotkeyDisplay = hotkeyDisplayString(keyCode: kc, modifiers: hoverRecorder.recordedModifiers)
-        }
-
-        if let seg = hoverLayoutControl {
-            settings.hoverLayoutMode = (seg.selectedSegment == 1) ? .fullWidth : .halfColumn
         }
 
         if let kc = closePanelRecorder.recordedKeyCode {
@@ -715,12 +650,6 @@ final class SettingsWindowController: NSObject {
         settings.selectionHotkeyModifiers = Int(controlKey | shiftKey)
         settings.selectionHotkeyDisplay = "⇧⌃T"
 
-        settings.hoverHotkeyKeyCode = DEFAULT_HOVER_HOTKEY_KEYCODE
-        settings.hoverHotkeyModifiers = Int(cmdKey | optionKey)
-        settings.hoverHotkeyDisplay = "⌥⌘T"
-        settings.hoverLayoutMode = .halfColumn
-        hoverLayoutControl?.selectedSegment = 0
-
         settings.closePanelHotkeyKeyCode = 0x35
         settings.closePanelHotkeyModifiers = 0
         settings.closePanelHotkeyDisplay = "Esc"
@@ -737,8 +666,6 @@ final class SettingsWindowController: NSObject {
         screenshotRecorder.statusLabel?.stringValue = "已恢复默认快捷键 ⌃T"
         selectionRecorder.recordBtn?.title = "    ⇧⌃T    "
         selectionRecorder.statusLabel?.stringValue = "已恢复默认快捷键 ⇧⌃T"
-        hoverRecorder.recordBtn?.title = "    ⌥⌘T    "
-        hoverRecorder.statusLabel?.stringValue = "已恢复默认快捷键 ⌥⌘T"
         closePanelRecorder.recordBtn?.title = "    Esc    "
         closePanelRecorder.statusLabel?.stringValue = "已恢复默认快捷键 Esc"
         togglePanelRecorder.recordBtn?.title = "    `    "
@@ -748,7 +675,6 @@ final class SettingsWindowController: NSObject {
 
         screenshotRecorder.reset()
         selectionRecorder.reset()
-        hoverRecorder.reset()
         closePanelRecorder.reset()
         togglePanelRecorder.reset()
         splitRecorder.reset()
@@ -832,7 +758,6 @@ extension SettingsWindowController: NSWindowDelegate {
         // 关闭窗口时清理未完成的录制，避免本地 keyDown monitor 残留
         screenshotRecorder.reset()
         selectionRecorder.reset()
-        hoverRecorder.reset()
         closePanelRecorder.reset()
         togglePanelRecorder.reset()
         splitRecorder.reset()
@@ -971,7 +896,6 @@ final class HotkeyRecorder: NSObject {
         let ctrl = SettingsWindowController.shared
         return ctrl.screenshotRecorder.isRecording
             || ctrl.selectionRecorder.isRecording
-            || ctrl.hoverRecorder.isRecording
             || ctrl.closePanelRecorder.isRecording
             || ctrl.togglePanelRecorder.isRecording
             || ctrl.splitRecorder.isRecording

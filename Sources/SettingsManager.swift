@@ -3,12 +3,6 @@ import Foundation
 
 // MARK: - 设置管理器
 
-/// 悬停翻译内容范围
-enum HoverLayoutMode: String {
-    case halfColumn  // 双栏（同屏双页，水平取半屏宽）
-    case fullWidth   // 整栏（全屏单栏，水平取整屏宽）
-}
-
 final class SettingsManager {
     static let shared = SettingsManager()
 
@@ -25,12 +19,6 @@ final class SettingsManager {
         static let selectionHotkeyKeyCode  = "snaptranslate.selectionHotkeyKeyCode"
         static let selectionHotkeyModifiers = "snaptranslate.selectionHotkeyModifiers"
         static let selectionHotkeyDisplay  = "snaptranslate.selectionHotkeyDisplay"
-        // 悬停翻译快捷键（免截图/划词）
-        static let hoverHotkeyKeyCode  = "snaptranslate.hoverHotkeyKeyCode"
-        static let hoverHotkeyModifiers = "snaptranslate.hoverHotkeyModifiers"
-        static let hoverHotkeyDisplay  = "snaptranslate.hoverHotkeyDisplay"
-        // 悬停翻译内容范围（双栏 / 整栏）
-        static let hoverLayoutMode     = "snaptranslate.hoverLayoutMode"
         // 关闭翻译面板快捷键
         static let closePanelHotkeyKeyCode   = "snaptranslate.closePanelHotkeyKeyCode"
         static let closePanelHotkeyModifiers = "snaptranslate.closePanelHotkeyModifiers"
@@ -267,35 +255,6 @@ final class SettingsManager {
     var selectionHotkeyDisplay: String {
         get { defaults.string(forKey: Keys.selectionHotkeyDisplay) ?? "⇧⌃T" }
         set { defaults.set(newValue, forKey: Keys.selectionHotkeyDisplay) }
-    }
-
-    // 悬停翻译快捷键（默认 ⌥⌘T）
-    var hoverHotkeyKeyCode: Int {
-        get { defaults.object(forKey: Keys.hoverHotkeyKeyCode) as? Int ?? DEFAULT_HOVER_HOTKEY_KEYCODE }
-        set { defaults.set(newValue, forKey: Keys.hoverHotkeyKeyCode) }
-    }
-    var hoverHotkeyModifiers: Int {
-        get { defaults.object(forKey: Keys.hoverHotkeyModifiers) as? Int ?? Int(cmdKey | optionKey) }
-        set { defaults.set(newValue, forKey: Keys.hoverHotkeyModifiers) }
-    }
-    var hoverHotkeyDisplay: String {
-        get { defaults.string(forKey: Keys.hoverHotkeyDisplay) ?? "⌥⌘T" }
-        set { defaults.set(newValue, forKey: Keys.hoverHotkeyDisplay) }
-    }
-
-    // 悬停翻译内容范围（默认双栏）
-    var hoverLayoutMode: HoverLayoutMode {
-        get {
-            lock.lock(); defer { lock.unlock() }
-            guard let raw = defaults.string(forKey: Keys.hoverLayoutMode),
-                  let m = HoverLayoutMode(rawValue: raw) else { return .halfColumn }
-            return m
-        }
-        set {
-            lock.lock()
-            defaults.set(newValue.rawValue, forKey: Keys.hoverLayoutMode)
-            lock.unlock()
-        }
     }
 
     // 关闭翻译面板快捷键（默认 ESC，keyCode 0x35，无修饰键）

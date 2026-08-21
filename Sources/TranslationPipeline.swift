@@ -291,89 +291,6 @@ final class TranslationPipeline {
         }
     }
 
-    /// 悬停翻译（免截图/划词）：鼠标移到段落右下角 → 按快捷键 → 翻译鼠标上方半屏内容
-    /// （固定高度窗口，自动按「行距 + 缩进」分段，可能覆盖多段或半段）。
-    /// 步骤：捕获鼠标下整屏 → OCR（含坐标）→ 水平过滤（左上）+ 半屏窗口 → 分段 → 翻译。
-    func startHoverTranslation() {
-        logi("===== 悬停翻译流水线开始 =====")
-        // 检查是否已有翻译弹窗
-        guard !ResultWindowController.shared.isPanelVisible else {
-            showAlert("请先关闭上一个翻译弹窗", "关闭后即可开始新翻译。\n按 ESC 或点击弹窗左上角关闭按钮即可。")
-            return
-        }
-        primePermissionsIfNeeded()
-        currentTaskGeneration += 1
-        let generation = currentTaskGeneration
-
-        // 0. 记录触发时的鼠标位置（用于弹窗定位 + 屏幕/段落锚定）
-        let mouseLocation = NSEvent.mouseLocation
-        let mouseRect = NSRect(x: mouseLocation.x - 5, y: mouseLocation.y - 5, width: 10, height: 10)
-
-        // 1. 等待用户释放快捷键按键（Cmd/Option）
-        RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.3))
-
-        // 2. 自动捕获鼠标所在屏幕（无需框选）
-        guard let (screen, image) = ScreenshotEngine.shared.captureScreen(at: mouseLocation) else {
-            showError("无法截取屏幕。\n请确认已授予【屏幕录制】权限（系统设置 → 隐私与安全性 → 屏幕录制）。")
-            return
-        }
-
-        // 3. 鼠标全局点 → 图像像素坐标（左上原点），供窗口锚定
-        let mousePixel = ScreenGeometry.pointToImagePixel(
-            globalPoint: mouseLocation,
-            screenFrame: screen.frame,
-            imageSize: CGSize(width: CGFloat(image.width), height: CGFloat(image.height))
-        )
-        // 半屏窗口高度（图像像素）
-        let windowHeight = CGFloat(image.height) / 2
-        // 水平范围：双栏 = 半屏宽，整栏 = 整屏宽
-        let horizontalScope: CGFloat
-        switch SettingsManager.shared.hoverLayoutMode {
-        case .halfColumn: horizontalScope = CGFloat(image.width) / 2
-        case .fullWidth:  horizontalScope = CGFloat(image.width)
-        }
-
-        showHoverLoading()
-
-        // 4. OCR + 窗口提取 + 翻译
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let blocks = OCREngine.shared.recognizeWithPositions(cgImage: image), !blocks.isEmpty else {
-                self?.hideLoading()
-                self?.showError("未能识别到文字。\n请将鼠标移到目标段落右下角后重试。")
-                return
-            }
-            let text = ParagraphDetector.extractWindow(
-                blocks,
-                mouseX: mousePixel.x,
-                mouseY: mousePixel.y,
-                windowHeight: windowHeight,
-                horizontalScope: horizontalScope
-            )
-            guard !text.isEmpty else {
-                self?.hideLoading()
-                self?.showError("未能识别鼠标上方的文本。\n请将鼠标移到目标段落右下角后重试。")
-                return
-            }
-            logi("悬停提取窗口文本: len=\(text.count)")
-
-            // ESC 已取消则不再发起翻译
-            guard generation == self?.currentTaskGeneration else { return }
-
-            TranslationEngine.shared.translate(text: text) { [weak self] result in
-                guard let self = self, generation == self.currentTaskGeneration else { return }
-                guard let result = result else {
-                    self.hideLoading()
-                    self.showError("AI 翻译失败。\n已识别段落：\n\(text.prefix(200))")
-                    return
-                }
-                self.hideLoading()
-                ResultWindowController.shared.show(markdown: result, originalText: text, screenshotRect: mouseRect)
-                NotificationManager.shared.show(title: APP_DISPLAY_NAME, body: "悬停翻译完成，点击查看结果")
-                logi("悬停翻译流水线完成")
-            }
-        }
-    }
-
     /// Cmd+C + 剪贴板兜底方案
     private func getSelectedTextViaCopyPasteboard() -> String? {
         let pasteboard = NSPasteboard.general
@@ -438,12 +355,6 @@ final class TranslationPipeline {
     private func showTextLoading() {
         DispatchQueue.main.async { [weak self] in
             self?.showLoadingPanel(title: "正在翻译...", subtitle: "划词翻译 → AI 翻译分析")
-        }
-    }
-
-    private func showHoverLoading() {
-        DispatchQueue.main.async { [weak self] in
-            self?.showLoadingPanel(title: "正在识别与翻译...", subtitle: "识别鼠标所在段落 → AI 翻译分析")
         }
     }
 

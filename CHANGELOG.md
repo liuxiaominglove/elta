@@ -2,6 +2,11 @@
 
 All notable changes to ELTA will be documented in this file.
 
+## [Unreleased]
+
+### Removed
+- 移除「悬停翻译」功能及其相关设置（快捷键设置项、内容范围选项、菜单栏入口），并同步清理官网与文档中的悬停翻译介绍
+
 ## [v5.4.1] — 2026-08-21
 
 ### Fixed

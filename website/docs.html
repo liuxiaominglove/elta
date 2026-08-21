@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>使用文档 — ELTA 英语精读翻译助手</title>
-  <meta name="description" content="ELTA 使用文档：截图 / 划词 / 悬停三种翻译方式的完整说明、使用场景、快捷键、翻译模板与 AI 后端配置。">
+  <meta name="description" content="ELTA 使用文档：截图 / 划词两种翻译方式的完整说明、使用场景、快捷键、翻译模板与 AI 后端配置。">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
   <link rel="manifest" href="/manifest.json">
@@ -46,7 +46,7 @@
   <main class="doc-main">
 
     <h1>使用文档</h1>
-    <p class="doc-intro">ELTA 是一款专为英语精读设计的 macOS 截图/划词/悬停翻译工具。还没安装？请先看 <a href="/install">安装教程</a>。</p>
+    <p class="doc-intro">ELTA 是一款专为英语精读设计的 macOS 截图/划词翻译工具。还没安装？请先看 <a href="/install">安装教程</a>。</p>
 
     <!-- 使用方式 -->
     <section id="usage">
@@ -74,15 +74,6 @@
         <li>ELTA 自动获取选中文字 → 直接 AI 翻译（<strong>跳过截图+OCR</strong>，速度更快）</li>
       </ol>
       <p>💡 <strong>对比：</strong>截图翻译适合图片/PDF 中的不可选文字；划词翻译适合网页/文档中可选中的文字。</p>
-
-      <h3>悬停翻译（免截图/划词）</h3>
-      <ol>
-        <li>将鼠标移到目标段落的<strong>右下角</strong>（无需点击、无需选中文字）</li>
-        <li>按下快捷键 <kbd>⌥⌘T</kbd>（Option+Cmd+T）</li>
-        <li>ELTA 自动识别鼠标上方约半屏内容并翻译；可在 <strong>偏好设置 → 快捷键</strong> 选择「内容范围」：<code>双栏</code>（左右分页，取鼠标左侧半屏宽）或 <code>整栏</code>（全屏单栏，取整屏宽）</li>
-        <li>窗口内的表格会自动转为 Markdown 表格，AI 逐格翻译、保持表格结构</li>
-      </ol>
-      <p>💡 <strong>适用场景：</strong>阅读双栏电子书、带目录/侧栏的网页时，悬停翻译能自动避开目录栏与浏览器 chrome，只翻译正文。</p>
 
       <h3>拆分翻译（逐句对照）</h3>
       <ol>
@@ -116,19 +107,7 @@
         <strong>小技巧：</strong>PDF 里的文字不可选中，必须用「截图翻译」而非「划词翻译」。截图翻译走本地 OCR，离线即可识别，隐私安全。
       </div>
 
-      <h3>场景二：读双栏英文电子书 / 文献</h3>
-      <p>双栏排版的电子书或论文，左右两页并排，普通工具容易把两栏文字混在一起。用「悬停翻译」能自动只取鼠标所在的那一栏。</p>
-      <ol>
-        <li>把鼠标移到目标段落右下角（<strong>无需点击、无需选中文字</strong>）。</li>
-        <li>按下 <kbd>⌥⌘T</kbd>。</li>
-        <li>ELTA 自动识别鼠标上方半屏内容并翻译。</li>
-        <li>默认「双栏」模式只取鼠标左侧半屏宽，正好避开另一栏；若是全屏单栏排版，可在偏好设置 → 快捷键里把「内容范围」改为「整栏」。</li>
-      </ol>
-      <div class="doc-note">
-        <strong>适用场景：</strong>带目录/侧边栏的网页、双栏 PDF、左右分页的阅读器。悬停翻译能自动绕开目录栏，只翻译正文。
-      </div>
-
-      <h3>场景三：浏览英文网页 / 新闻</h3>
+      <h3>场景二：浏览英文网页 / 新闻</h3>
       <p>网页和文档里的文字可以选中，这时用「划词翻译」最快——跳过截图和 OCR，直接翻译选中文字。</p>
       <ol>
         <li>在网页里<strong>选中</strong>想翻译的英文句子或段落。</li>
@@ -139,7 +118,7 @@
         <strong>对比：</strong>能选中文字就用「划词翻译」（快）；文字是图片/不可选中时才用「截图翻译」（走 OCR）。
       </div>
 
-      <h3>场景四：图片 / 视频字幕里的文字</h3>
+      <h3>场景三：图片 / 视频字幕里的文字</h3>
       <p>截图、漫画、海报、视频字幕里的英文无法被选中，只能用「截图翻译」靠 OCR 提取。</p>
       <ol>
         <li>按下 <kbd>⌃T</kbd>。</li>
@@ -150,7 +129,7 @@
         <strong>注意：</strong>OCR 识别的是「框选区域内的清晰文字」，框选太小或文字太模糊会影响识别率，建议框选范围稍大于文字区域。
       </div>
 
-      <h3>场景五：积累词汇与短语</h3>
+      <h3>场景四：积累词汇与短语</h3>
       <p>内置的「精读翻译」模板除了译文，还会输出「重要词汇」和「常用短语与习语」两栏，适合一边读一边做笔记。</p>
       <ol>
         <li>用截图或划词翻译一段英文。</li>
@@ -172,13 +151,12 @@
         <tbody>
           <tr><td><kbd>⌃T</kbd>（可自定义）</td><td>截图翻译</td><td>全局可用，框选屏幕区域 → 自动 OCR + 翻译</td></tr>
           <tr><td><kbd>⇧⌃T</kbd>（可自定义）</td><td>划词翻译</td><td>选中文本后使用，跳过 OCR 直接翻译</td></tr>
-          <tr><td><kbd>⌥⌘T</kbd>（可自定义）</td><td>悬停翻译</td><td>鼠标移到段落右下角，自动识别该段并翻译（免截图/划词）</td></tr>
           <tr><td><kbd>⌃D</kbd>（可自定义）</td><td>整段 / 拆分切换</td><td>翻译弹窗可见时，在整段译文与逐句对照之间切换</td></tr>
           <tr><td><kbd>`</kbd>（可自定义）</td><td>切换弹窗位置</td><td>翻译弹窗可见时，一键切换弹窗到屏幕另一侧</td></tr>
           <tr><td><kbd>Esc</kbd>（可自定义）</td><td>关闭</td><td>关闭翻译结果浮动面板，可在偏好设置中修改</td></tr>
         </tbody>
       </table>
-      <p>你可以在 <strong>偏好设置 → 快捷键</strong> 中自定义截图、划词、悬停、切换弹窗以及关闭面板的快捷键。</p>
+      <p>你可以在 <strong>偏好设置 → 快捷键</strong> 中自定义截图、划词、切换弹窗以及关闭面板的快捷键。</p>
     </section>
 
     <!-- 翻译模板 -->
@@ -282,7 +260,7 @@
       <h2>反馈</h2>
       <p>遇到问题或有建议？欢迎直接发邮件给我：</p>
       <p><a href="mailto:1959624534@qq.com">1959624534@qq.com</a></p>
-      <p>建议在邮件中附上：问题描述、macOS 版本、使用的翻译方式（截图 / 划词 / 悬停），如能附上截图更好。</p>
+      <p>建议在邮件中附上：问题描述、macOS 版本、使用的翻译方式（截图 / 划词），如能附上截图更好。</p>
     </section>
 
   </main>

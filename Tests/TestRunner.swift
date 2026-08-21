@@ -65,8 +65,6 @@ func runAllTests() -> Int32 {
     runTranslationEngineTests()
     runTranslationPipelineTests()
     runPasteboardSnapshotTests()
-    runParagraphDetectorTests()
-    runScreenGeometryTests()
     runSentenceSplitterTests()
     runTestRunnerTests()
 

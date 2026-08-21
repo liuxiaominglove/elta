@@ -20,7 +20,6 @@ final class StatusBarController {
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "📷 截图翻译", action: #selector(AppDelegate.screenshotTranslate), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "📝 划词翻译", action: #selector(AppDelegate.selectionTranslate), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "🎯 悬停翻译", action: #selector(AppDelegate.hoverTranslate), keyEquivalent: ""))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "⚙️ 偏好设置...", action: #selector(AppDelegate.openSettings), keyEquivalent: ","))
         menu.addItem(.separator())

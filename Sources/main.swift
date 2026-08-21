@@ -19,7 +19,6 @@ let APP_DISPLAY_NAME  = "ELTA"
 let LOG_PATH          = "\(NSHomeDirectory())/Library/Logs/elta.log"
 let DEFAULT_HOTKEY_KEYCODE: Int = 0x11  // T
 let DEFAULT_SELECTION_HOTKEY_KEYCODE: Int = 0x11  // T（配合 Shift）
-let DEFAULT_HOVER_HOTKEY_KEYCODE: Int = 0x11  // T（配合 Cmd+Option）
 let DEFAULT_SPLIT_HOTKEY_KEYCODE: Int = 0x02  // D（配合 Control）
 
 // 运行时从 Info.plist 读取版本号（每次编译/打包时自动同步）

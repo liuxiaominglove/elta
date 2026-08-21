@@ -87,22 +87,6 @@ final class ScreenshotEngine: NSObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 60, execute: timer)
     }
 
-    // MARK: - 自动整屏捕获（悬停翻译用）
-
-    /// 捕获鼠标所在屏幕的完整画面，返回所在屏幕 + CGImage（无选区遮罩，直接截图）。
-    /// 用于「免截图/划词」的悬停翻译：自动识别鼠标下段落，无需用户框选。
-    func captureScreen(at point: NSPoint) -> (screen: NSScreen, image: CGImage)? {
-        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(point) }) ?? NSScreen.main else {
-            loge("captureScreen: 无法定位鼠标所在屏幕")
-            return nil
-        }
-        guard let image = captureDisplayImage(screen: screen) else {
-            loge("captureScreen: 屏幕截图失败")
-            return nil
-        }
-        return (screen, image)
-    }
-
     // MARK: - 结束 & 清理
 
     private func finish(rect: NSRect, image: CGImage?) {        overlayView?.doneCallback?(rect, image)

@@ -7,7 +7,6 @@ import UserNotifications
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkeyRef: EventHotKeyRef?
     private var selectionHotkeyRef: EventHotKeyRef?
-    private var hoverHotkeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
     private let settings = SettingsManager.shared
 
@@ -34,7 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             SettingsWindowController.shared.show()
         }
 
-        logi("\(APP_DISPLAY_NAME) 就绪 — Cmd+T 截图翻译 | Shift+Cmd+T 划词翻译 | ⌥⌘T 悬停翻译 | 点击菜单栏 📖 操作")
+        logi("\(APP_DISPLAY_NAME) 就绪 — Cmd+T 截图翻译 | Shift+Cmd+T 划词翻译 | 点击菜单栏 📖 操作")
 
         // 后台检查更新
         UpdateChecker.shared.check()
@@ -79,7 +78,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 先注销旧的
         if let ref = hotkeyRef { UnregisterEventHotKey(ref); hotkeyRef = nil }
         if let ref = selectionHotkeyRef { UnregisterEventHotKey(ref); selectionHotkeyRef = nil }
-        if let ref = hoverHotkeyRef { UnregisterEventHotKey(ref); hoverHotkeyRef = nil }
 
         // 收集注册失败的热键：不再降级、不覆盖用户偏好，改为提示用户去修改
         var failures: [(name: String, display: String, reason: String)] = []
@@ -116,22 +114,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             loge("划词快捷键注册失败")
         }
 
-        // ---- 悬停翻译热键（id=20） ----
-        let hotkeyID20 = EventHotKeyID(signature: 0x534E5452, id: 20)
-        let hoverKeyCode = settings.hoverHotkeyKeyCode
-        let hoverMods = settings.hoverHotkeyModifiers
-        let s20 = RegisterEventHotKey(sanitizeHotkeyCode(hoverKeyCode), sanitizeHotkeyCode(hoverMods), hotkeyID20,
-                                       GetApplicationEventTarget(), 0, &hoverHotkeyRef)
-        if s20 == noErr {
-            settings.hoverHotkeyDisplay = hotkeyDisplayString(keyCode: hoverKeyCode, modifiers: hoverMods)
-            logi("悬停快捷键: \(settings.hoverHotkeyDisplay)")
-        } else {
-            failures.append((name: "悬停翻译",
-                             display: hotkeyDisplayString(keyCode: hoverKeyCode, modifiers: hoverMods),
-                             reason: checkSystemHotkeyConflict(modifiers: hoverMods, keyCode: hoverKeyCode) ?? "该键已被其他程序占用"))
-            loge("悬停快捷键注册失败")
-        }
-
         // 事件处理器 — 先移除旧的再安装新的，防止重复累积
         if let oldHandler = eventHandlerRef {
             RemoveEventHandler(oldHandler)
@@ -155,8 +137,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     if hkID.id == 10 || hkID.id == 11 {
                         TranslationPipeline.shared.selectionSourcePID = effectivePID
                         TranslationPipeline.shared.startTextTranslation()
-                    } else if hkID.id == 20 || hkID.id == 21 {
-                        TranslationPipeline.shared.startHoverTranslation()
                     } else {
                         TranslationPipeline.shared.start()
                     }
@@ -170,7 +150,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // 处理器安装失败：注销已注册的热键，避免「占用按键却不触发」的残留状态
             if let ref = hotkeyRef { UnregisterEventHotKey(ref); hotkeyRef = nil }
             if let ref = selectionHotkeyRef { UnregisterEventHotKey(ref); selectionHotkeyRef = nil }
-            if let ref = hoverHotkeyRef { UnregisterEventHotKey(ref); hoverHotkeyRef = nil }
         }
 
         // 注册失败时提示用户去设置修改（启动与保存设置时均触发）
@@ -203,10 +182,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         TranslationPipeline.shared.startTextTranslation()
     }
 
-    @objc func hoverTranslate() {
-        TranslationPipeline.shared.startHoverTranslation()
-    }
-
     @objc func openSettings() {
         SettingsWindowController.shared.show()
     }
@@ -215,7 +190,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ScreenshotEngine.shared.cleanup()
         if let ref = hotkeyRef { UnregisterEventHotKey(ref) }
         if let ref = selectionHotkeyRef { UnregisterEventHotKey(ref) }
-        if let ref = hoverHotkeyRef { UnregisterEventHotKey(ref) }
         if let ref = eventHandlerRef { RemoveEventHandler(ref) }
         logi("\(APP_DISPLAY_NAME) 已退出")
     }

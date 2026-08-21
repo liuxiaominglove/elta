@@ -23,7 +23,7 @@ final class TableExtractor {
     }
 
     /// 检测并转换为 Markdown 表格；若块不构成表格（<2 列或 <2 行）返回 nil。
-    /// 要求传入的块是「干净的表格区域」（不含正文），供悬停翻译在聚行前识别表格用。
+    /// 要求传入的块是「干净的表格区域」（不含正文）。
     static func tableMarkdown(_ blocks: [OCRBlock]) -> String? {
         guard blocks.count >= 4 else { return nil }
 
