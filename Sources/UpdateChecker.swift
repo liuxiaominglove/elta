@@ -5,7 +5,7 @@ final class UpdateChecker {
     static let shared = UpdateChecker()
 
     private let releasesURL = "https://api.github.com/repos/liuxiaominglove/elta/releases/latest"
-    private let downloadPageURL = "https://elta-seven.vercel.app/download"
+    private let downloadPageURL = "https://autoelta.com/"
 
     private var hasChecked = false
 

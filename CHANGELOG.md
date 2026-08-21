@@ -2,6 +2,11 @@
 
 All notable changes to ELTA will be documented in this file.
 
+## [v5.4.1] — 2026-08-21
+
+### Fixed
+- 修复「发现新版本」弹窗「前往下载」打开的是海外备用站（elta-seven.vercel.app），现改为国内主站 autoelta.com
+
 ## [v5.4.0] — 2026-08-21
 
 ### Changed
