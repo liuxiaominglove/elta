@@ -159,5 +159,6 @@ ssh root@106.53.167.38 '/root/update-elta-website.sh'
 ### 其他备注
 
 - `website/api/admin.js` 的 `ALLOWED_ORIGIN_HOSTS` 同时认 `autoelta.com` 与 `elta-seven.vercel.app`。
-- **DMG 国内直链**：`https://autoelta.com/download/latest.dmg` 指向 `/var/www/elta-downloads/latest.dmg` 软链，由服务器 cron 自动从 GitHub release 拉取，无需手动上传、无需改官网版本号。
+- **DMG 国内直链**：官网下载按钮走**版本化 URL** `https://autoelta.com/download/ELTA.vX.Y.Z.dmg`（不可变，nginx 长期缓存 `immutable`），发版时 sed 自动 bump 版本号会顺带更新它。`https://autoelta.com/download/latest.dmg` 保留为**可变指针**（软链，nginx `no-cache`），供书签/脚本使用。两者都由服务器 cron 从 GitHub release 拉取，无需手动上传。
+- **缓存纪律**：`website/sw.js` 的 Service Worker **永不缓存 `/download/` 请求**（fetch 处理器开头有护栏），否则会缓存旧 DMG 导致下载内容陈旧。
 - 版本发布是完整流程：改 `Resources/Info.plist` 版本 + `CHANGELOG.md` + 官网文案/版本号 + `git tag vX.Y.Z` 并推送（触发 GitHub Actions 构建 DMG 发 release）。推送后主站与国内直链由服务器 cron 自动更新（≤5 分钟），**只需 `git push --tags`，其余全自动**。

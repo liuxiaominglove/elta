@@ -1,4 +1,4 @@
-const CACHE = "elta-v2";
+const CACHE = "elta-v3";
 const ASSETS = [
   "/",
   "/docs",
@@ -28,6 +28,8 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
+  const url = new URL(e.request.url);
+  if (url.pathname.startsWith("/download/")) return;
   e.respondWith(
     caches.match(e.request).then((cached) => {
       const fetched = fetch(e.request).then((res) => {
