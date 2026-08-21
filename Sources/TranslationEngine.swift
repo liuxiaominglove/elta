@@ -19,8 +19,7 @@ final class TranslationEngine {
         let settings = SettingsManager.shared
         let provider = settings.apiProvider
         let key = settings.activeApiKey ?? ""
-        // Ollama 本地无需 API Key；其余提供商必须配置
-        if provider.needsAPIKey && key.isEmpty {
+        if key.isEmpty {
             logi("未配置 \(provider.displayName) API Key")
             DispatchQueue.main.async {
                 let alert = NSAlert()
@@ -48,46 +47,13 @@ final class TranslationEngine {
             ["role": "user", "content": "请分析以下英文文本：\n\n\(text)"]
         ]
 
-        var body: [String: Any] = [:]
         let endpoint = provider.endpoint
-        var request: URLRequest
-
-        switch provider {
-        case .anthropic:
-            guard let url = URL(string: endpoint) else { loge("无效 API 地址"); completion(nil); return }
-            request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue(key, forHTTPHeaderField: "x-api-key")
-            request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-            body = [
-                "model": provider.defaultModel,
-                "max_tokens": 4096,
-                "system": settings.systemPrompt,
-                "messages": [["role": "user", "content": "请分析以下英文文本：\n\n\(text)"]]
-            ]
-
-        case .googleAI:
-            let googleEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/\(provider.defaultModel):generateContent"
-            guard let url = URL(string: googleEndpoint) else { loge("无效 API 地址"); completion(nil); return }
-            request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue(key, forHTTPHeaderField: "x-goog-api-key")
-            let fullPrompt = "\(settings.systemPrompt)\n\n请分析以下英文文本：\n\n\(text)"
-            body = [
-                "contents": [["parts": [["text": fullPrompt]]]],
-                "generationConfig": ["maxOutputTokens": 4096, "temperature": 0.1]
-            ]
-
-        default:
-            guard let url = URL(string: endpoint) else { loge("无效 API 地址"); completion(nil); return }
-            request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-            body = Self.chatBody(provider: provider, model: provider.defaultModel, messages: messages)
-        }
+        guard let url = URL(string: endpoint) else { loge("无效 API 地址"); completion(nil); return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        let body = Self.chatBody(provider: provider, model: provider.defaultModel, messages: messages)
 
         request.timeoutInterval = 120
 
@@ -122,7 +88,7 @@ final class TranslationEngine {
                     return
                 }
 
-                let result = ResponseParser.parse(data: data, provider: provider)
+                let result = ResponseParser.parse(data: data)
                 logi("API 返回 \(result?.count ?? 0) 字符")
                 completion(result)
             }

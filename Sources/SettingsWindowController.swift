@@ -30,8 +30,6 @@ final class SettingsWindowController: NSObject {
     private var apiKeyHiddenField: PasteSecureTextField?  // 密文（默认显示）
     private var apiKeyEyeButton: NSButton?
     private var apiKeyVisible: Bool = false             // 当前是否明文
-    private var customEndpointField: NSTextField?
-    private var customModelField: NSTextField?
     private var customModelPopup: NSPopUpButton?
     private var providerDescLabel: NSTextField?
     private var testStatusLabel: NSTextField?
@@ -147,14 +145,10 @@ final class SettingsWindowController: NSObject {
         return apiKeyHiddenField?.stringValue ?? ""
     }
 
-    /// 当前模型控件值：下拉框优先；无下拉框则读输入框（空值返回 nil）
+    /// 当前模型控件值：下拉框优先；无下拉框则返回 nil
     private var activeModelValue: String? {
         if let popup = customModelPopup, let title = popup.titleOfSelectedItem {
             return title
-        }
-        if let field = customModelField {
-            let v = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            return v.isEmpty ? nil : v
         }
         return nil
     }
@@ -214,133 +208,76 @@ final class SettingsWindowController: NSObject {
 
     private func buildProviderCard(for provider: AIProvider, width w: CGFloat) -> NSView {
         let settings = SettingsManager.shared
-        var y: CGFloat = 20
 
         let v = NSView(frame: NSRect(x: 0, y: 0, width: w, height: 320))
-        let descLabel = NSTextField(labelWithString: provider == .ollama
-            ? "Ollama 无需注册，本地运行即可"
-            : "注册地址：\(provider.registerURL)")
+        let descLabel = NSTextField(labelWithString: "注册地址：\(provider.registerURL)")
         descLabel.frame = NSRect(x: 4, y: 180, width: w - 8, height: 18)
         descLabel.font = .systemFont(ofSize: 12, weight: .regular)
         descLabel.textColor = .secondaryLabelColor
         v.addSubview(descLabel)
 
-        // --- 模型选择（预设下拉框 或 自由输入框） ---
-        if let models = provider.availableModels {
-            let mdlTitle = NSTextField(labelWithString: "模型（Model）：")
-            mdlTitle.frame = NSRect(x: 4, y: 158, width: w - 8, height: 18)
-            mdlTitle.font = .systemFont(ofSize: 12, weight: .semibold)
-            v.addSubview(mdlTitle)
+        // --- 模型选择（预设下拉框） ---
+        let models = provider.availableModels
+        let mdlTitle = NSTextField(labelWithString: "模型（Model）：")
+        mdlTitle.frame = NSRect(x: 4, y: 158, width: w - 8, height: 18)
+        mdlTitle.font = .systemFont(ofSize: 12, weight: .semibold)
+        v.addSubview(mdlTitle)
 
-            let popup = NSPopUpButton(frame: NSRect(x: 4, y: 130, width: w - 8, height: 26), pullsDown: false)
-            for m in models { popup.addItem(withTitle: m) }
-            let current = settings.modelOverride(for: provider) ?? provider.defaultModel
-            if let idx = models.firstIndex(of: current) {
-                popup.selectItem(at: idx)
-            } else {
-                popup.selectItem(at: 0)
-            }
-            v.addSubview(popup)
-            customModelPopup = popup
-            customModelField = nil
+        let popup = NSPopUpButton(frame: NSRect(x: 4, y: 130, width: w - 8, height: 26), pullsDown: false)
+        for m in models { popup.addItem(withTitle: m) }
+        let current = settings.modelOverride(for: provider) ?? provider.defaultModel
+        if let idx = models.firstIndex(of: current) {
+            popup.selectItem(at: idx)
         } else {
-            let mdlTitle = NSTextField(labelWithString: "模型名称（Model）：")
-            mdlTitle.frame = NSRect(x: 4, y: 158, width: w - 8, height: 18)
-            mdlTitle.font = .systemFont(ofSize: 12, weight: .semibold)
-            v.addSubview(mdlTitle)
-
-            let mdlField = PasteTextField(frame: NSRect(x: 4, y: 130, width: w - 8, height: 26))
-            mdlField.placeholderString = provider == .ollama ? "llama3.2" : "gpt-3.5-turbo"
-            mdlField.stringValue = settings.modelOverride(for: provider) ?? provider.defaultModel
-            mdlField.isBordered = true
-            mdlField.bezelStyle = .roundedBezel
-            v.addSubview(mdlField)
-            customModelField = mdlField
-            customModelPopup = nil
+            popup.selectItem(at: 0)
         }
+        v.addSubview(popup)
+        customModelPopup = popup
 
-        if provider.needsAPIKey {
-            let keyTitle = NSTextField(labelWithString: "API Key：")
-            keyTitle.frame = NSRect(x: 4, y: 106, width: w - 8, height: 18)
-            keyTitle.font = .systemFont(ofSize: 12, weight: .semibold)
-            v.addSubview(keyTitle)
+        // --- API Key ---
+        let keyTitle = NSTextField(labelWithString: "API Key：")
+        keyTitle.frame = NSRect(x: 4, y: 106, width: w - 8, height: 18)
+        keyTitle.font = .systemFont(ofSize: 12, weight: .semibold)
+        v.addSubview(keyTitle)
 
-            // Hidden secure field
-            let hiddenField = PasteSecureTextField(frame: NSRect(x: 4, y: 76, width: w - 40, height: 26))
-            hiddenField.placeholderString = "输入 API Key..."
-            hiddenField.isBordered = true
-            hiddenField.bezelStyle = .roundedBezel
-            v.addSubview(hiddenField)
-            apiKeyHiddenField = hiddenField
+        // Hidden secure field
+        let hiddenField = PasteSecureTextField(frame: NSRect(x: 4, y: 76, width: w - 40, height: 26))
+        hiddenField.placeholderString = "输入 API Key..."
+        hiddenField.isBordered = true
+        hiddenField.bezelStyle = .roundedBezel
+        v.addSubview(hiddenField)
+        apiKeyHiddenField = hiddenField
 
-            // Visible field
-            let visibleField = PasteTextField(frame: NSRect(x: 4, y: 76, width: w - 40, height: 26))
-            visibleField.placeholderString = "输入 API Key..."
-            visibleField.isBordered = true
-            visibleField.bezelStyle = .roundedBezel
-            visibleField.isHidden = true
-            v.addSubview(visibleField)
-            apiKeyVisibleField = visibleField
+        // Visible field
+        let visibleField = PasteTextField(frame: NSRect(x: 4, y: 76, width: w - 40, height: 26))
+        visibleField.placeholderString = "输入 API Key..."
+        visibleField.isBordered = true
+        visibleField.bezelStyle = .roundedBezel
+        visibleField.isHidden = true
+        v.addSubview(visibleField)
+        apiKeyVisibleField = visibleField
 
-            // Eye toggle button
-            let eyeBtn = NSButton(title: "👁️", target: self, action: #selector(toggleKeyVisibility))
-            eyeBtn.frame = NSRect(x: w - 34, y: 76, width: 28, height: 26)
-            eyeBtn.bezelStyle = .roundRect
-            eyeBtn.isBordered = false
-            v.addSubview(eyeBtn)
-            apiKeyEyeButton = eyeBtn
+        // Eye toggle button
+        let eyeBtn = NSButton(title: "👁️", target: self, action: #selector(toggleKeyVisibility))
+        eyeBtn.frame = NSRect(x: w - 34, y: 76, width: 28, height: 26)
+        eyeBtn.bezelStyle = .roundRect
+        eyeBtn.isBordered = false
+        v.addSubview(eyeBtn)
+        apiKeyEyeButton = eyeBtn
 
-            // Test button
-            let testBtn = NSButton(title: "测试连接", target: self, action: #selector(testAPIKeyConnection))
-            testBtn.frame = NSRect(x: 4, y: 38, width: 100, height: 26)
-            testBtn.bezelStyle = .rounded
-            v.addSubview(testBtn)
+        // Test button
+        let testBtn = NSButton(title: "测试连接", target: self, action: #selector(testAPIKeyConnection))
+        testBtn.frame = NSRect(x: 4, y: 38, width: 100, height: 26)
+        testBtn.bezelStyle = .rounded
+        v.addSubview(testBtn)
 
-            let testStatus = NSTextField(labelWithString: "")
-            testStatus.frame = NSRect(x: 112, y: 42, width: w - 120, height: 18)
-            testStatus.font = .systemFont(ofSize: 11)
-            testStatus.textColor = .secondaryLabelColor
-            testStatus.lineBreakMode = .byWordWrapping
-            v.addSubview(testStatus)
-            testStatusLabel = testStatus
-
-            y = 20
-        } else {
-            // Ollama 无需 API Key
-            let noKeyLabel = NSTextField(labelWithString: "Ollama 运行在本地，无需 API Key。")
-            noKeyLabel.frame = NSRect(x: 4, y: 106, width: w - 8, height: 18)
-            noKeyLabel.font = .systemFont(ofSize: 12, weight: .medium)
-            noKeyLabel.textColor = .secondaryLabelColor
-            v.addSubview(noKeyLabel)
-            y = 78
-        }
-
-        // --- 分隔线 ---
-        let sep1 = NSBox(frame: NSRect(x: 4, y: y, width: w - 8, height: 1))
-        sep1.boxType = .separator
-        v.addSubview(sep1)
-        y -= 16
-
-        // --- 自定义 Endpoint（OpenAI-Compatible 和 Ollama） ---
-        self.customEndpointField = nil  // 先复位，避免切到非自定义 provider 时残留旧引用
-        if provider.needsCustomEndpoint {
-            let epTitle = NSTextField(labelWithString: "API 地址（Endpoint）：")
-            epTitle.frame = NSRect(x: 4, y: y, width: w - 8, height: 18)
-            epTitle.font = .systemFont(ofSize: 12, weight: .semibold)
-            v.addSubview(epTitle)
-            y -= 22
-
-            let epField = PasteTextField(frame: NSRect(x: 4, y: y, width: w - 8, height: 26))
-            epField.placeholderString = provider == .ollama
-                ? "http://localhost:11434/v1/chat/completions"
-                : "https://your-api.com/v1/chat/completions"
-            epField.stringValue = settings.customEndpoint ?? provider.endpoint
-            epField.isBordered = true
-            epField.bezelStyle = .roundedBezel
-            v.addSubview(epField)
-            self.customEndpointField = epField
-            y -= 40
-        }
+        let testStatus = NSTextField(labelWithString: "")
+        testStatus.frame = NSRect(x: 112, y: 42, width: w - 120, height: 18)
+        testStatus.font = .systemFont(ofSize: 11)
+        testStatus.textColor = .secondaryLabelColor
+        testStatus.lineBreakMode = .byWordWrapping
+        v.addSubview(testStatus)
+        testStatusLabel = testStatus
 
         // 修复负 y 布局：非翻转视图原点在左下，负 y 子视图会被裁剪不可见。
         // 把所有子视图上移使最小 y >= 0，并按内容顶高扩展卡片高度。
@@ -372,10 +309,9 @@ final class SettingsWindowController: NSObject {
     }
 
     /// 解析「测试连接」实际应使用的 endpoint 与 model：
-    /// 优先用输入框键入的值（用户刚改、尚未保存），为空才回退到 provider 默认（provider.endpoint/defaultModel 已含已保存的自定义值）。
-    static func resolveConnectionTarget(endpointInput: String?, modelInput: String?, provider: AIProvider) -> (endpoint: String, model: String) {
-        let ep = endpointInput?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let endpoint = (ep?.isEmpty == false) ? ep! : provider.endpoint
+    /// 优先用输入框键入的模型（用户刚改、尚未保存），为空才回退到 provider 默认。
+    static func resolveConnectionTarget(modelInput: String?, provider: AIProvider) -> (endpoint: String, model: String) {
+        let endpoint = provider.endpoint
         let md = modelInput?.trimmingCharacters(in: .whitespacesAndNewlines)
         let model = (md?.isEmpty == false) ? md! : provider.defaultModel
         return (endpoint, model)
@@ -402,7 +338,6 @@ final class SettingsWindowController: NSObject {
         testStatusLabel?.textColor = .secondaryLabelColor
 
         let target = Self.resolveConnectionTarget(
-            endpointInput: customEndpointField?.stringValue,
             modelInput: activeModelValue,
             provider: provider
         )
@@ -417,26 +352,9 @@ final class SettingsWindowController: NSObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 10
-        let body: [String: Any]
-        switch provider {
-        case .googleAI:
-            body = ["contents": [["parts": [["text": "hi"]]]], "generationConfig": ["maxOutputTokens": 1]]
-        case .anthropic:
-            body = ["model": target.model, "max_tokens": 1, "messages": [["role": "user", "content": "hi"]]]
-        default:
-            body = ["model": target.model, "messages": [["role": "user", "content": "hi"]], "max_tokens": 1]
-        }
+        let body: [String: Any] = ["model": target.model, "messages": [["role": "user", "content": "hi"]], "max_tokens": 1]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
-        switch provider {
-        case .anthropic:
-            request.setValue(key, forHTTPHeaderField: "x-api-key")
-            request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        case .googleAI:
-            request.setValue(key, forHTTPHeaderField: "x-goog-api-key")
-        default:
-            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        }
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
 
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             DispatchQueue.main.async {
@@ -689,19 +607,6 @@ final class SettingsWindowController: NSObject {
     @objc private func saveAllSettings() {
         let settings = SettingsManager.shared
 
-        // 先校验自定义 endpoint（若有输入），避免 API Key 已保存、其余设置却因无效地址被丢弃的半保存状态
-        if let ep = customEndpointField?.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), !ep.isEmpty {
-            guard AIProvider.isValidEndpoint(ep) else {
-                let alert = NSAlert()
-                alert.messageText = "无效的自定义接口地址"
-                alert.informativeText = "仅支持 HTTPS 地址或以 localhost / 192.168.x.x / 10.x.x.x 开头的 HTTP 地址。\n当前输入：\(ep)"
-                alert.alertStyle = .warning
-                alert.addButton(withTitle: "确定")
-                alert.runModal()
-                return
-            }
-        }
-
         // 二次确认：本次新录制的翻译热键若命中已知系统快捷键冲突，先让用户确认再保存
         let recorded: [(keyCode: Int?, modifiers: Int)] = [
             (screenshotRecorder.recordedKeyCode, screenshotRecorder.recordedModifiers),
@@ -730,14 +635,6 @@ final class SettingsWindowController: NSObject {
             settings.setApiKey(nil, for: settings.apiProvider)
         }
 
-        if let field = customEndpointField {
-            let ep = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !ep.isEmpty {
-                settings.customEndpoint = ep
-            } else {
-                settings.customEndpoint = nil
-            }
-        }
         settings.setModelOverride(activeModelValue, for: settings.apiProvider)
 
         if let kc = screenshotRecorder.recordedKeyCode {
@@ -872,13 +769,6 @@ final class SettingsWindowController: NSObject {
             settings.setApiKey(nil, for: settings.apiProvider)
         }
 
-        if let ep = customEndpointField?.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), !ep.isEmpty {
-            if AIProvider.isValidEndpoint(ep) {
-                settings.customEndpoint = ep
-            } else {
-                logi("providerChanged：拒绝保存非法 endpoint: \(ep.prefix(50))")
-            }
-        }
         settings.setModelOverride(activeModelValue, for: settings.apiProvider)
         settings.apiProvider = newProvider
 

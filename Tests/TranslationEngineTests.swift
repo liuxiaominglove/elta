@@ -3,54 +3,36 @@ import Foundation
 func runTranslationEngineTests() {
     print("\n--- TranslationEngine Tests ---")
 
-    test("parseOpenAIResponse extracts content correctly") {
+    test("parseResponse extracts content correctly") {
         let json = """
         {"choices":[{"message":{"content":"这是翻译结果"}}]}
         """
         let data = json.data(using: .utf8)!
-        let result = ResponseParser.parse(data: data, provider: .deepseek)
+        let result = ResponseParser.parse(data: data)
         try assertEqual(result, "这是翻译结果")
     }
 
-    test("parseOpenAIResponse returns nil on empty choices") {
+    test("parseResponse returns nil on empty choices") {
         let json = """
         {"choices":[]}
         """
         let data = json.data(using: .utf8)!
-        let result = ResponseParser.parse(data: data, provider: .openai)
+        let result = ResponseParser.parse(data: data)
         try assertNil(result as Any?)
     }
 
-    test("parseOpenAIResponse handles nil content") {
+    test("parseResponse handles nil content") {
         let json = """
         {"choices":[{"message":{}}]}
         """
         let data = json.data(using: .utf8)!
-        let result = ResponseParser.parse(data: data, provider: .qwen)
+        let result = ResponseParser.parse(data: data)
         try assertNil(result as Any?)
-    }
-
-    test("parseAnthropicResponse extracts text") {
-        let json = """
-        {"content":[{"type":"text","text":"Anthrophic 翻译"}]}
-        """
-        let data = json.data(using: .utf8)!
-        let result = ResponseParser.parse(data: data, provider: .anthropic)
-        try assertEqual(result, "Anthrophic 翻译")
-    }
-
-    test("parseGeminiResponse extracts text") {
-        let json = """
-        {"candidates":[{"content":{"parts":[{"text":"Gemini 翻译"}]}}]}
-        """
-        let data = json.data(using: .utf8)!
-        let result = ResponseParser.parse(data: data, provider: .googleAI)
-        try assertEqual(result, "Gemini 翻译")
     }
 
     test("parseResponse returns nil on invalid JSON") {
         let data = "not json".data(using: .utf8)!
-        let result = ResponseParser.parse(data: data, provider: .deepseek)
+        let result = ResponseParser.parse(data: data)
         try assertNil(result as Any?)
     }
 
@@ -60,11 +42,6 @@ func runTranslationEngineTests() {
         let body = TranslationEngine.chatBody(provider: .deepseek, model: "deepseek-v4-flash", messages: [["role": "user", "content": "hi"]])
         let thinking = body["thinking"] as? [String: Any]
         try assertEqual(thinking?["type"] as? String, "disabled")
-    }
-
-    test("chatBody omits thinking for openai") {
-        let body = TranslationEngine.chatBody(provider: .openai, model: "gpt-4o-mini", messages: [["role": "user", "content": "hi"]])
-        try assertNil(body["thinking"] as Any?)
     }
 
     test("chatBody omits thinking for qwen") {

@@ -1,48 +1,28 @@
 import Foundation
 
 enum AIProvider: String, CaseIterable {
-    case deepseek          = "deepseek"
-    case openai            = "openai"
-    case anthropic         = "anthropic"
-    case openAICompatible  = "openai_compatible"
-    case googleAI          = "google_ai"
-    case ollama            = "ollama"
-    case qwen              = "qwen"
+    case deepseek = "deepseek"
+    case qwen     = "qwen"
 
     var displayName: String {
         switch self {
-        case .deepseek:          return "DeepSeek（国内 · 推荐）"
-        case .openai:            return "OpenAI（国外）"
-        case .anthropic:         return "Anthropic（Claude）"
-        case .openAICompatible:  return "OpenAI-Compatible（自定义）"
-        case .googleAI:          return "Google AI（Gemini）"
-        case .ollama:            return "Ollama（本地 API）"
-        case .qwen:              return "千问（阿里云 · 国内）"
+        case .deepseek: return "DeepSeek（国内 · 推荐）"
+        case .qwen:     return "千问（阿里云 · 国内）"
         }
     }
 
     /// 简短名称，用于翻译结果页脚
     var shortName: String {
         switch self {
-        case .deepseek:          return "DeepSeek"
-        case .openai:            return "OpenAI"
-        case .anthropic:         return "Anthropic"
-        case .openAICompatible:  return "OpenAI-Compatible"
-        case .googleAI:          return "Google AI"
-        case .ollama:            return "Ollama"
-        case .qwen:              return "千问"
+        case .deepseek: return "DeepSeek"
+        case .qwen:     return "千问"
         }
     }
 
     var endpoint: String {
         switch self {
-        case .deepseek:          return "https://api.deepseek.com/chat/completions"
-        case .openai:            return "https://api.openai.com/v1/chat/completions"
-        case .anthropic:         return "https://api.anthropic.com/v1/messages"
-        case .openAICompatible:  return SettingsManager.shared.customEndpoint ?? "https://your-api.com/v1/chat/completions"
-        case .googleAI:          return "https://generativelanguage.googleapis.com/v1beta/models/\(defaultModel):generateContent"
-        case .ollama:            return "http://localhost:11434/v1/chat/completions"
-        case .qwen:              return "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+        case .deepseek: return "https://api.deepseek.com/chat/completions"
+        case .qwen:     return "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
         }
     }
 
@@ -55,92 +35,23 @@ enum AIProvider: String, CaseIterable {
 
     private var hardcodedDefaultModel: String {
         switch self {
-        case .deepseek:          return "deepseek-v4-flash"
-        case .openai:            return "gpt-4o-mini"
-        case .anthropic:         return "claude-sonnet-4-6"
-        case .openAICompatible:  return "gpt-3.5-turbo"
-        case .googleAI:          return "gemini-2.5-flash"
-        case .ollama:            return "llama3.2"
-        case .qwen:              return "qwen-plus"
+        case .deepseek: return "deepseek-v4-flash"
+        case .qwen:     return "qwen-plus"
         }
     }
 
-    /// 预设模型列表（用于下拉框）；返回 nil 表示自由输入（Ollama 本地 / OpenAI-Compatible 第三方）
-    var availableModels: [String]? {
+    /// 预设模型列表（用于下拉框）
+    var availableModels: [String] {
         switch self {
-        case .deepseek:          return ["deepseek-v4-flash", "deepseek-v4-pro"]
-        case .openai:            return ["gpt-4o-mini", "gpt-4o"]
-        case .anthropic:         return ["claude-sonnet-4-6", "claude-opus-4-7", "claude-haiku-4-5"]
-        case .googleAI:          return ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.5-flash"]
-        case .qwen:              return ["qwen-turbo", "qwen-plus", "qwen-max"]
-        case .openAICompatible, .ollama: return nil
+        case .deepseek: return ["deepseek-v4-flash", "deepseek-v4-pro"]
+        case .qwen:     return ["qwen-turbo", "qwen-plus", "qwen-max"]
         }
     }
 
     var registerURL: String {
         switch self {
-        case .deepseek:          return "platform.deepseek.com"
-        case .openai:            return "platform.openai.com"
-        case .anthropic:         return "console.anthropic.com"
-        case .openAICompatible:  return "（自定义兼容 OpenAI 接口的地址）"
-        case .googleAI:          return "aistudio.google.com/apikey"
-        case .ollama:            return "（本地运行，无需注册）"
-        case .qwen:              return "bailian.console.aliyun.com"
-        }
-    }
-
-    /// 是否需要自定义 endpoint（用户可编辑）
-    var needsCustomEndpoint: Bool {
-        self == .openAICompatible || self == .ollama
-    }
-
-    /// 是否需要自定义 model 名称
-    var needsCustomModel: Bool {
-        self == .openAICompatible || self == .ollama
-    }
-
-    /// 是否需要 API Key（Ollama 本地不需要）
-    var needsAPIKey: Bool {
-        self != .ollama
-    }
-
-    static func isValidEndpoint(_ urlString: String) -> Bool {
-        guard !urlString.isEmpty,
-              let url = URL(string: urlString),
-              let scheme = url.scheme?.lowercased() else { return false }
-
-        switch scheme {
-        case "https":
-            return true
-        case "http":
-            return isPrivateOrLocalhost(url.host?.lowercased() ?? "")
-        default:
-            return false
-        }
-    }
-
-    private static func isPrivateOrLocalhost(_ host: String) -> Bool {
-        if host == "localhost" || host == "127.0.0.1" || host == "::1" { return true }
-        // 先确认是合法 IPv4（四段 0-255 数字），排除 192.168.evil.com 及 192.168.1. / 192.168.1..2 之类畸形串
-        guard isNumericIPv4(host) else { return false }
-        if host.hasPrefix("192.168.") { return true }
-        if host.hasPrefix("10.") { return true }
-        // 172.16.0.0/12 私有网段（172.16.x – 172.31.x）
-        if host.hasPrefix("172.") {
-            let parts = host.split(separator: ".")
-            if parts.count == 4, let second = Int(parts[1]), second >= 16, second <= 31 {
-                return true
-            }
-        }
-        return false
-    }
-
-    /// 校验是否为合法 IPv4（四段、每段非空纯数字 0-255）
-    private static func isNumericIPv4(_ s: String) -> Bool {
-        let parts = s.split(separator: ".", omittingEmptySubsequences: false)
-        guard parts.count == 4 else { return false }
-        return parts.allSatisfy { part in
-            !part.isEmpty && part.allSatisfy { $0.isNumber } && (Int(part) ?? 256) <= 255
+        case .deepseek: return "platform.deepseek.com"
+        case .qwen:     return "bailian.console.aliyun.com"
         }
     }
 }

@@ -14,14 +14,9 @@ func runSettingsManagerTests() {
         try assertEqual(SettingsManager.shared.apiProvider, .deepseek)
     }
 
-    test("set provider to openai works") {
-        SettingsManager.shared.apiProvider = .openai
-        try assertEqual(SettingsManager.shared.apiProvider, .openai)
-    }
-
-    test("set provider to google_ai works") {
-        SettingsManager.shared.apiProvider = .googleAI
-        try assertEqual(SettingsManager.shared.apiProvider, .googleAI)
+    test("set provider to qwen works") {
+        SettingsManager.shared.apiProvider = .qwen
+        try assertEqual(SettingsManager.shared.apiProvider, .qwen)
     }
 
     test("invalid provider rawValue falls back to deepseek") {
@@ -155,16 +150,16 @@ func runSettingsManagerTests() {
     }
 
     test("activeApiKey reflects current provider's key") {
-        SettingsManager.shared.apiProvider = .openai
-        SettingsManager.shared.setApiKey("sk-openai-test", for: .openai)
-        try assertEqual(SettingsManager.shared.activeApiKey, "sk-openai-test")
-        SettingsManager.shared.setApiKey(nil, for: .openai)
+        SettingsManager.shared.apiProvider = .qwen
+        SettingsManager.shared.setApiKey("sk-qwen-test", for: .qwen)
+        try assertEqual(SettingsManager.shared.activeApiKey, "sk-qwen-test")
+        SettingsManager.shared.setApiKey(nil, for: .qwen)
         SettingsManager.shared.apiProvider = .deepseek
     }
 
     test("apiKey returns nil when not set") {
-        SettingsManager.shared.setApiKey(nil, for: .openai)
-        try assertNil(SettingsManager.shared.apiKey(for: .openai) as Any?)
+        SettingsManager.shared.setApiKey(nil, for: .qwen)
+        try assertNil(SettingsManager.shared.apiKey(for: .qwen) as Any?)
     }
 
     // WI-B2: 验证 activeApiKey 优先读取当前 provider 的 key
@@ -217,19 +212,17 @@ func runSettingsManagerTests() {
 
     // ━━━ 审计修复：测试连接应使用用户在输入框键入的 endpoint/model，而非 provider 默认 ━━━
 
-    test("resolveConnectionTarget prefers typed endpoint and model") {
+    test("resolveConnectionTarget prefers typed model") {
         let (endpoint, model) = SettingsWindowController.resolveConnectionTarget(
-            endpointInput: "https://custom.example.com/v1",
-            modelInput: "my-custom-model",
-            provider: .openAICompatible
+            modelInput: "qwen-max",
+            provider: .qwen
         )
-        try assertEqual(endpoint, "https://custom.example.com/v1")
-        try assertEqual(model, "my-custom-model")
+        try assertEqual(endpoint, AIProvider.qwen.endpoint)
+        try assertEqual(model, "qwen-max")
     }
 
-    test("resolveConnectionTarget falls back to provider when fields empty") {
+    test("resolveConnectionTarget falls back to provider when model empty") {
         let (endpoint, model) = SettingsWindowController.resolveConnectionTarget(
-            endpointInput: "",
             modelInput: "  ",
             provider: .deepseek
         )
@@ -314,11 +307,11 @@ func runSettingsManagerTests() {
 
     test("modelOverride does not leak across providers") {
         SettingsManager.shared.setModelOverride("a", for: .deepseek)
-        SettingsManager.shared.setModelOverride("b", for: .openai)
+        SettingsManager.shared.setModelOverride("b", for: .qwen)
         try assertEqual(SettingsManager.shared.modelOverride(for: .deepseek), "a")
-        try assertEqual(SettingsManager.shared.modelOverride(for: .openai), "b")
+        try assertEqual(SettingsManager.shared.modelOverride(for: .qwen), "b")
         SettingsManager.shared.setModelOverride(nil, for: .deepseek)
-        SettingsManager.shared.setModelOverride(nil, for: .openai)
+        SettingsManager.shared.setModelOverride(nil, for: .qwen)
     }
 
     test("defaultModel reflects override when set") {
@@ -330,30 +323,5 @@ func runSettingsManagerTests() {
     test("defaultModel falls back to hardcoded when override empty") {
         SettingsManager.shared.setModelOverride("", for: .deepseek)
         try assertEqual(AIProvider.deepseek.defaultModel, "deepseek-v4-flash")
-    }
-
-    test("migrateModelOverride moves legacy customModel to openAICompatible") {
-        let ud = UserDefaults.standard
-        ud.set("legacy-custom", forKey: "snaptranslate.customModel")
-        SettingsManager.migrateModelOverride(fromLegacy: "snaptranslate.customModel", to: .openAICompatible, defaults: ud)
-        try assertEqual(SettingsManager.shared.modelOverride(for: .openAICompatible), "legacy-custom")
-        try assertNil(ud.string(forKey: "snaptranslate.customModel") as Any?)
-        SettingsManager.shared.setModelOverride(nil, for: .openAICompatible)
-    }
-
-    test("migrateModelOverride moves legacy ollamaModel to ollama") {
-        let ud = UserDefaults.standard
-        ud.set("legacy-ollama", forKey: "snaptranslate.ollamaModel")
-        SettingsManager.migrateModelOverride(fromLegacy: "snaptranslate.ollamaModel", to: .ollama, defaults: ud)
-        try assertEqual(SettingsManager.shared.modelOverride(for: .ollama), "legacy-ollama")
-        try assertNil(ud.string(forKey: "snaptranslate.ollamaModel") as Any?)
-        SettingsManager.shared.setModelOverride(nil, for: .ollama)
-    }
-
-    test("migrateModelOverride no-op when legacy key absent") {
-        let ud = UserDefaults.standard
-        ud.removeObject(forKey: "snaptranslate.customModel")
-        let moved = SettingsManager.migrateModelOverride(fromLegacy: "snaptranslate.customModel", to: .openAICompatible, defaults: ud)
-        try assertFalse(moved, "无旧值时不应迁移")
     }
 }

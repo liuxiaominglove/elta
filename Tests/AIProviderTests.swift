@@ -3,47 +3,33 @@ import Foundation
 func runAIProviderTests() {
     print("\n--- AIProvider Tests ---")
 
-    test("allCases contains all 7 providers") {
+    test("allCases contains 2 providers") {
         let cases = AIProvider.allCases
-        try assertEqual(cases.count, 7)
+        try assertEqual(cases.count, 2)
     }
 
     test("deepseek displayName is correct") {
         try assertEqual(AIProvider.deepseek.displayName, "DeepSeek（国内 · 推荐）")
     }
 
-    test("openai displayName is correct") {
-        try assertEqual(AIProvider.openai.displayName, "OpenAI（国外）")
-    }
-
-    test("anthropic displayName is correct") {
-        try assertEqual(AIProvider.anthropic.displayName, "Anthropic（Claude）")
-    }
-
-    test("ollama displayName is correct") {
-        try assertEqual(AIProvider.ollama.displayName, "Ollama（本地 API）")
+    test("qwen displayName is correct") {
+        try assertEqual(AIProvider.qwen.displayName, "千问（阿里云 · 国内）")
     }
 
     test("deepseek shortName is correct") {
         try assertEqual(AIProvider.deepseek.shortName, "DeepSeek")
     }
 
-    test("openai endpoint is correct") {
-        try assertEqual(AIProvider.openai.endpoint, "https://api.openai.com/v1/chat/completions")
+    test("qwen shortName is correct") {
+        try assertEqual(AIProvider.qwen.shortName, "千问")
     }
 
     test("deepseek endpoint is correct") {
         try assertEqual(AIProvider.deepseek.endpoint, "https://api.deepseek.com/chat/completions")
     }
 
-    test("gemini endpoint follows defaultModel") {
-        UserDefaults.standard.removeObject(forKey: "snaptranslate.model.google_ai")
-        let ep = "https://generativelanguage.googleapis.com/v1beta/models/\(AIProvider.googleAI.defaultModel):generateContent"
-        try assertEqual(AIProvider.googleAI.endpoint, ep)
-    }
-
-    test("ollama endpoint is localhost") {
-        try assertEqual(AIProvider.ollama.endpoint, "http://localhost:11434/v1/chat/completions")
+    test("qwen endpoint is correct") {
+        try assertEqual(AIProvider.qwen.endpoint, "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions")
     }
 
     test("deepseek defaultModel is 'deepseek-v4-flash'") {
@@ -51,41 +37,22 @@ func runAIProviderTests() {
         try assertEqual(AIProvider.deepseek.defaultModel, "deepseek-v4-flash")
     }
 
-    test("openai defaultModel is 'gpt-4o-mini'") {
-        UserDefaults.standard.removeObject(forKey: "snaptranslate.model.openai")
-        try assertEqual(AIProvider.openai.defaultModel, "gpt-4o-mini")
-    }
-
-    test("gemini defaultModel is 'gemini-2.5-flash'") {
-        UserDefaults.standard.removeObject(forKey: "snaptranslate.model.google_ai")
-        try assertEqual(AIProvider.googleAI.defaultModel, "gemini-2.5-flash")
-    }
-
     test("qwen defaultModel is 'qwen-plus'") {
         UserDefaults.standard.removeObject(forKey: "snaptranslate.model.qwen")
         try assertEqual(AIProvider.qwen.defaultModel, "qwen-plus")
-    }
-
-    test("anthropic defaultModel is 'claude-sonnet-4-6'") {
-        UserDefaults.standard.removeObject(forKey: "snaptranslate.model.anthropic")
-        try assertEqual(AIProvider.anthropic.defaultModel, "claude-sonnet-4-6")
     }
 
     test("deepseek availableModels are v4 flash/pro") {
         try assertEqual(AIProvider.deepseek.availableModels, ["deepseek-v4-flash", "deepseek-v4-pro"])
     }
 
-    test("openAICompatible availableModels is nil (free input)") {
-        try assertNil(AIProvider.openAICompatible.availableModels as Any?)
+    test("qwen availableModels are turbo/plus/max") {
+        try assertEqual(AIProvider.qwen.availableModels, ["qwen-turbo", "qwen-plus", "qwen-max"])
     }
 
-    test("ollama availableModels is nil (free input)") {
-        try assertNil(AIProvider.ollama.availableModels as Any?)
-    }
-
-    test("preset providers have non-empty availableModels containing defaultModel") {
-        for p in [AIProvider.openai, .anthropic, .googleAI, .qwen] {
-            let list = try assertNotNil(p.availableModels)
+    test("providers have non-empty availableModels containing defaultModel") {
+        for p in [AIProvider.deepseek, .qwen] {
+            let list = p.availableModels
             try assertTrue(!list.isEmpty, "availableModels should not be empty for \(p.rawValue)")
             UserDefaults.standard.removeObject(forKey: "snaptranslate.model.\(p.rawValue)")
             try assertTrue(list.contains(p.defaultModel), "defaultModel \(p.defaultModel) should be in \(p.rawValue) availableModels")
@@ -96,44 +63,8 @@ func runAIProviderTests() {
         try assertEqual(AIProvider.deepseek.registerURL, "platform.deepseek.com")
     }
 
-    test("openai registerURL is correct") {
-        try assertEqual(AIProvider.openai.registerURL, "platform.openai.com")
-    }
-
-    test("needsCustomEndpoint: openAICompatible needs custom") {
-        try assertTrue(AIProvider.openAICompatible.needsCustomEndpoint)
-    }
-
-    test("needsCustomEndpoint: ollama needs custom") {
-        try assertTrue(AIProvider.ollama.needsCustomEndpoint)
-    }
-
-    test("needsCustomEndpoint: deepseek does not need custom") {
-        try assertFalse(AIProvider.deepseek.needsCustomEndpoint)
-    }
-
-    test("needsCustomEndpoint: openai does not need custom") {
-        try assertFalse(AIProvider.openai.needsCustomEndpoint)
-    }
-
-    test("needsCustomModel: openAICompatible needs custom model") {
-        try assertTrue(AIProvider.openAICompatible.needsCustomModel)
-    }
-
-    test("needsCustomModel: ollama needs custom model") {
-        try assertTrue(AIProvider.ollama.needsCustomModel)
-    }
-
-    test("needsAPIKey: ollama does not need API key") {
-        try assertFalse(AIProvider.ollama.needsAPIKey)
-    }
-
-    test("needsAPIKey: deepseek needs API key") {
-        try assertTrue(AIProvider.deepseek.needsAPIKey)
-    }
-
-    test("needsAPIKey: openai needs API key") {
-        try assertTrue(AIProvider.openai.needsAPIKey)
+    test("qwen registerURL is correct") {
+        try assertEqual(AIProvider.qwen.registerURL, "bailian.console.aliyun.com")
     }
 
     test("rawValue roundtrip for all providers") {

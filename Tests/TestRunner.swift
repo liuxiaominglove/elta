@@ -57,7 +57,6 @@ func runAllTests() -> Int32 {
     runTableExtractorTests()
     runBuildScriptTests()
     runHTMLRendererTests()
-    runEndpointValidationTests()
     runSettingsManagerThreadSafetyTests()
     runTranslationEngineTests()
     runTranslationPipelineTests()

@@ -52,7 +52,6 @@ TEST_FILES=(
   "$PROJECT_DIR/Tests/TableExtractorTests.swift"
   "$PROJECT_DIR/Tests/BuildScriptTests.swift"
   "$PROJECT_DIR/Tests/HTMLRendererTests.swift"
-  "$PROJECT_DIR/Tests/EndpointValidationTests.swift"
   "$PROJECT_DIR/Tests/SettingsManagerThreadSafetyTests.swift"
   "$PROJECT_DIR/Tests/TranslationEngineTests.swift"
   "$PROJECT_DIR/Tests/TranslationPipelineTests.swift"
