@@ -2,6 +2,11 @@
 
 All notable changes to ELTA will be documented in this file.
 
+## [v5.3.1] — 2026-08-21
+
+### Fixed
+- 修复增量审计发现的 8 个 bug：`et al.` 多词缩写后跟数字/大写不再误拆句；补 172.16.0.0/12 私有网段识别（SSRF）；Ollama 本地无 key 不再被「未配置 API Key」拦截；CapsLock 开启时 `Cmd+V/C/X/A` 失效；InstallEventHandler 失败时注销已注册热键；换屏后窗口位置/高度夹紧防出屏；表格含管道符单元格不再误拆；`run_tests.sh` 在 `set -e` 下测试失败跳过 cleanup
+
 ## [v5.3.0] — 2026-08-21
 
 ### Added
