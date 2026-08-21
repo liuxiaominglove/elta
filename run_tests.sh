@@ -58,6 +58,7 @@ TEST_FILES=(
   "$PROJECT_DIR/Tests/PasteboardSnapshotTests.swift"
   "$PROJECT_DIR/Tests/ParagraphDetectorTests.swift"
   "$PROJECT_DIR/Tests/SentenceSplitterTests.swift"
+  "$PROJECT_DIR/Tests/TestRunnerTests.swift"
   "$PROJECT_DIR/Tests/main.swift"
 )
 
@@ -100,8 +101,12 @@ if [ -f "$TEST_BIN" ]; then
   rm -f "$TEST_BIN"
 fi
 
-# Clean up test log
+# Clean up test log — 失败时保留日志供诊断，成功才删
 LOG_FILE="$HOME/Library/Logs/elta_test.log"
-[ -f "$LOG_FILE" ] && rm -f "$LOG_FILE"
+if [ "$EXIT_CODE" -eq 0 ]; then
+  [ -f "$LOG_FILE" ] && rm -f "$LOG_FILE"
+else
+  echo "测试失败，日志保留：$LOG_FILE"
+fi
 
 exit $EXIT_CODE

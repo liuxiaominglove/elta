@@ -33,12 +33,24 @@ func runAIProviderTests() {
     }
 
     test("deepseek defaultModel is 'deepseek-v4-flash'") {
-        UserDefaults.standard.removeObject(forKey: "snaptranslate.model.deepseek")
+        let ud = UserDefaults.standard
+        let saved = ud.string(forKey: "snaptranslate.model.deepseek")
+        ud.removeObject(forKey: "snaptranslate.model.deepseek")
+        defer {
+            if let saved { ud.set(saved, forKey: "snaptranslate.model.deepseek") }
+            else { ud.removeObject(forKey: "snaptranslate.model.deepseek") }
+        }
         try assertEqual(AIProvider.deepseek.defaultModel, "deepseek-v4-flash")
     }
 
     test("qwen defaultModel is 'qwen-plus'") {
-        UserDefaults.standard.removeObject(forKey: "snaptranslate.model.qwen")
+        let ud = UserDefaults.standard
+        let saved = ud.string(forKey: "snaptranslate.model.qwen")
+        ud.removeObject(forKey: "snaptranslate.model.qwen")
+        defer {
+            if let saved { ud.set(saved, forKey: "snaptranslate.model.qwen") }
+            else { ud.removeObject(forKey: "snaptranslate.model.qwen") }
+        }
         try assertEqual(AIProvider.qwen.defaultModel, "qwen-plus")
     }
 
@@ -54,7 +66,14 @@ func runAIProviderTests() {
         for p in [AIProvider.deepseek, .qwen] {
             let list = p.availableModels
             try assertTrue(!list.isEmpty, "availableModels should not be empty for \(p.rawValue)")
-            UserDefaults.standard.removeObject(forKey: "snaptranslate.model.\(p.rawValue)")
+            let ud = UserDefaults.standard
+            let key = "snaptranslate.model.\(p.rawValue)"
+            let saved = ud.string(forKey: key)
+            ud.removeObject(forKey: key)
+            defer {
+                if let saved { ud.set(saved, forKey: key) }
+                else { ud.removeObject(forKey: key) }
+            }
             try assertTrue(list.contains(p.defaultModel), "defaultModel \(p.defaultModel) should be in \(p.rawValue) availableModels")
         }
     }

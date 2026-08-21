@@ -13,9 +13,8 @@ func test(_ name: String, _ block: () throws -> Void) {
         passedTests += 1
     } catch {
         failedTests += 1
-        let err = error as? TestFailure ?? TestFailure("unknown error")
         print("  FAIL: \(name)")
-        print("    Reason: \(err.message)")
+        print("    Reason: \(failureMessage(error))")
     }
 }
 
@@ -25,25 +24,30 @@ struct TestFailure: Error, CustomStringConvertible {
     init(_ msg: String) { self.message = msg }
 }
 
+/// 把任意 error 转成可展示的失败信息；非 TestFailure 也保留原始描述，而非笼统的 "unknown error"
+func failureMessage(_ error: Error) -> String {
+    return (error as? TestFailure)?.message ?? String(describing: error)
+}
+
 func assertEqual<T: Equatable>(_ lhs: T, _ rhs: T, file: StaticString = #file, line: UInt = #line) throws {
-    if lhs != rhs { throw TestFailure("Expected \(rhs), got \(lhs)") }
+    if lhs != rhs { throw TestFailure("Expected \(rhs), got \(lhs) (\(file):\(line))") }
 }
 
-func assertTrue(_ condition: Bool, _ msg: String = "Expected true") throws {
-    if !condition { throw TestFailure(msg) }
+func assertTrue(_ condition: Bool, _ msg: String = "Expected true", file: StaticString = #file, line: UInt = #line) throws {
+    if !condition { throw TestFailure("\(msg) (\(file):\(line))") }
 }
 
-func assertFalse(_ condition: Bool, _ msg: String = "Expected false") throws {
-    if condition { throw TestFailure(msg) }
+func assertFalse(_ condition: Bool, _ msg: String = "Expected false", file: StaticString = #file, line: UInt = #line) throws {
+    if condition { throw TestFailure("\(msg) (\(file):\(line))") }
 }
 
-func assertNotNil<T>(_ value: T?, _ msg: String = "Expected non-nil") throws -> T {
-    guard let v = value else { throw TestFailure(msg) }
+func assertNotNil<T>(_ value: T?, _ msg: String = "Expected non-nil", file: StaticString = #file, line: UInt = #line) throws -> T {
+    guard let v = value else { throw TestFailure("\(msg) (\(file):\(line))") }
     return v
 }
 
-func assertNil<T>(_ value: T?, _ msg: String = "Expected nil") throws {
-    if value != nil { throw TestFailure(msg) }
+func assertNil<T>(_ value: T?, _ msg: String = "Expected nil", file: StaticString = #file, line: UInt = #line) throws {
+    if value != nil { throw TestFailure("\(msg) (\(file):\(line))") }
 }
 
 func runAllTests() -> Int32 {
@@ -64,6 +68,7 @@ func runAllTests() -> Int32 {
     runParagraphDetectorTests()
     runScreenGeometryTests()
     runSentenceSplitterTests()
+    runTestRunnerTests()
 
     print("\n========== Results ==========")
     print("Total: \(totalTests) | Passed: \(passedTests) | Failed: \(failedTests)")

@@ -356,24 +356,28 @@ final class SettingsWindowController: NSObject {
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
 
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+        // 捕获发起测试时的状态标签：切 provider 会重建卡片、重赋 testStatusLabel，
+        // 若不捕获，迟到回调会把 A 的测试结果写进 B 的标签，造成假阳性「连接成功」。
+        let statusLabel = testStatusLabel
+
+        URLSession.shared.dataTask(with: request) { _, response, error in
             DispatchQueue.main.async {
                 if let error = error {
-                    self?.testStatusLabel?.stringValue = "连接失败: \(error.localizedDescription)"
-                    self?.testStatusLabel?.textColor = .systemRed
+                    statusLabel?.stringValue = "连接失败: \(error.localizedDescription)"
+                    statusLabel?.textColor = .systemRed
                     return
                 }
                 if let http = response as? HTTPURLResponse {
                     switch ConnectionResult.classify(http.statusCode) {
                     case .success(let code):
-                        self?.testStatusLabel?.stringValue = "连接成功 (HTTP \(code))"
-                        self?.testStatusLabel?.textColor = .systemGreen
+                        statusLabel?.stringValue = "连接成功 (HTTP \(code))"
+                        statusLabel?.textColor = .systemGreen
                     case .authFailure(let code):
-                        self?.testStatusLabel?.stringValue = "API Key 无效 (HTTP \(code))"
-                        self?.testStatusLabel?.textColor = .systemRed
+                        statusLabel?.stringValue = "API Key 无效 (HTTP \(code))"
+                        statusLabel?.textColor = .systemRed
                     case .serverError(let code):
-                        self?.testStatusLabel?.stringValue = "服务器返回 HTTP \(code)"
-                        self?.testStatusLabel?.textColor = .systemOrange
+                        statusLabel?.stringValue = "服务器返回 HTTP \(code)"
+                        statusLabel?.textColor = .systemOrange
                     }
                 }
             }
@@ -845,6 +849,7 @@ final class HotkeyRecorder: NSObject {
     var recordedModifiers = 0
     private var monitor: Any?
     private var timeoutWorkItem: DispatchWorkItem?
+    private var bezelResetWorkItem: DispatchWorkItem?
 
     let allowedSoloKeyCodes: Set<Int>
     let soloKeyHint: String
@@ -861,6 +866,9 @@ final class HotkeyRecorder: NSObject {
         isRecording = true
         recordedKeyCode = nil
         recordedModifiers = 0
+
+        bezelResetWorkItem?.cancel()
+        bezelResetWorkItem = nil
 
         recordBtn?.title = "  ... 按下组合键 ...  "
         recordBtn?.bezelColor = .systemOrange
@@ -881,6 +889,17 @@ final class HotkeyRecorder: NSObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: timeout)
     }
 
+    /// 可取消的 bezel 颜色复位：只清「非录制中」的按钮颜色，避免旧复位误清新录制（start 置橙）的指示
+    private func scheduleBezelReset(after seconds: TimeInterval) {
+        bezelResetWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            guard let self = self, !self.isRecording else { return }
+            self.recordBtn?.bezelColor = nil
+        }
+        bezelResetWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: item)
+    }
+
     private func record(event: NSEvent) {
         let carbonModifiers = cocoaToCarbonModifiers(event.modifierFlags)
         let keyCode = Int(event.keyCode)
@@ -889,9 +908,7 @@ final class HotkeyRecorder: NSObject {
             cancel()
             statusLabel?.stringValue = "❌ 单个字母不能作为快捷键\n请同时按住 ⌘ / ⌥ / ⌃ / ⇧ 之一再按字母"
             recordBtn?.bezelColor = .systemRed
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                self?.recordBtn?.bezelColor = nil
-            }
+            scheduleBezelReset(after: 1.5)
             return
         }
 
@@ -917,15 +934,15 @@ final class HotkeyRecorder: NSObject {
         }
         statusLabel?.stringValue = status
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            self?.recordBtn?.bezelColor = nil
-        }
+        scheduleBezelReset(after: 2)
     }
 
     private func cancel() {
         isRecording = false
         timeoutWorkItem?.cancel()
         timeoutWorkItem = nil
+        bezelResetWorkItem?.cancel()
+        bezelResetWorkItem = nil
         if let m = monitor {
             NSEvent.removeMonitor(m)
             monitor = nil
@@ -940,6 +957,8 @@ final class HotkeyRecorder: NSObject {
         isRecording = false
         timeoutWorkItem?.cancel()
         timeoutWorkItem = nil
+        bezelResetWorkItem?.cancel()
+        bezelResetWorkItem = nil
         if let m = monitor {
             NSEvent.removeMonitor(m)
             monitor = nil

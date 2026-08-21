@@ -22,6 +22,7 @@ func runSettingsManagerTests() {
     test("invalid provider rawValue falls back to deepseek") {
         // Setting the raw value directly to an invalid string
         UserDefaults.standard.set("nonexistent", forKey: "snaptranslate.apiProvider")
+        defer { UserDefaults.standard.removeObject(forKey: "snaptranslate.apiProvider") }
         try assertEqual(SettingsManager.shared.apiProvider, .deepseek)
     }
 
@@ -162,11 +163,18 @@ func runSettingsManagerTests() {
         try assertNil(SettingsManager.shared.apiKey(for: .qwen) as Any?)
     }
 
-    // WI-B2: 验证 activeApiKey 优先读取当前 provider 的 key
+    // WI-B2: 验证 activeApiKey 优先读取当前 provider 的 key（Keychain 优先于 UserDefaults 陈旧明文）
     test("activeApiKey reads from Keychain, not stale UserDefaults") {
+        let ud = UserDefaults.standard
+        let udKey = "snaptranslate.apikey.deepseek"
         SettingsManager.shared.setApiKey("sk-test-active", for: .deepseek)
+        // 注入陈旧明文（模拟旧版遗留），若实现误读 UserDefaults 优先，此测试会失败
+        ud.set("sk-stale-plaintext", forKey: udKey)
+        defer {
+            ud.removeObject(forKey: udKey)
+            SettingsManager.shared.setApiKey(nil, for: .deepseek)
+        }
         try assertEqual(SettingsManager.shared.activeApiKey, "sk-test-active")
-        SettingsManager.shared.setApiKey(nil, for: .deepseek)
     }
 
     test("activeApiKey returns nil when Keychain and UserDefaults both empty") {

@@ -93,6 +93,8 @@ final class TranslationEngine {
                 completion(result)
             }
         }
+        // 取消上一次仍在飞的请求，避免陈旧结果与新请求竞争（旧回调经调用方 generation 守卫兜底丢弃）
+        currentTask?.cancel()
         self.currentTask = task
         task?.resume()
     }
