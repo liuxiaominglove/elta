@@ -2,6 +2,15 @@
 
 All notable changes to ELTA will be documented in this file.
 
+## [v5.4.0] — 2026-08-21
+
+### Changed
+- 移除 OpenAI / Anthropic Claude / Google Gemini / Ollama / 自定义（OpenAI-Compatible）提供商，仅保留 **DeepSeek** 与 **千问（阿里云）** 两个官方服务商，均国内直连、OpenAI 兼容格式
+
+### Fixed
+- 修复增量审计发现的 13 个低危 bug：测试连接切换 provider 后假阳性「连接成功」；热键录制 bezel 复位竞态；并发翻译未取消旧请求；官网 Service Worker 离线无缓存时返回 undefined；测试失败仍删日志；测试框架失败信息丢失原始错误 / 断言缺 file:line；测试污染 UserDefaults 等
+- 官网下载缓存串版本：Service Worker 不再缓存 `/download/`，下载按钮走版本化 URL
+
 ## [v5.3.1] — 2026-08-21
 
 ### Fixed
