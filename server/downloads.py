@@ -7,6 +7,8 @@ nginx 日志为 combined 格式：
 """
 
 import datetime
+import glob
+import gzip
 import re
 
 LOG_RE = re.compile(r'^\S+ \S+ \S+ \[[^\]]*\] "([^"]*)" (\d{3}) ')
@@ -70,11 +72,17 @@ def aggregate_nginx(lines):
     return {"total": total, "byVersion": by_version}
 
 
-def parse_github_release(data):
-    dmg = [a for a in data.get("assets", [])
-           if str(a.get("name", "")).endswith(".dmg")]
-    total = sum(int(a.get("download_count", 0)) for a in dmg)
-    return {"total": total, "version": data.get("tag_name")}
+def parse_github_releases(releases):
+    """汇总所有 release 的 .dmg 资产下载数（GitHub 下载量跨版本累计）。"""
+    total = 0
+    version = None
+    for rel in releases:
+        if version is None:
+            version = rel.get("tag_name")
+        for a in rel.get("assets", []):
+            if str(a.get("name", "")).endswith(".dmg"):
+                total += int(a.get("download_count", 0))
+    return {"total": total, "version": version}
 
 
 def merge(nginx, github):
@@ -82,3 +90,20 @@ def merge(nginx, github):
         "total": nginx["total"] + github["total"],
         "byVersion": nginx["byVersion"],
     }
+
+
+def read_log_lines(log_path):
+    """读取当前 + 轮转日志（含 .gz）的所有行，按文件名排序。"""
+    lines = []
+    paths = sorted(set([log_path] + glob.glob(log_path + "*")))
+    for p in paths:
+        try:
+            if p.endswith(".gz"):
+                with gzip.open(p, "rt", encoding="utf-8", errors="replace") as f:
+                    lines.extend(f.readlines())
+            else:
+                with open(p, "r", encoding="utf-8", errors="replace") as f:
+                    lines.extend(f.readlines())
+        except OSError:
+            continue
+    return lines

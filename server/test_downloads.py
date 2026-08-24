@@ -1,6 +1,8 @@
 import os
 import sys
 import unittest
+import gzip
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import downloads as dl
@@ -45,17 +47,24 @@ class DownloadsTests(unittest.TestCase):
         self.assertEqual(agg["byVersion"], {"5.5.0": 1, "latest": 1})
 
     def test_github_extract(self):
-        data = {
-            "tag_name": "v5.5.0",
-            "assets": [
-                {"name": "ELTA.v5.5.0.dmg", "download_count": 42},
-                {"name": "src.zip", "download_count": 9},
-            ],
-        }
-        self.assertEqual(dl.parse_github_release(data)["total"], 42)
+        data = [
+            {
+                "tag_name": "v5.5.1",
+                "assets": [
+                    {"name": "ELTA.v5.5.1.dmg", "download_count": 42},
+                    {"name": "src.zip", "download_count": 9},
+                ],
+            },
+            {
+                "tag_name": "v5.5.0",
+                "assets": [{"name": "ELTA.v5.5.0.dmg", "download_count": 3}],
+            },
+        ]
+        self.assertEqual(dl.parse_github_releases(data)["total"], 45)
+        self.assertEqual(dl.parse_github_releases(data)["version"], "v5.5.1")
 
     def test_github_no_asset(self):
-        self.assertEqual(dl.parse_github_release({"tag_name": "v5.5.0", "assets": []})["total"], 0)
+        self.assertEqual(dl.parse_github_releases([{"tag_name": "v5.5.1", "assets": []}])["total"], 0)
 
     def test_merge(self):
         nginx = {"total": 10, "byVersion": {"5.5.0": 10}}
@@ -69,6 +78,18 @@ class DownloadsTests(unittest.TestCase):
 
     def test_parse_date_malformed(self):
         self.assertIsNone(dl.parse_nginx_date("garbage line without date"))
+
+    def test_read_log_lines_includes_current_and_rotated_gz(self):
+        with tempfile.TemporaryDirectory() as d:
+            log = os.path.join(d, "elta-access.log")
+            with open(log, "w") as f:
+                f.write(line(path="/download/ELTA.v5.5.0.dmg") + "\n")
+            with gzip.open(log + "-20260101.gz", "wt") as f:
+                f.write(line(path="/download/ELTA.v5.4.0.dmg") + "\n")
+            lines = dl.read_log_lines(log)
+            self.assertEqual(len(lines), 2)
+            labels = [dl.parse_nginx_line(x) for x in lines]
+            self.assertEqual(sorted(labels), ["5.4.0", "5.5.0"])
 
 
 if __name__ == "__main__":

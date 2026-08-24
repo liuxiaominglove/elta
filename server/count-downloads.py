@@ -33,11 +33,7 @@ def build_downloads(lines, github_total):
 
 
 def main():
-    try:
-        with open(LOG, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
-    except OSError:
-        lines = []
+    lines = dl.read_log_lines(LOG)
 
     github_total = 0
     try:

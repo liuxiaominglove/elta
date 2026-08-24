@@ -19,14 +19,14 @@ GITHUB_JSON = os.path.join(DATA_DIR, "github.json")
 
 
 def fetch_github_total():
-    url = f"https://api.github.com/repos/{REPO}/releases/latest"
+    url = f"https://api.github.com/repos/{REPO}/releases?per_page=100"
     req = urllib.request.Request(url, headers={
         "Accept": "application/vnd.github+json",
         "User-Agent": "ELTA-stats",
     })
     with urllib.request.urlopen(req, timeout=30) as r:
-        data = json.loads(r.read().decode("utf-8"))
-    return dl.parse_github_release(data)
+        releases = json.loads(r.read().decode("utf-8"))
+    return dl.parse_github_releases(releases)
 
 
 def main():
