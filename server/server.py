@@ -76,6 +76,23 @@ def _send_html(handler, status, html):
     handler.wfile.write(body)
 
 
+def _send_unauthorized(handler, is_html):
+    """401 响应必须带 WWW-Authenticate，浏览器才会弹出 Basic Auth 登录框。"""
+    if is_html:
+        body = "<h1>401 Unauthorized</h1>".encode("utf-8")
+        ctype = "text/html; charset=utf-8"
+    else:
+        body = json.dumps({"error": "unauthorized"}, ensure_ascii=False).encode("utf-8")
+        ctype = "application/json; charset=utf-8"
+    handler.send_response(401)
+    handler.send_header("WWW-Authenticate", 'Basic realm="ELTA Admin"')
+    handler.send_header("Content-Type", ctype)
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-store")
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
 def _check_auth(handler, password):
     if not password:
         return False
@@ -119,7 +136,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/stats":
             if not _check_auth(self, self.app.admin_password):
-                _send_json(self, 401, {"error": "unauthorized"})
+                _send_unauthorized(self, False)
                 return
             downloads = self.app.read_downloads()
             _send_json(self, 200, {
@@ -132,7 +149,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/admin":
             if not _check_auth(self, self.app.admin_password):
-                _send_html(self, 401, "<h1>401 Unauthorized</h1>")
+                _send_unauthorized(self, True)
                 return
             try:
                 with open(self.app.admin_html_path, "r", encoding="utf-8") as f:

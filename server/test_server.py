@@ -113,6 +113,24 @@ class ServerTests(unittest.TestCase):
         code, _ = self.get("/admin")
         self.assertEqual(code, 401)
 
+    def test_admin_401_includes_www_authenticate(self):
+        req = urllib.request.Request(self._url("/admin"))
+        try:
+            urllib.request.urlopen(req)
+            self.fail("should 401")
+        except urllib.error.HTTPError as e:
+            self.assertEqual(e.code, 401)
+            self.assertIn("Basic", e.headers.get("WWW-Authenticate", ""))
+
+    def test_stats_401_includes_www_authenticate(self):
+        req = urllib.request.Request(self._url("/api/stats"))
+        try:
+            urllib.request.urlopen(req)
+            self.fail("should 401")
+        except urllib.error.HTTPError as e:
+            self.assertEqual(e.code, 401)
+            self.assertIn("Basic", e.headers.get("WWW-Authenticate", ""))
+
     def test_admin_serves_html_when_authed(self):
         code, body = self.get("/admin", headers=self._basic("secret"))
         self.assertEqual(code, 200)
