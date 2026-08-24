@@ -4,8 +4,8 @@ import Foundation
 final class UpdateChecker {
     static let shared = UpdateChecker()
 
-    private let releasesURL = "https://api.github.com/repos/liuxiaominglove/elta/releases/latest"
-    private let downloadPageURL = "https://autoelta.com/"
+    static let updateURL = "https://autoelta.com/api/update"
+    static let downloadPageURL = "https://autoelta.com/"
 
     private var hasChecked = false
 
@@ -19,37 +19,18 @@ final class UpdateChecker {
         }
     }
 
-    private func performCheck() {
-        guard let url = URL(string: releasesURL) else { return }
-        var request = URLRequest(url: url)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("ELTA/\(APP_SHORT_VERSION)", forHTTPHeaderField: "User-Agent")
-        request.timeoutInterval = 10
-
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            guard let self = self, let data = data, error == nil else { return }
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return }
-
-            do {
-                guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let tag = json["tag_name"] as? String,
-                      let htmlURL = json["html_url"] as? String else { return }
-
-                let remoteVersion = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
-                guard self.isNewer(remote: remoteVersion, local: APP_SHORT_VERSION) else { return }
-
-                let settings = SettingsManager.shared
-                guard settings.skipUpdateVersion != remoteVersion else { return }
-
-                DispatchQueue.main.async {
-                    self.showUpdateAlert(version: remoteVersion, url: htmlURL)
-                }
-            } catch {}
-        }
-        task.resume()
+    /// 解析自建更新端点的响应：{"version":"5.6.0","url":"..."}
+    /// 返回 nil 表示响应不合法（缺字段 / 空值 / 非 JSON）。
+    static func parseUpdateResponse(_ data: Data) -> (version: String, url: String)? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let version = json["version"] as? String,
+              let url = json["url"] as? String else { return nil }
+        let v = version.hasPrefix("v") ? String(version.dropFirst()) : version
+        guard !v.isEmpty, !url.isEmpty else { return nil }
+        return (version: v, url: url)
     }
 
-    private func isNewer(remote: String, local: String) -> Bool {
+    static func isNewer(remote: String, local: String) -> Bool {
         let rv = remote.split(separator: ".").compactMap { Int($0) }
         let lv = local.split(separator: ".").compactMap { Int($0) }
         let maxLen = max(rv.count, lv.count)
@@ -61,6 +42,46 @@ final class UpdateChecker {
             if r < l { return false }
         }
         return false
+    }
+
+    /// 是否需要提示更新：远程较新且未被用户跳过。
+    static func shouldShowUpdate(remoteVersion: String, localVersion: String, skipVersion: String?) -> Bool {
+        guard isNewer(remote: remoteVersion, local: localVersion) else { return false }
+        if let skip = skipVersion, skip == remoteVersion { return false }
+        return true
+    }
+
+    /// 构造更新检查 URL：开启匿名统计时附带 installID，否则不带。
+    static func buildUpdateURL(telemetryEnabled: Bool, installID: String) -> String {
+        if telemetryEnabled {
+            return updateURL + "?id=" + installID
+        }
+        return updateURL
+    }
+
+    private func performCheck() {
+        let settings = SettingsManager.shared
+        let urlString = UpdateChecker.buildUpdateURL(telemetryEnabled: settings.telemetryEnabled,
+                                                     installID: settings.installID)
+        guard let url = URL(string: urlString) else { return }
+        var request = URLRequest(url: url)
+        request.setValue("ELTA/\(APP_SHORT_VERSION)", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 10
+
+        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            guard let self = self, let data = data, error == nil else { return }
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return }
+            guard let parsed = UpdateChecker.parseUpdateResponse(data) else { return }
+            let remoteVersion = parsed.version
+            guard UpdateChecker.shouldShowUpdate(remoteVersion: remoteVersion,
+                                                 localVersion: APP_SHORT_VERSION,
+                                                 skipVersion: settings.skipUpdateVersion) else { return }
+
+            DispatchQueue.main.async {
+                self.showUpdateAlert(version: remoteVersion, url: parsed.url)
+            }
+        }
+        task.resume()
     }
 
     private func showUpdateAlert(version: String, url: String) {
@@ -100,7 +121,8 @@ final class UpdateChecker {
     private func handleAlertResult(_ result: NSApplication.ModalResponse, version: String, url: String) {
         switch result {
         case .alertFirstButtonReturn:
-            NSWorkspace.shared.open(URL(string: downloadPageURL)!)
+            let target = URL(string: url) ?? URL(string: UpdateChecker.downloadPageURL)!
+            NSWorkspace.shared.open(target)
         case .alertSecondButtonReturn:
             SettingsManager.shared.skipUpdateVersion = version
             logi("跳过版本: v\(version)")

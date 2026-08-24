@@ -16,6 +16,17 @@ enum ConnectionResult: Equatable {
     }
 }
 
+// MARK: - 通用标签页卡片布局
+
+struct ProviderCardLayout {
+    let registerLabelY: CGFloat
+    let modelTitleY: CGFloat
+    let modelPopupY: CGFloat
+    let keyTitleY: CGFloat
+    let keyFieldY: CGFloat
+    let testButtonY: CGFloat
+}
+
 // MARK: - 偏好设置窗口
 
 final class SettingsWindowController: NSObject {
@@ -35,6 +46,7 @@ final class SettingsWindowController: NSObject {
     private var testStatusLabel: NSTextField?
     private var providerCardView: NSView?          // 当前提供商的卡片容器
     private var providerCardHeight: CGFloat = 0
+    private var cardLayout: ProviderCardLayout?    // 通用标签页卡片布局（模型严格居中）
 
     // Tab 2: 快捷键 — 4 个 HotkeyRecorder 实例
     let screenshotRecorder = HotkeyRecorder(
@@ -191,21 +203,72 @@ final class SettingsWindowController: NSObject {
         scrollView.drawsBackground = false
         v.addSubview(scrollView)
 
+        // 计算卡片布局：模型与 API Key 按给定底边 y 摆放
+        self.cardLayout = Self.computeProviderCardLayout(
+            modelPopupY: 549,
+            keyFieldY: 415,
+            cardHeight: size.height - 110)
+
         let provider = SettingsManager.shared.apiProvider
         let card = buildProviderCard(for: provider, width: w - 8)
         providerCardView = card
         providerCardHeight = card.frame.height
         card.frame.size.height = max(card.frame.height, scrollView.contentSize.height)
         scrollView.documentView = card
+
+        // 匿名使用统计开关
+        let telemetryCheck = NSButton(checkboxWithTitle: "参与匿名使用统计", target: self, action: #selector(telemetryToggled(_:)))
+        telemetryCheck.state = SettingsManager.shared.telemetryEnabled ? .on : .off
+        telemetryCheck.frame = NSRect(x: 4, y: 22, width: 220, height: 20)
+        telemetryCheck.font = .systemFont(ofSize: 12)
+        v.addSubview(telemetryCheck)
+
+        let telemetryHint = NSTextField(labelWithString: "仅上报随机匿名标识统计每日使用人数，不含任何个人信息")
+        telemetryHint.frame = NSRect(x: 24, y: 4, width: w - 28, height: 14)
+        telemetryHint.font = .systemFont(ofSize: 10)
+        telemetryHint.textColor = .secondaryLabelColor
+        v.addSubview(telemetryHint)
+
         return v
+    }
+
+    @objc private func telemetryToggled(_ sender: NSButton) {
+        SettingsManager.shared.telemetryEnabled = (sender.state == .on)
+    }
+
+    /// 计算通用标签页卡片内各控件的 y 坐标（非翻转坐标系，y 向上）。
+    /// 模型下拉框与 API Key 输入框按给定的底边 y 摆放，标题自动跟随、测试按钮随 API Key 移动。
+    static func computeProviderCardLayout(modelPopupY: CGFloat,
+                                          keyFieldY: CGFloat,
+                                          cardHeight: CGFloat) -> ProviderCardLayout {
+        let labelHeight: CGFloat = 18
+        let fieldHeight: CGFloat = 26
+        let gap: CGFloat = 4
+        let topMargin: CGFloat = 8
+        let testButtonOffset: CGFloat = 38
+
+        let registerLabelY = cardHeight - topMargin - labelHeight
+        let modelTitleY = modelPopupY + fieldHeight + gap
+        let keyTitleY = keyFieldY + fieldHeight + gap
+        let testButtonY = keyFieldY - testButtonOffset
+
+        return ProviderCardLayout(
+            registerLabelY: registerLabelY,
+            modelTitleY: modelTitleY,
+            modelPopupY: modelPopupY,
+            keyTitleY: keyTitleY,
+            keyFieldY: keyFieldY,
+            testButtonY: testButtonY)
     }
 
     private func buildProviderCard(for provider: AIProvider, width w: CGFloat) -> NSView {
         let settings = SettingsManager.shared
+        let layout = cardLayout ?? Self.computeProviderCardLayout(
+            modelPopupY: 549, keyFieldY: 415, cardHeight: 666)
 
         let v = NSView(frame: NSRect(x: 0, y: 0, width: w, height: 320))
         let descLabel = NSTextField(labelWithString: "注册地址：\(provider.registerURL)")
-        descLabel.frame = NSRect(x: 4, y: 180, width: w - 8, height: 18)
+        descLabel.frame = NSRect(x: 4, y: layout.registerLabelY, width: w - 8, height: 18)
         descLabel.font = .systemFont(ofSize: 12, weight: .regular)
         descLabel.textColor = .secondaryLabelColor
         v.addSubview(descLabel)
@@ -213,11 +276,11 @@ final class SettingsWindowController: NSObject {
         // --- 模型选择（预设下拉框） ---
         let models = provider.availableModels
         let mdlTitle = NSTextField(labelWithString: "模型（Model）：")
-        mdlTitle.frame = NSRect(x: 4, y: 158, width: w - 8, height: 18)
+        mdlTitle.frame = NSRect(x: 4, y: layout.modelTitleY, width: w - 8, height: 18)
         mdlTitle.font = .systemFont(ofSize: 12, weight: .semibold)
         v.addSubview(mdlTitle)
 
-        let popup = NSPopUpButton(frame: NSRect(x: 4, y: 130, width: w - 8, height: 26), pullsDown: false)
+        let popup = NSPopUpButton(frame: NSRect(x: 4, y: layout.modelPopupY, width: w - 8, height: 26), pullsDown: false)
         for m in models { popup.addItem(withTitle: m) }
         let current = settings.modelOverride(for: provider) ?? provider.defaultModel
         if let idx = models.firstIndex(of: current) {
@@ -230,12 +293,12 @@ final class SettingsWindowController: NSObject {
 
         // --- API Key ---
         let keyTitle = NSTextField(labelWithString: "API Key：")
-        keyTitle.frame = NSRect(x: 4, y: 106, width: w - 8, height: 18)
+        keyTitle.frame = NSRect(x: 4, y: layout.keyTitleY, width: w - 8, height: 18)
         keyTitle.font = .systemFont(ofSize: 12, weight: .semibold)
         v.addSubview(keyTitle)
 
         // Hidden secure field
-        let hiddenField = PasteSecureTextField(frame: NSRect(x: 4, y: 76, width: w - 40, height: 26))
+        let hiddenField = PasteSecureTextField(frame: NSRect(x: 4, y: layout.keyFieldY, width: w - 40, height: 26))
         hiddenField.placeholderString = "输入 API Key..."
         hiddenField.isBordered = true
         hiddenField.bezelStyle = .roundedBezel
@@ -243,7 +306,7 @@ final class SettingsWindowController: NSObject {
         apiKeyHiddenField = hiddenField
 
         // Visible field
-        let visibleField = PasteTextField(frame: NSRect(x: 4, y: 76, width: w - 40, height: 26))
+        let visibleField = PasteTextField(frame: NSRect(x: 4, y: layout.keyFieldY, width: w - 40, height: 26))
         visibleField.placeholderString = "输入 API Key..."
         visibleField.isBordered = true
         visibleField.bezelStyle = .roundedBezel
@@ -253,7 +316,7 @@ final class SettingsWindowController: NSObject {
 
         // Eye toggle button
         let eyeBtn = NSButton(title: "👁️", target: self, action: #selector(toggleKeyVisibility))
-        eyeBtn.frame = NSRect(x: w - 34, y: 76, width: 28, height: 26)
+        eyeBtn.frame = NSRect(x: w - 34, y: layout.keyFieldY, width: 28, height: 26)
         eyeBtn.bezelStyle = .roundRect
         eyeBtn.isBordered = false
         v.addSubview(eyeBtn)
@@ -261,12 +324,12 @@ final class SettingsWindowController: NSObject {
 
         // Test button
         let testBtn = NSButton(title: "测试连接", target: self, action: #selector(testAPIKeyConnection))
-        testBtn.frame = NSRect(x: 4, y: 38, width: 100, height: 26)
+        testBtn.frame = NSRect(x: 4, y: layout.testButtonY, width: 100, height: 26)
         testBtn.bezelStyle = .rounded
         v.addSubview(testBtn)
 
         let testStatus = NSTextField(labelWithString: "")
-        testStatus.frame = NSRect(x: 112, y: 42, width: w - 120, height: 18)
+        testStatus.frame = NSRect(x: 112, y: layout.testButtonY + 4, width: w - 120, height: 18)
         testStatus.font = .systemFont(ofSize: 11)
         testStatus.textColor = .secondaryLabelColor
         testStatus.lineBreakMode = .byWordWrapping

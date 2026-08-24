@@ -62,7 +62,7 @@
         <li><strong>屏幕截图</strong> — 截图仅在本地内存中处理，OCR 完成后立即释放</li>
         <li><strong>OCR 识别文本</strong> — 本地 Vision 引擎处理后，仅用于翻译请求，不作留存</li>
         <li><strong>翻译结果</strong> — 翻译结果仅在浮动面板中展示，关闭后即消失</li>
-        <li><strong>浏览历史 / 使用习惯</strong> — 本软件<strong>不含任何埋点、分析或追踪代码</strong></li>
+        <li><strong>浏览历史 / 使用习惯</strong> — 本软件不收集你的浏览历史或使用习惯，不含任何广告或行为分析追踪代码</li>
         <li><strong>个人信息</strong> — 不收集设备 ID、Apple ID、邮件地址等任何可识别身份的信息</li>
       </ul>
 
@@ -70,13 +70,22 @@
       <ul>
         <li><strong>API Key</strong> — 你配置的 AI 服务商密钥，存储在 macOS <strong>Keychain</strong>（系统级加密钥匙串）中</li>
         <li><strong>偏好设置</strong> — 快捷键、翻译模板等配置，存储在本地 <strong>UserDefaults</strong> 中</li>
+        <li><strong>匿名安装标识</strong> — 一个本地随机生成的 UUID，仅用于区分不同安装，存储在本地 UserDefaults，不含任何设备或个人信息</li>
         <li><strong>运行日志</strong> — 应用运行日志存储在 <code>~/Library/Logs/elta.log</code>，仅在你的设备上，用于排查问题</li>
+      </ul>
+
+      <h3>匿名使用统计</h3>
+      <p>为统计「每日使用人数」，本软件启动时会向官网服务器（autoelta.com）发起一次更新检查请求。若你在设置中开启「参与匿名使用统计」（<strong>默认开启</strong>），该请求会附带一个本地随机生成的<strong>匿名标识</strong>（随机 UUID），服务器仅用它按日去重计数，用于了解每天有多少人在使用。</p>
+      <ul>
+        <li>该标识<strong>与设备、Apple ID、网络身份均无关</strong>，无法反向识别个人</li>
+        <li>请求<strong>不包含</strong>屏幕截图、OCR 识别文本、翻译内容或任何个人信息</li>
+        <li>你随时可在「偏好设置」中<strong>关闭</strong>该开关，关闭后更新检查不再附带此标识</li>
       </ul>
     </section>
 
     <section id="data-usage">
       <h2>数据使用</h2>
-      <p>翻译过程中，OCR 识别出的英文文本会<strong>发送到你选择的 AI 服务商</strong>（DeepSeek 或千问）进行翻译处理。这是翻译功能的必要步骤。除此之外，你的数据不会被发送到任何其他服务器。</p>
+      <p>翻译过程中，OCR 识别出的英文文本会<strong>发送到你选择的 AI 服务商</strong>（DeepSeek 或千问）进行翻译处理。这是翻译功能的必要步骤。此外，应用启动时会向官网服务器（autoelta.com）发起一次更新检查请求，详情见上方「匿名使用统计」。除此之外，你的数据不会被发送到任何其他服务器。</p>
     </section>
 
     <section id="permissions">
@@ -139,7 +148,7 @@
     <section id="changes">
       <h2>政策更新</h2>
       <p>我们可能会不时更新本隐私政策。更新后的政策将发布在本页面，重大变更会通过应用更新日志或网站公告通知。</p>
-      <p>最后更新日期：2026年8月20日</p>
+      <p>最后更新日期：2026年8月25日</p>
     </section>
 
     <section id="contact">
@@ -164,7 +173,7 @@
       <a href="/privacy">隐私政策</a>
       <a href="https://github.com/liuxiaominglove/elta" target="_blank" rel="noopener">GitHub</a>
     </div>
-    <p class="footer-copy">ELTA v5.5.0 · 完全免费 · macOS 13.0+</p>
+    <p class="footer-copy">ELTA v5.5.1 · 完全免费 · macOS 13.0+</p>
   </div>
   <div class="footer-beian">
     <a href="https://beian.miit.gov.cn/" rel="noreferrer" target="_blank">冀ICP备2026030538号-1</a>

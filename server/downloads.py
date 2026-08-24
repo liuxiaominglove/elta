@@ -1,0 +1,84 @@
+"""ELTA 下载量聚合：nginx 日志解析 + GitHub release 下载数。
+
+nginx 日志为 combined 格式：
+    $remote_addr - $remote_user [$time_local] "$request" $status $bytes ...
+
+只统计：GET + 状态 200/206 + 路径以 /download/ 开头且以 .dmg 结尾 的请求。
+"""
+
+import datetime
+import re
+
+LOG_RE = re.compile(r'^\S+ \S+ \S+ \[[^\]]*\] "([^"]*)" (\d{3}) ')
+DATE_RE = re.compile(r'\[(\d{1,2})/([A-Za-z]{3})/(\d{4}):')
+VERSIONED_RE = re.compile(r'^ELTA\.v(.+)\.dmg$')
+
+
+def extract_version(filename):
+    """把 DMG 文件名映射为版本标签。latest.dmg 视为 'latest'。"""
+    if filename == "latest.dmg":
+        return "latest"
+    m = VERSIONED_RE.match(filename)
+    if m:
+        return m.group(1)
+    return filename
+
+
+def parse_nginx_line(line):
+    """可计数的下载请求返回版本标签，否则返回 None。"""
+    m = LOG_RE.match(line)
+    if not m:
+        return None
+    request = m.group(1)
+    status = int(m.group(2))
+    parts = request.split()
+    if len(parts) < 2:
+        return None
+    method, path = parts[0], parts[1]
+    if method != "GET":
+        return None
+    if status not in (200, 206):
+        return None
+    if not path.startswith("/download/"):
+        return None
+    if not path.endswith(".dmg"):
+        return None
+    return extract_version(path[len("/download/"):])
+
+
+def parse_nginx_date(line):
+    m = DATE_RE.search(line)
+    if not m:
+        return None
+    try:
+        d = datetime.datetime.strptime(
+            f"{m.group(1)}/{m.group(2)}/{m.group(3)}", "%d/%b/%Y")
+    except ValueError:
+        return None
+    return d.strftime("%Y-%m-%d")
+
+
+def aggregate_nginx(lines):
+    by_version = {}
+    total = 0
+    for ln in lines:
+        label = parse_nginx_line(ln)
+        if label is None:
+            continue
+        by_version[label] = by_version.get(label, 0) + 1
+        total += 1
+    return {"total": total, "byVersion": by_version}
+
+
+def parse_github_release(data):
+    dmg = [a for a in data.get("assets", [])
+           if str(a.get("name", "")).endswith(".dmg")]
+    total = sum(int(a.get("download_count", 0)) for a in dmg)
+    return {"total": total, "version": data.get("tag_name")}
+
+
+def merge(nginx, github):
+    return {
+        "total": nginx["total"] + github["total"],
+        "byVersion": nginx["byVersion"],
+    }

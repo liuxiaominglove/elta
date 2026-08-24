@@ -1,0 +1,15 @@
+[Unit]
+Description=ELTA usage stats + update check API
+After=network.target
+
+[Service]
+Type=simple
+Environment=ELTA_DATA_DIR=/var/www/elta-api
+Environment=ELTA_PORT=8787
+EnvironmentFile=/etc/elta-api.env
+ExecStart=/usr/bin/python3 /var/www/elta-api/server.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

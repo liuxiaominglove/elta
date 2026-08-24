@@ -32,6 +32,8 @@ final class SettingsManager {
         static let splitHotkeyModifiers = "snaptranslate.splitHotkeyModifiers"
         static let splitHotkeyDisplay   = "snaptranslate.splitHotkeyDisplay"
         static let skipUpdateVersion = "snaptranslate.skipUpdateVersion"
+        static let installID = "snaptranslate.installID"
+        static let telemetryEnabled = "snaptranslate.telemetryEnabled"
     }
 
     private init() {
@@ -360,5 +362,34 @@ final class SettingsManager {
     var skipUpdateVersion: String? {
         get { defaults.string(forKey: Keys.skipUpdateVersion) }
         set { defaults.set(newValue, forKey: Keys.skipUpdateVersion) }
+    }
+
+    // MARK: 匿名使用统计
+
+    /// 匿名安装标识：首次读取时生成随机 UUID 并持久化，不含任何设备/个人信息。
+    var installID: String {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            if let existing = defaults.string(forKey: Keys.installID), !existing.isEmpty {
+                return existing
+            }
+            let id = UUID().uuidString
+            defaults.set(id, forKey: Keys.installID)
+            return id
+        }
+    }
+
+    /// 是否参与匿名使用统计（默认开启；关闭时更新检查不再附带 installID）。
+    var telemetryEnabled: Bool {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            if defaults.object(forKey: Keys.telemetryEnabled) == nil { return true }
+            return defaults.bool(forKey: Keys.telemetryEnabled)
+        }
+        set {
+            lock.lock()
+            defaults.set(newValue, forKey: Keys.telemetryEnabled)
+            lock.unlock()
+        }
     }
 }

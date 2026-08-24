@@ -45,6 +45,7 @@ TEST_FILES=(
   "$PROJECT_DIR/Tests/AIProviderTests.swift"
   "$PROJECT_DIR/Tests/HotkeyHelpersTests.swift"
   "$PROJECT_DIR/Tests/SettingsManagerTests.swift"
+  "$PROJECT_DIR/Tests/SettingsWindowControllerTests.swift"
   "$PROJECT_DIR/Tests/TextPreprocessorTests.swift"
   "$PROJECT_DIR/Tests/TextNormalizerTests.swift"
   "$PROJECT_DIR/Tests/TableExtractorTests.swift"
@@ -55,6 +56,7 @@ TEST_FILES=(
   "$PROJECT_DIR/Tests/TranslationPipelineTests.swift"
   "$PROJECT_DIR/Tests/PasteboardSnapshotTests.swift"
   "$PROJECT_DIR/Tests/SentenceSplitterTests.swift"
+  "$PROJECT_DIR/Tests/UpdateCheckerTests.swift"
   "$PROJECT_DIR/Tests/TestRunnerTests.swift"
   "$PROJECT_DIR/Tests/main.swift"
 )

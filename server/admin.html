@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ELTA 数据看板</title>
+  <style>
+    :root { --bg:#f5f6f8; --card:#fff; --ink:#1f2937; --muted:#6b7280; --accent:#2563eb; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--ink); padding: 32px; }
+    h1 { font-size: 22px; margin-bottom: 4px; }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .card { background: var(--card); border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    .card .label { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    .card .value { font-size: 32px; font-weight: 700; }
+    .card .value small { font-size: 14px; font-weight: 400; color: var(--muted); }
+    table { width: 100%; max-width: 560px; border-collapse: collapse; background: var(--card); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    th, td { text-align: left; padding: 12px 16px; font-size: 14px; border-bottom: 1px solid #eef0f3; }
+    th { background: #fafbfc; color: var(--muted); font-weight: 600; }
+    tr:last-child td { border-bottom: none; }
+    .err { color: #dc2626; font-size: 14px; }
+    .refresh { color: var(--muted); font-size: 12px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <h1>ELTA 数据看板</h1>
+  <p class="sub">下载量 · 今日使用人数（匿名去重统计）</p>
+
+  <div class="grid">
+    <div class="card"><div class="label">今日使用人数</div><div class="value" id="active">—</div></div>
+    <div class="card"><div class="label">今日下载</div><div class="value" id="dlToday">—</div></div>
+    <div class="card"><div class="label">累计下载</div><div class="value" id="dlTotal">—</div></div>
+  </div>
+
+  <table>
+    <thead><tr><th>版本</th><th>下载量</th></tr></thead>
+    <tbody id="versions"></tbody>
+  </table>
+
+  <p class="refresh" id="status">加载中…</p>
+
+  <script>
+    async function load() {
+      try {
+        const res = await fetch('/api/stats');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const d = await res.json();
+        document.getElementById('active').textContent = d.activeUsersToday ?? 0;
+        document.getElementById('dlToday').textContent = d.downloadsToday ?? 0;
+        document.getElementById('dlTotal').textContent = d.downloadsTotal ?? 0;
+        const rows = Object.entries(d.downloadsByVersion || {}).sort((a, b) => b[1] - a[1]);
+        document.getElementById('versions').innerHTML = rows.length
+          ? rows.map(([v, n]) => `<tr><td>${v}</td><td>${n}</td></tr>`).join('')
+          : '<tr><td colspan="2">暂无数据</td></tr>';
+        document.getElementById('status').textContent = '更新于 ' + new Date().toLocaleTimeString();
+      } catch (e) {
+        document.getElementById('status').textContent = '加载失败：' + e.message;
+        document.getElementById('status').className = 'err';
+      }
+    }
+    load();
+    setInterval(load, 60000);
+  </script>
+</body>
+</html>

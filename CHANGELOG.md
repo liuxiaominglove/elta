@@ -2,6 +2,16 @@
 
 All notable changes to ELTA will be documented in this file.
 
+## [v5.5.1] — 2026-08-25
+
+### Added
+- 使用统计：下载量（国内直链 + GitHub）与今日使用人数，私有看板页查看
+- App 启动匿名上报（随机 UUID、默认开启、可在偏好设置关闭），隐私政策同步披露
+
+### Changed
+- 更新检查改走自建端点 autoelta.com/api/update
+- 偏好设置「通用」页模型 / API Key 布局调整
+
 ## [v5.5.0] — 2026-08-21
 
 ### Removed

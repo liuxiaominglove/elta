@@ -332,4 +332,35 @@ func runSettingsManagerTests() {
         SettingsManager.shared.setModelOverride("", for: .deepseek)
         try assertEqual(AIProvider.deepseek.defaultModel, "deepseek-v4-flash")
     }
+
+    // ━━━ 匿名使用统计：installID + 开关 ━━━
+
+    test("installID is a valid UUID string") {
+        let id = SettingsManager.shared.installID
+        try assertNotNil(UUID(uuidString: id) as UUID?)
+    }
+
+    test("installID is stable across reads") {
+        let a = SettingsManager.shared.installID
+        let b = SettingsManager.shared.installID
+        try assertEqual(a, b)
+    }
+
+    test("installID generates once and persists") {
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.installID")
+        let first = SettingsManager.shared.installID
+        let stored = UserDefaults.standard.string(forKey: "snaptranslate.installID")
+        try assertEqual(first, stored)
+    }
+
+    test("telemetryEnabled defaults to true when unset") {
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.telemetryEnabled")
+        try assertTrue(SettingsManager.shared.telemetryEnabled)
+    }
+
+    test("telemetryEnabled persists false") {
+        SettingsManager.shared.telemetryEnabled = false
+        try assertFalse(SettingsManager.shared.telemetryEnabled)
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.telemetryEnabled")
+    }
 }

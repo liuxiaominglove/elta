@@ -56,6 +56,7 @@ func runAllTests() -> Int32 {
     runAIProviderTests()
     runHotkeyHelpersTests()
     runSettingsManagerTests()
+    runSettingsWindowControllerTests()
     runTextPreprocessorTests()
     runTextNormalizerTests()
     runTableExtractorTests()
@@ -66,6 +67,7 @@ func runAllTests() -> Int32 {
     runTranslationPipelineTests()
     runPasteboardSnapshotTests()
     runSentenceSplitterTests()
+    runUpdateCheckerTests()
     runTestRunnerTests()
 
     print("\n========== Results ==========")
