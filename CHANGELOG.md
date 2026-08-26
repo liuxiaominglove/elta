@@ -2,6 +2,22 @@
 
 All notable changes to ELTA will be documented in this file.
 
+## [v5.5.2] — 2026-08-26
+
+### Added
+- 设置新增「默认优先弹窗」选项：整段 / 拆分（默认拆分），翻译弹窗按设置决定初始视图
+- 设置底部新增「恢复默认」按钮，一键恢复除 API Key 外的所有设置
+- 翻译模板编辑框支持 Cmd+C/V/X/A 快捷键（修复 accessory 应用无 Edit 菜单导致粘贴失效）
+
+### Changed
+- 默认翻译模板：重要词汇新增音标字段、删除「核查」章节、统一全角标点
+
+### Fixed
+- 断句拆分：识别「句点后紧跟左引号 + 大写」为句尾，修复引语漏拆；补 `a.m.`/`p.m.` 小写时间缩写
+- 服务端下载统计：纳入轮转日志(.gz)，GitHub 下载量按版本归集、跨版本累计
+- 服务端 `/admin` 401 补 `WWW-Authenticate` 头，浏览器才能弹登录框
+- 增量审计修复 20 个 bug（5 高危 + 9 中危 + 6 低危），含：Basic Auth 计时侧信道（恒定时间比较）、`json.load` 非对象崩溃、`github.json` 失败清零、`record` 持久化丢计数、`_ip_seen` 内存泄漏、下载 query string 丢失、byVersion 统计不一致、更新弹窗打开不可信 URL、划词翻译冻结主线程、OCR 失败误弹过期错误、CGEventTap 内存泄漏、表格段落误拆、清空模板不重置等
+
 ## [v5.5.1] — 2026-08-25
 
 ### Added
