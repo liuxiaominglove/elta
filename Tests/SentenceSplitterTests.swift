@@ -131,6 +131,16 @@ func runSentenceSplitterTests() {
         try assertEqual(result, ["J. K. Rowling wrote it."])
     }
 
+    test("splitEnglish does not split after lowercase a.m.") {
+        let result = SentenceSplitter.splitEnglish("The train leaves at 8 a.m. Passengers should board early.")
+        try assertEqual(result, ["The train leaves at 8 a.m. Passengers should board early."])
+    }
+
+    test("splitEnglish does not split after lowercase p.m.") {
+        let result = SentenceSplitter.splitEnglish("Meeting ends at 6 p.m. Dinner follows.")
+        try assertEqual(result, ["Meeting ends at 6 p.m. Dinner follows."])
+    }
+
     test("splitEnglish does not split inside quoted sentence") {
         let result = SentenceSplitter.splitEnglish(#"He said "Stop." and left."#)
         try assertEqual(result, [#"He said "Stop." and left."#])

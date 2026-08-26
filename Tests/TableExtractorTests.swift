@@ -53,6 +53,16 @@ func runTableExtractorTests() {
         try assertEqual(lines.count, 1)
     }
 
+    test("word-level blocks on same line are not split into paragraphs") {
+        let blocks = [
+            OCRBlock(text: "The", boundingBox: CGRect(x: 50, y: 10, width: 30, height: 14)),
+            OCRBlock(text: "quick", boundingBox: CGRect(x: 85, y: 10, width: 50, height: 14)),
+            OCRBlock(text: "jumps", boundingBox: CGRect(x: 50, y: 28, width: 60, height: 14)),
+        ]
+        let result = TableExtractor.process(blocks: blocks)
+        try assertEqual(result, "The quick\njumps")
+    }
+
     test("tableMarkdown: 三列表格返回 Markdown 表格") {
         let blocks = [
             OCRBlock(text: "H1", boundingBox: CGRect(x: 100, y: 10, width: 100, height: 14)),

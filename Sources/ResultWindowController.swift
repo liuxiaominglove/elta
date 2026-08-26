@@ -75,13 +75,13 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
     private func installEscTap() {
         guard escEventTap == nil else { return }
         let callback: CGEventTapCallBack = { (proxy, type, event, info) -> Unmanaged<CGEvent>? in
-            guard let info = info else { return Unmanaged.passRetained(event) }
+            guard let info = info else { return Unmanaged.passUnretained(event) }
             let ctrl = Unmanaged<ResultWindowController>.fromOpaque(info).takeUnretainedValue()
-            guard ctrl.panel != nil else { return Unmanaged.passRetained(event) }
+            guard ctrl.panel != nil else { return Unmanaged.passUnretained(event) }
 
             let settings = SettingsManager.shared
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-            if keyCode != Int64(settings.closePanelHotkeyKeyCode) { return Unmanaged.passRetained(event) }
+            if keyCode != Int64(settings.closePanelHotkeyKeyCode) { return Unmanaged.passUnretained(event) }
 
             let expectedModifiers = settings.closePanelHotkeyModifiers
             let flags = event.flags
@@ -90,7 +90,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             if flags.contains(.maskShift) { actualModifiers |= Int(shiftKey) }
             if flags.contains(.maskControl) { actualModifiers |= Int(controlKey) }
             if flags.contains(.maskAlternate) { actualModifiers |= Int(optionKey) }
-            if actualModifiers != expectedModifiers { return Unmanaged.passRetained(event) }
+            if actualModifiers != expectedModifiers { return Unmanaged.passUnretained(event) }
 
             DispatchQueue.main.async { ctrl.panel?.close() }
             return nil
@@ -134,13 +134,13 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
     private func installToggleTap() {
         guard togglePanelTap == nil else { return }
         let callback: CGEventTapCallBack = { (proxy, type, event, info) -> Unmanaged<CGEvent>? in
-            guard let info = info else { return Unmanaged.passRetained(event) }
+            guard let info = info else { return Unmanaged.passUnretained(event) }
             let ctrl = Unmanaged<ResultWindowController>.fromOpaque(info).takeUnretainedValue()
-            guard ctrl.panel != nil else { return Unmanaged.passRetained(event) }
+            guard ctrl.panel != nil else { return Unmanaged.passUnretained(event) }
 
             let settings = SettingsManager.shared
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-            if keyCode != Int64(settings.togglePanelHotkeyKeyCode) { return Unmanaged.passRetained(event) }
+            if keyCode != Int64(settings.togglePanelHotkeyKeyCode) { return Unmanaged.passUnretained(event) }
 
             let expectedModifiers = settings.togglePanelHotkeyModifiers
             let flags = event.flags
@@ -149,7 +149,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             if flags.contains(.maskShift) { actualModifiers |= Int(shiftKey) }
             if flags.contains(.maskControl) { actualModifiers |= Int(controlKey) }
             if flags.contains(.maskAlternate) { actualModifiers |= Int(optionKey) }
-            if actualModifiers != expectedModifiers { return Unmanaged.passRetained(event) }
+            if actualModifiers != expectedModifiers { return Unmanaged.passUnretained(event) }
 
             DispatchQueue.main.async { ctrl.togglePanelPosition() }
             return nil
@@ -174,13 +174,13 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
     private func installSplitTap() {
         guard splitTap == nil else { return }
         let callback: CGEventTapCallBack = { (proxy, type, event, info) -> Unmanaged<CGEvent>? in
-            guard let info = info else { return Unmanaged.passRetained(event) }
+            guard let info = info else { return Unmanaged.passUnretained(event) }
             let ctrl = Unmanaged<ResultWindowController>.fromOpaque(info).takeUnretainedValue()
-            guard ctrl.panel != nil else { return Unmanaged.passRetained(event) }
+            guard ctrl.panel != nil else { return Unmanaged.passUnretained(event) }
 
             let settings = SettingsManager.shared
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-            if keyCode != Int64(settings.splitHotkeyKeyCode) { return Unmanaged.passRetained(event) }
+            if keyCode != Int64(settings.splitHotkeyKeyCode) { return Unmanaged.passUnretained(event) }
 
             let expectedModifiers = settings.splitHotkeyModifiers
             let flags = event.flags
@@ -189,7 +189,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             if flags.contains(.maskShift) { actualModifiers |= Int(shiftKey) }
             if flags.contains(.maskControl) { actualModifiers |= Int(controlKey) }
             if flags.contains(.maskAlternate) { actualModifiers |= Int(optionKey) }
-            if actualModifiers != expectedModifiers { return Unmanaged.passRetained(event) }
+            if actualModifiers != expectedModifiers { return Unmanaged.passUnretained(event) }
 
             DispatchQueue.main.async { ctrl.toggleSplitMode() }
             return nil

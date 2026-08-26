@@ -76,6 +76,8 @@ final class TranslationPipeline {
                 // OCR（含坐标，用于表格检测与还原）
                 logi("[Step 2] OCR 识别（含坐标）...")
                 guard let blocks = OCREngine.shared.recognizeWithPositions(cgImage: cgImage), !blocks.isEmpty else {
+                    // OCR 失败：仅当仍是当前任务时才清理 loading 并报错，避免误清新任务的弹窗/弹过期错误
+                    guard generation == self?.currentTaskGeneration else { return }
                     self?.hideLoading()
                     self?.showError("OCR 未能识别到文字。\n请确认框选区域包含清晰文字，且文字不过小/模糊。")
                     return
@@ -315,19 +317,24 @@ final class TranslationPipeline {
         let keyPressDelay: useconds_t = 30_000
         let keyHoldDelay: useconds_t = 40_000
 
+        // 用 RunLoop 而非 usleep 等待：不冻结主线程，事件循环可继续处理剪贴板更新
+        func pump(_ us: useconds_t) {
+            RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: Double(us) / 1_000_000))
+        }
+
         cmdDown?.post(tap: .cghidEventTap)
-        usleep(keyPressDelay)
+        pump(keyPressDelay)
         cDown?.post(tap: .cghidEventTap)
-        usleep(keyHoldDelay)
+        pump(keyHoldDelay)
         cUp?.post(tap: .cghidEventTap)
-        usleep(keyPressDelay)
+        pump(keyPressDelay)
         cmdUp?.post(tap: .cghidEventTap)
 
         // 读取剪贴板（重试等待目标 App 处理 Cmd+C）
         var selectedText: String? = nil
         let maxRetries = 15
         for i in 0..<maxRetries {
-            usleep(100_000)  // 每次等待 100ms，总计最多 1.5 秒
+            pump(100_000)  // 每次等待 100ms，总计最多 1.5 秒
             if pasteboard.changeCount != oldChangeCount,
                let newText = pasteboard.string(forType: .string),
                !newText.isEmpty {
@@ -417,17 +424,17 @@ final class TranslationPipeline {
         guard loadingEscTap == nil else { return }
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
         let callback: CGEventTapCallBack = { (proxy, type, event, info) -> Unmanaged<CGEvent>? in
-            guard let info = info else { return Unmanaged.passRetained(event) }
+            guard let info = info else { return Unmanaged.passUnretained(event) }
             let pipeline = Unmanaged<TranslationPipeline>.fromOpaque(info).takeUnretainedValue()
-            guard pipeline.loadingPanel != nil else { return Unmanaged.passRetained(event) }
+            guard pipeline.loadingPanel != nil else { return Unmanaged.passUnretained(event) }
 
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-            guard keyCode == 0x35 else { return Unmanaged.passRetained(event) }  // ESC
+            guard keyCode == 0x35 else { return Unmanaged.passUnretained(event) }  // ESC
 
             let flags = event.flags
             if flags.contains(.maskCommand) || flags.contains(.maskControl)
                 || flags.contains(.maskAlternate) || flags.contains(.maskShift) {
-                return Unmanaged.passRetained(event)
+                return Unmanaged.passUnretained(event)
             }
 
             DispatchQueue.main.async { pipeline.cancelCurrentTranslation() }

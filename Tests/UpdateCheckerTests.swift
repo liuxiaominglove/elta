@@ -37,6 +37,16 @@ func runUpdateCheckerTests() {
         try assertNil(UpdateChecker.parseUpdateResponse("not json".data(using: .utf8)!) as Any?)
     }
 
+    test("parseUpdateResponse rejects file scheme url") {
+        let json = #"{"version":"5.6.0","url":"file:///etc/passwd"}"#
+        try assertNil(UpdateChecker.parseUpdateResponse(json.data(using: .utf8)!) as Any?)
+    }
+
+    test("parseUpdateResponse rejects javascript scheme url") {
+        let json = #"{"version":"5.6.0","url":"javascript:alert(1)"}"#
+        try assertNil(UpdateChecker.parseUpdateResponse(json.data(using: .utf8)!) as Any?)
+    }
+
     // MARK: - 版本比较
 
     test("isNewer returns true when remote is newer") {

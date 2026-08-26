@@ -21,7 +21,7 @@ enum SentenceSplitter {
 
     /// 含中间句点的多段缩写（"e.g." / "i.e." / "U.S." 等），匹配最后一个句点前的片段
     private static let multiDotAbbreviations: Set<String> = [
-        "e.g", "i.e", "U.S", "U.K", "Ph.D", "M.D", "B.C", "A.D", "vs"
+        "e.g", "i.e", "U.S", "U.K", "Ph.D", "M.D", "B.C", "A.D", "vs", "a.m", "p.m"
     ]
 
     /// 含空格的多词缩写（如 "et al."），按「前一词 + 句点前词」整体匹配

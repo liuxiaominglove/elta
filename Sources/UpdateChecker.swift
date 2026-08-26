@@ -20,13 +20,17 @@ final class UpdateChecker {
     }
 
     /// 解析自建更新端点的响应：{"version":"5.6.0","url":"..."}
-    /// 返回 nil 表示响应不合法（缺字段 / 空值 / 非 JSON）。
+    /// 返回 nil 表示响应不合法（缺字段 / 空值 / 非 JSON / url 非 http(s) 协议）。
     static func parseUpdateResponse(_ data: Data) -> (version: String, url: String)? {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let version = json["version"] as? String,
               let url = json["url"] as? String else { return nil }
         let v = version.hasPrefix("v") ? String(version.dropFirst()) : version
         guard !v.isEmpty, !url.isEmpty else { return nil }
+        // 只接受 http/https，拒绝 file://、javascript:、自定义 app scheme 等不可信协议
+        guard let urlObj = URL(string: url),
+              let scheme = urlObj.scheme?.lowercased(),
+              scheme == "https" || scheme == "http" else { return nil }
         return (version: v, url: url)
     }
 
@@ -121,7 +125,14 @@ final class UpdateChecker {
     private func handleAlertResult(_ result: NSApplication.ModalResponse, version: String, url: String) {
         switch result {
         case .alertFirstButtonReturn:
-            let target = URL(string: url) ?? URL(string: UpdateChecker.downloadPageURL)!
+            // 打开前二次校验协议，防止不可信 URL 被打开；不合法则回退到官网下载页
+            let fallback = URL(string: UpdateChecker.downloadPageURL)!
+            var target = fallback
+            if let u = URL(string: url),
+               let scheme = u.scheme?.lowercased(),
+               scheme == "https" || scheme == "http" {
+                target = u
+            }
             NSWorkspace.shared.open(target)
         case .alertSecondButtonReturn:
             SettingsManager.shared.skipUpdateVersion = version

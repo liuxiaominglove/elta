@@ -275,36 +275,75 @@ final class TableExtractor {
             }
             return $0.boundingBox.minX < $1.boundingBox.minX
         }
-        guard sorted.count >= 2 else {
-            return sorted.first?.text ?? ""
+        guard !sorted.isEmpty else { return "" }
+
+        let lines = clusterIntoLines(sorted)
+        guard lines.count >= 2 else {
+            return lineText(lines.first ?? [])
         }
 
-        let widths = sorted.map { $0.boundingBox.width }
-        let minXs = sorted.map { $0.boundingBox.minX }
-        let heights = sorted.map { $0.boundingBox.height }
+        let lineMinYs = lines.map { $0.map { $0.boundingBox.minY }.min() ?? 0 }
+        let lineMaxYs = lines.map { $0.map { $0.boundingBox.maxY }.max() ?? 0 }
+        let lineHeights = lines.map { $0.map { $0.boundingBox.height }.max() ?? 14 }
+        let lineWidths = lines.map { line -> CGFloat in
+            let minX = line.map { $0.boundingBox.minX }.min() ?? 0
+            let maxX = line.map { $0.boundingBox.maxX }.max() ?? 0
+            return maxX - minX
+        }
+        let lineMinXs = lines.map { $0.map { $0.boundingBox.minX }.min() ?? 0 }
 
-        let lineHeight = median(heights) ?? 14
-        let medianWidth = median(widths) ?? 500
-        let normalWidths = widths.filter { $0 > medianWidth * 0.6 }
+        let lineHeight = median(lineHeights) ?? 14
+        let medianWidth = median(lineWidths) ?? 500
+        let normalWidths = lineWidths.filter { $0 > medianWidth * 0.6 }
         let normalWidth = normalWidths.isEmpty ? medianWidth : (normalWidths.reduce(0, +) / CGFloat(normalWidths.count))
-        let normalMinX = median(minXs) ?? 50
+        let normalMinX = median(lineMinXs) ?? 50
 
-        var result = sorted[0].text
-        for i in 1..<sorted.count {
-            let prev = sorted[i - 1]
-            let curr = sorted[i]
-            let gap = curr.boundingBox.minY - prev.boundingBox.maxY
+        var result = lineText(lines[0])
+        for i in 1..<lines.count {
+            let gap = lineMinYs[i] - lineMaxYs[i - 1]
+            let currMinX = lineMinXs[i]
+            let prevWidth = lineWidths[i - 1]
 
             if gap > lineHeight * 1.5
-                || curr.boundingBox.minX > normalMinX + 8
-                || prev.boundingBox.width < normalWidth * 0.8 {
+                || currMinX > normalMinX + 8
+                || prevWidth < normalWidth * 0.8 {
                 result += "\n\n"
             } else {
                 result += "\n"
             }
-            result += curr.text
+            result += lineText(lines[i])
         }
         return result
+    }
+
+    /// 把词级/片段级 OCR 块按 minY 聚成视觉行（同一行的块 minY 接近，行间差至少一个行高）。
+    private static func clusterIntoLines(_ sorted: [OCRBlock]) -> [[OCRBlock]] {
+        guard !sorted.isEmpty else { return [] }
+        let heights = sorted.map { $0.boundingBox.height }
+        let lineHeight = median(heights) ?? 14
+        let tolerance = lineHeight * 0.6
+
+        var lines: [[OCRBlock]] = []
+        var current: [OCRBlock] = [sorted[0]]
+        var currentMinY = sorted[0].boundingBox.minY
+        for block in sorted.dropFirst() {
+            if abs(block.boundingBox.minY - currentMinY) <= tolerance {
+                current.append(block)
+            } else {
+                lines.append(current)
+                current = [block]
+                currentMinY = block.boundingBox.minY
+            }
+        }
+        lines.append(current)
+        return lines
+    }
+
+    /// 行内文本：按 minX 排序后用空格连接。
+    private static func lineText(_ line: [OCRBlock]) -> String {
+        line.sorted { $0.boundingBox.minX < $1.boundingBox.minX }
+            .map { $0.text }
+            .joined(separator: " ")
     }
 
     private static func median(_ values: [CGFloat]) -> CGFloat? {
