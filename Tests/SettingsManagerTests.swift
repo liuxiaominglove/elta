@@ -10,7 +10,8 @@ func runSettingsManagerTests() {
     }
 
     test("default provider is deepseek") {
-        SettingsManager.shared.apiProvider = .deepseek
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.apiProvider")
+        defer { UserDefaults.standard.removeObject(forKey: "snaptranslate.apiProvider") }
         try assertEqual(SettingsManager.shared.apiProvider, .deepseek)
     }
 
@@ -38,30 +39,30 @@ func runSettingsManagerTests() {
 
     test("setting hotkey keyCode works") {
         let orig = SettingsManager.shared.hotkeyKeyCode
+        defer { SettingsManager.shared.hotkeyKeyCode = orig }
         SettingsManager.shared.hotkeyKeyCode = 0x03 // F key
         try assertEqual(SettingsManager.shared.hotkeyKeyCode, 0x03)
-        SettingsManager.shared.hotkeyKeyCode = orig // Restore
     }
 
     test("hotkeyKeyCode=0 (A key) is preserved, NOT default T key") {
         let orig = SettingsManager.shared.hotkeyKeyCode
+        defer { SettingsManager.shared.hotkeyKeyCode = orig }
         SettingsManager.shared.hotkeyKeyCode = 0
         try assertEqual(SettingsManager.shared.hotkeyKeyCode, 0)
-        SettingsManager.shared.hotkeyKeyCode = orig
     }
 
     test("hotkeyModifiers=0 preserved, NOT replaced by controlKey") {
         let orig = SettingsManager.shared.hotkeyModifiers
+        defer { SettingsManager.shared.hotkeyModifiers = orig }
         SettingsManager.shared.hotkeyModifiers = 0
         try assertEqual(SettingsManager.shared.hotkeyModifiers, 0)
-        SettingsManager.shared.hotkeyModifiers = orig
     }
 
     test("selectionHotkeyKeyCode=0 preserved, NOT default") {
         let orig = SettingsManager.shared.selectionHotkeyKeyCode
+        defer { SettingsManager.shared.selectionHotkeyKeyCode = orig }
         SettingsManager.shared.selectionHotkeyKeyCode = 0
         try assertEqual(SettingsManager.shared.selectionHotkeyKeyCode, 0)
-        SettingsManager.shared.selectionHotkeyKeyCode = orig
     }
 
     test("selectionHotkeyModifiers has ctrl+shift default") {
@@ -84,24 +85,24 @@ func runSettingsManagerTests() {
 
     test("closePanelHotkeyKeyCode=0 preserved, NOT ESC 0x35") {
         let orig = SettingsManager.shared.closePanelHotkeyKeyCode
+        defer { SettingsManager.shared.closePanelHotkeyKeyCode = orig }
         SettingsManager.shared.closePanelHotkeyKeyCode = 0
         try assertEqual(SettingsManager.shared.closePanelHotkeyKeyCode, 0)
-        SettingsManager.shared.closePanelHotkeyKeyCode = orig
     }
 
     test("togglePanelHotkeyKeyCode=0 preserved, NOT backtick 0x32") {
         let orig = SettingsManager.shared.togglePanelHotkeyKeyCode
+        defer { SettingsManager.shared.togglePanelHotkeyKeyCode = orig }
         SettingsManager.shared.togglePanelHotkeyKeyCode = 0
         try assertEqual(SettingsManager.shared.togglePanelHotkeyKeyCode, 0)
-        SettingsManager.shared.togglePanelHotkeyKeyCode = orig
     }
 
     test("setting hotkey modifiers works") {
         let orig = SettingsManager.shared.hotkeyModifiers
+        defer { SettingsManager.shared.hotkeyModifiers = orig }
         let cmdValue = Int(cmdKey | optionKey)
         SettingsManager.shared.hotkeyModifiers = cmdValue
         try assertEqual(SettingsManager.shared.hotkeyModifiers, cmdValue)
-        SettingsManager.shared.hotkeyModifiers = orig // Restore
     }
 
     test("selectionHotkeyKeyCode has valid default") {
@@ -135,33 +136,34 @@ func runSettingsManagerTests() {
 
     test("systemPrompt returns custom when set") {
         let custom = "Custom prompt"
+        defer { UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt") }
         SettingsManager.shared.systemPrompt = custom
         try assertEqual(SettingsManager.shared.systemPrompt, custom)
-        // Clean up
-        UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt")
     }
 
     test("setApiKey stores to Keychain and retrieves via activeApiKey") {
+        defer { SettingsManager.shared.setApiKey(nil, for: .deepseek) }
         SettingsManager.shared.setApiKey("test-key-123", for: .deepseek)
         try assertEqual(SettingsManager.shared.apiKey(for: .deepseek), "test-key-123")
-        SettingsManager.shared.setApiKey(nil, for: .deepseek)
     }
 
     test("setApiKey does NOT write to UserDefaults") {
         let udKey = "snaptranslate.apikey.deepseek"
+        defer { SettingsManager.shared.setApiKey(nil, for: .deepseek) }
         SettingsManager.shared.setApiKey(nil, for: .deepseek)
         UserDefaults.standard.removeObject(forKey: udKey)
         SettingsManager.shared.setApiKey("sk-secure-only", for: .deepseek)
         try assertNil(UserDefaults.standard.string(forKey: udKey) as Any?)
-        SettingsManager.shared.setApiKey(nil, for: .deepseek)
     }
 
     test("activeApiKey reflects current provider's key") {
+        defer {
+            SettingsManager.shared.setApiKey(nil, for: .qwen)
+            SettingsManager.shared.apiProvider = .deepseek
+        }
         SettingsManager.shared.apiProvider = .qwen
         SettingsManager.shared.setApiKey("sk-qwen-test", for: .qwen)
         try assertEqual(SettingsManager.shared.activeApiKey, "sk-qwen-test")
-        SettingsManager.shared.setApiKey(nil, for: .qwen)
-        SettingsManager.shared.apiProvider = .deepseek
     }
 
     test("apiKey returns nil when not set") {
@@ -190,6 +192,7 @@ func runSettingsManagerTests() {
 
     // WI-C3: API Key 存储往返回归（保存后重开应能读回）
     test("setApiKey persists and activeApiKey reads back after provider roundtrip") {
+        defer { SettingsManager.shared.setApiKey(nil, for: .deepseek) }
         SettingsManager.shared.apiProvider = .deepseek
         SettingsManager.shared.setApiKey("sk-persist-test", for: .deepseek)
         try assertEqual(SettingsManager.shared.activeApiKey, "sk-persist-test")
@@ -248,20 +251,20 @@ func runSettingsManagerTests() {
 
     test("setApiKey clears plaintext UserDefaults fallback after save") {
         let udKey = "snaptranslate.apikey.deepseek"
+        defer { SettingsManager.shared.setApiKey(nil, for: .deepseek) }
         SettingsManager.shared.setApiKey(nil, for: .deepseek)
         UserDefaults.standard.set("legacy-plaintext", forKey: udKey)
         SettingsManager.shared.setApiKey("sk-new", for: .deepseek)
         try assertNil(UserDefaults.standard.string(forKey: udKey) as Any?, "保存新 key 后应清除明文回退")
-        SettingsManager.shared.setApiKey(nil, for: .deepseek)
     }
 
     // ━━━ 审计修复 3：keychain 覆盖写（更新路径）━━━━
 
     test("setApiKey overwrites existing key via update path") {
+        defer { SettingsManager.shared.setApiKey(nil, for: .deepseek) }
         SettingsManager.shared.setApiKey("sk-first", for: .deepseek)
         SettingsManager.shared.setApiKey("sk-second", for: .deepseek)
         try assertEqual(SettingsManager.shared.apiKey(for: .deepseek), "sk-second")
-        SettingsManager.shared.setApiKey(nil, for: .deepseek)
     }
 
     // ━━━ 审计修复 4：连接状态分类 ━━━
@@ -302,9 +305,9 @@ func runSettingsManagerTests() {
     // ━━━ 模型选择：modelOverride 统一存储 ━━━
 
     test("modelOverride roundtrip via setModelOverride") {
+        defer { SettingsManager.shared.setModelOverride(nil, for: .deepseek) }
         SettingsManager.shared.setModelOverride("deepseek-v4-pro", for: .deepseek)
         try assertEqual(SettingsManager.shared.modelOverride(for: .deepseek), "deepseek-v4-pro")
-        SettingsManager.shared.setModelOverride(nil, for: .deepseek)
     }
 
     test("setModelOverride empty string clears override") {
@@ -320,18 +323,20 @@ func runSettingsManagerTests() {
     }
 
     test("modelOverride does not leak across providers") {
+        defer {
+            SettingsManager.shared.setModelOverride(nil, for: .deepseek)
+            SettingsManager.shared.setModelOverride(nil, for: .qwen)
+        }
         SettingsManager.shared.setModelOverride("a", for: .deepseek)
         SettingsManager.shared.setModelOverride("b", for: .qwen)
         try assertEqual(SettingsManager.shared.modelOverride(for: .deepseek), "a")
         try assertEqual(SettingsManager.shared.modelOverride(for: .qwen), "b")
-        SettingsManager.shared.setModelOverride(nil, for: .deepseek)
-        SettingsManager.shared.setModelOverride(nil, for: .qwen)
     }
 
     test("defaultModel reflects override when set") {
+        defer { SettingsManager.shared.setModelOverride(nil, for: .deepseek) }
         SettingsManager.shared.setModelOverride("deepseek-v4-pro", for: .deepseek)
         try assertEqual(AIProvider.deepseek.defaultModel, "deepseek-v4-pro")
-        SettingsManager.shared.setModelOverride(nil, for: .deepseek)
     }
 
     test("defaultModel falls back to hardcoded when override empty") {

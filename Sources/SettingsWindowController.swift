@@ -719,6 +719,10 @@ final class SettingsWindowController: NSObject {
 
         if let template = templateTextView?.string, !template.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             settings.systemPrompt = template
+        } else {
+            // 清空模板时重置为默认模板，避免空内容被静默忽略、旧模板残留
+            settings.systemPrompt = settings.defaultPrompt
+            templateTextView?.string = settings.defaultPrompt
         }
 
         logi("设置已保存")

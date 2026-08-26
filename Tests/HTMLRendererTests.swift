@@ -56,7 +56,7 @@ func runHTMLRendererTests() {
     // MARK: - render 方法安全性测试
 
     test("render escapes AI response markdown") {
-        let markdown = ##"## 中文翻译\n包含 <script>alert('xss')</script> 的内容"##
+        let markdown = "## 中文翻译\n包含 <script>alert('xss')</script> 的内容"
         let original = "test"
         let html = HTMLRenderer.render(markdown: markdown, originalText: original, isDark: false)
         try assertFalse(html.contains("<script>"), "AI response should not contain executable script tags")
@@ -64,7 +64,7 @@ func runHTMLRendererTests() {
     }
 
     test("render escapes AI response with img onerror") {
-        let markdown = ##"## 中文翻译\n图片 <img src=x onerror=alert(1)> in text"##
+        let markdown = "## 中文翻译\n图片 <img src=x onerror=alert(1)> in text"
         let original = "test"
         let html = HTMLRenderer.render(markdown: markdown, originalText: original, isDark: false)
         try assertFalse(html.contains("<img"), "AI response should not contain raw <img tag")
@@ -72,7 +72,7 @@ func runHTMLRendererTests() {
     }
 
     test("render preserves safe markdown formatting after escaping") {
-        let markdown = ##"## 中文翻译\n这是 **加粗** 的内容"##
+        let markdown = "## 中文翻译\n这是 **加粗** 的内容"
         let original = "test"
         let html = HTMLRenderer.render(markdown: markdown, originalText: original, isDark: false)
         try assertTrue(html.contains("<strong>"), "Bold markdown should still be converted")

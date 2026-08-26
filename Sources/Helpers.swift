@@ -78,10 +78,16 @@ final class Logger {
     private let queue = DispatchQueue(label: "snaptranslate.logger")
 
     private init() {
-        if !FileManager.default.fileExists(atPath: LOG_PATH) {
-            FileManager.default.createFile(atPath: LOG_PATH, contents: nil)
+        // createFile 不会创建中间目录，先确保父目录存在，避免日志路径失效
+        let logPath = (LOG_PATH as NSString).expandingTildeInPath
+        let dir = (logPath as NSString).deletingLastPathComponent
+        if !FileManager.default.fileExists(atPath: dir) {
+            try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         }
-        handle = FileHandle(forUpdatingAtPath: LOG_PATH)
+        if !FileManager.default.fileExists(atPath: logPath) {
+            FileManager.default.createFile(atPath: logPath, contents: nil)
+        }
+        handle = FileHandle(forUpdatingAtPath: logPath)
         handle?.seekToEndOfFile()
     }
 
