@@ -38,7 +38,7 @@ ssh "$SERVER" '
 '
 
 echo "=== 4/5 启动服务 ==="
-ssh "$SERVER" 'systemctl daemon-reload && systemctl enable --now elta-api && systemctl status elta-api --no-pager | head -5'
+ssh "$SERVER" 'systemctl daemon-reload && systemctl enable elta-api && systemctl restart elta-api && systemctl status elta-api --no-pager | head -5'
 
 echo "=== 5/5 安装 cron ==="
 ssh "$SERVER" '
@@ -56,7 +56,7 @@ echo " 还需手动完成（本脚本不自动改，防误操作）:"
 echo "================================================"
 echo " 1) nginx: 把 /etc/nginx/conf.d/elta.conf 里的"
 echo "       location /api/ { return 404; }"
-echo "    替换为 proxy_pass 到 127.0.0.1:$PORT，并加 /admin 反代"
+echo "    替换为 proxy_pass 到 127.0.0.1:${PORT}，并加 /admin 反代"
 echo "    （需传 X-Real-IP 供 IP 兜底去重）"
 echo " 2) /root/sync-elta-release.sh 末尾追加 latest.json 写入:"
 echo "       VERSION_NO_V=\${TAG#v}"
