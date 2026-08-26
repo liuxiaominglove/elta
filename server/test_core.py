@@ -78,6 +78,35 @@ class UsageStoreTests(unittest.TestCase):
         key = core.today_key()
         self.assertRegex(key, r"^\d{4}-\d{2}-\d{2}$")
 
+    def test_record_persist_failure_does_not_corrupt_memory(self):
+        self.assertTrue(self.store.record("a", "2026-08-24"))
+        original = self.store._persist
+
+        def boom():
+            raise OSError("disk full")
+
+        self.store._persist = boom
+        try:
+            with self.assertRaises(OSError):
+                self.store.record("b", "2026-08-24")
+        finally:
+            self.store._persist = original
+
+        # b 未持久化成功，内存应回滚，不能留下「假去重」导致永远不再落盘
+        self.assertEqual(self.store.active_users_on("2026-08-24"), 1)
+        # 恢复后重试应成功
+        self.assertTrue(self.store.record("b", "2026-08-24"))
+        self.assertEqual(self.store.active_users_on("2026-08-24"), 2)
+
+    def test_ip_seen_pruned_across_days(self):
+        self.store.record(None, "2026-08-24", ip="1.1.1.1")
+        self.store.record(None, "2026-08-25", ip="2.2.2.2")
+        self.store.record(None, "2026-08-26", ip="3.3.3.3")
+        # 旧日期桶应被剪除，只保留最近日期，防止内存线性增长
+        self.assertNotIn("2026-08-24", self.store._ip_seen)
+        self.assertNotIn("2026-08-25", self.store._ip_seen)
+        self.assertIn("2026-08-26", self.store._ip_seen)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -32,8 +32,14 @@ def fetch_github_total():
 def main():
     try:
         result = fetch_github_total()
-    except Exception:
-        result = {"total": 0, "version": None}
+    except Exception as e:
+        # 拉取失败：保留上次已知好数据，避免公共站点显示 0 下载；仅首次无历史数据时写占位
+        if not os.path.exists(GITHUB_JSON):
+            os.makedirs(DATA_DIR, exist_ok=True)
+            with open(GITHUB_JSON, "w", encoding="utf-8") as f:
+                json.dump({"total": 0, "version": None}, f, ensure_ascii=False, indent=2)
+        print(f"github fetch failed: {e}", file=sys.stderr)
+        sys.exit(1)
     os.makedirs(DATA_DIR, exist_ok=True)
     tmp = GITHUB_JSON + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:

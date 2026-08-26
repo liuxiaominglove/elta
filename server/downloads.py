@@ -41,6 +41,8 @@ def parse_nginx_line(line):
         return None
     if status not in (200, 206):
         return None
+    # 剥离 query string（如 ?ref=homepage / 缓存参数），避免 .dmg 结尾判断与版本提取被破坏
+    path = path.split("?", 1)[0]
     if not path.startswith("/download/"):
         return None
     if not path.endswith(".dmg"):
@@ -73,22 +75,30 @@ def aggregate_nginx(lines):
 
 
 def parse_github_releases(releases):
-    """汇总所有 release 的 .dmg 资产下载数（GitHub 下载量跨版本累计）。"""
+    """汇总所有 release 的 .dmg 资产下载数，并按版本归集（下载数是 per-asset 的）。"""
     total = 0
     version = None
+    by_version = {}
     for rel in releases:
         if version is None:
             version = rel.get("tag_name")
         for a in rel.get("assets", []):
-            if str(a.get("name", "")).endswith(".dmg"):
-                total += int(a.get("download_count", 0))
-    return {"total": total, "version": version}
+            name = str(a.get("name", ""))
+            if name.endswith(".dmg"):
+                count = int(a.get("download_count", 0))
+                total += count
+                label = extract_version(name)
+                by_version[label] = by_version.get(label, 0) + count
+    return {"total": total, "version": version, "byVersion": by_version}
 
 
 def merge(nginx, github):
+    by_version = dict(nginx["byVersion"])
+    for k, v in (github.get("byVersion") or {}).items():
+        by_version[k] = by_version.get(k, 0) + v
     return {
         "total": nginx["total"] + github["total"],
-        "byVersion": nginx["byVersion"],
+        "byVersion": by_version,
     }
 
 

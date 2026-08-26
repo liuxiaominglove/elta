@@ -80,13 +80,23 @@ class UsageStore:
                 if uid in bucket:
                     return False
                 bucket[uid] = True
-                self._persist()
+                try:
+                    self._persist()
+                except Exception:
+                    # 持久化失败回滚内存，避免「假去重」让该 uid 永远不再落盘
+                    del bucket[uid]
+                    if not bucket:
+                        self._ids.pop(date, None)
+                    raise
                 return True
             if ip:
                 bucket = self._ip_seen.setdefault(date, {})
                 if ip in bucket:
                     return False
                 bucket[ip] = True
+                # 剪除过期日期桶：仅今日会被查询，防止内存随天数/IP 数线性增长
+                for d in [k for k in self._ip_seen if k < date]:
+                    del self._ip_seen[d]
                 return True
             return False
 

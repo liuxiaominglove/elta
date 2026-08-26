@@ -12,6 +12,7 @@
 """
 
 import base64
+import hmac
 import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -36,6 +37,8 @@ class App:
         try:
             with open(self.latest_json, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            if not isinstance(data, dict):
+                return {"version": None, "url": None}
             return {
                 "version": data.get("version"),
                 "url": data.get("url"),
@@ -47,6 +50,8 @@ class App:
         try:
             with open(self.downloads_json, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            if not isinstance(data, dict):
+                return {"total": 0, "today": 0, "byVersion": {}}
             return {
                 "total": data.get("total", 0),
                 "today": data.get("today", 0),
@@ -103,7 +108,8 @@ def _check_auth(handler, password):
         decoded = base64.b64decode(header[len("Basic "):]).decode("utf-8")
     except Exception:
         return False
-    return decoded == f"{AUTH_USER}:{password}"
+    expected = f"{AUTH_USER}:{password}"
+    return hmac.compare_digest(decoded, expected)
 
 
 class Handler(BaseHTTPRequestHandler):

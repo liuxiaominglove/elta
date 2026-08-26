@@ -20,29 +20,39 @@ GITHUB_JSON = os.path.join(DATA_DIR, "github.json")
 DOWNLOADS_JSON = os.path.join(DATA_DIR, "downloads.json")
 
 
-def build_downloads(lines, github_total):
+def load_github(path):
+    """读取 github.json 的 total 与 byVersion；文件缺失/损坏/非对象 JSON 时返回 (0, {})。"""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError, ValueError):
+        return 0, {}
+    if not isinstance(data, dict):
+        return 0, {}
+    return data.get("total", 0) or 0, data.get("byVersion", {}) or {}
+
+
+def build_downloads(lines, github_total, github_by_version=None):
     today = core.today_key()
     today_lines = [l for l in lines if dl.parse_nginx_date(l) == today]
     all_agg = dl.aggregate_nginx(lines)
     today_agg = dl.aggregate_nginx(today_lines)
+    by_version = dict(all_agg["byVersion"])
+    for k, v in (github_by_version or {}).items():
+        by_version[k] = by_version.get(k, 0) + v
     return {
         "total": all_agg["total"] + github_total,
         "today": today_agg["total"],
-        "byVersion": all_agg["byVersion"],
+        "byVersion": by_version,
     }
 
 
 def main():
     lines = dl.read_log_lines(LOG)
 
-    github_total = 0
-    try:
-        with open(GITHUB_JSON, "r", encoding="utf-8") as f:
-            github_total = json.load(f).get("total", 0)
-    except (OSError, json.JSONDecodeError, ValueError):
-        github_total = 0
+    github_total, github_by_version = load_github(GITHUB_JSON)
 
-    out = build_downloads(lines, github_total)
+    out = build_downloads(lines, github_total, github_by_version)
     os.makedirs(DATA_DIR, exist_ok=True)
     tmp = DOWNLOADS_JSON + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:

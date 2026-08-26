@@ -18,6 +18,10 @@ class DownloadsTests(unittest.TestCase):
     def test_versioned_url_200_counted(self):
         self.assertEqual(dl.parse_nginx_line(line()), "5.5.0")
 
+    def test_query_string_stripped(self):
+        l = line(path="/download/ELTA.v5.5.0.dmg?ref=homepage")
+        self.assertEqual(dl.parse_nginx_line(l), "5.5.0")
+
     def test_latest_206_counted(self):
         l = line(path="/download/latest.dmg", status=206)
         self.assertEqual(dl.parse_nginx_line(l), "latest")
@@ -65,6 +69,25 @@ class DownloadsTests(unittest.TestCase):
 
     def test_github_no_asset(self):
         self.assertEqual(dl.parse_github_releases([{"tag_name": "v5.5.1", "assets": []}])["total"], 0)
+
+    def test_github_builds_by_version(self):
+        data = [
+            {
+                "tag_name": "v5.5.1",
+                "assets": [
+                    {"name": "ELTA.v5.5.1.dmg", "download_count": 42},
+                    {"name": "src.zip", "download_count": 9},
+                ],
+            }
+        ]
+        self.assertEqual(dl.parse_github_releases(data)["byVersion"], {"5.5.1": 42})
+
+    def test_merge_combines_by_version(self):
+        nginx = {"total": 10, "byVersion": {"5.5.0": 10}}
+        github = {"total": 5, "byVersion": {"5.5.0": 3, "5.5.1": 2}}
+        merged = dl.merge(nginx, github)
+        self.assertEqual(merged["total"], 15)
+        self.assertEqual(merged["byVersion"], {"5.5.0": 13, "5.5.1": 2})
 
     def test_merge(self):
         nginx = {"total": 10, "byVersion": {"5.5.0": 10}}

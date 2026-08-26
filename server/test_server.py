@@ -140,6 +140,24 @@ class ServerTests(unittest.TestCase):
         code, _ = self.get("/nope")
         self.assertEqual(code, 404)
 
+    def test_read_latest_non_dict_json_does_not_crash(self):
+        with open(os.path.join(self.tmp, "latest.json"), "w", encoding="utf-8") as f:
+            f.write("null")
+        self.assertEqual(self.app.read_latest(), {"version": None, "url": None})
+
+    def test_read_downloads_non_dict_json_does_not_crash(self):
+        with open(os.path.join(self.tmp, "downloads.json"), "w", encoding="utf-8") as f:
+            f.write("[]")
+        self.assertEqual(self.app.read_downloads(), {"total": 0, "today": 0, "byVersion": {}})
+
+    def test_check_auth_malformed_base64_returns_false(self):
+        class FakeHandler:
+            class Headers:
+                def get(self, *a):
+                    return "Basic !!!not-base64!!!"
+            headers = Headers()
+        self.assertFalse(srv._check_auth(FakeHandler(), "secret"))
+
 
 if __name__ == "__main__":
     unittest.main()
