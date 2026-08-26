@@ -48,6 +48,28 @@ final class PasteSecureTextField: NSSecureTextField {
     }
 }
 
+/// 支持 Cmd+C/V/X/A 的文本视图（.accessory 应用无障碍 Edit 菜单，NSTextView 原生的 Cmd 快捷键会失效）
+final class ShortcutTextView: NSTextView {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.type == .keyDown else { return super.performKeyEquivalent(with: event) }
+        let f = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let realModifiers: NSEvent.ModifierFlags = [.command, .shift, .control, .option]
+        guard f.intersection(realModifiers) == .command else { return super.performKeyEquivalent(with: event) }
+
+        let sel: Selector?
+        switch event.charactersIgnoringModifiers?.lowercased() {
+        case "v": sel = #selector(NSText.paste(_:))
+        case "c": sel = #selector(NSText.copy(_:))
+        case "x": sel = #selector(NSText.cut(_:))
+        case "a": sel = #selector(NSText.selectAll(_:))
+        default:  sel = nil
+        }
+        guard let s = sel else { return super.performKeyEquivalent(with: event) }
+        if NSApp.sendAction(s, to: nil, from: self) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
+}
+
 // MARK: - Logger
 
 final class Logger {

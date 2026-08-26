@@ -245,7 +245,11 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             self.panel?.close()
             self.currentMarkdown = markdown
             self.currentOriginalText = originalText
-            self.isSplitMode = false
+            let startSplit = HTMLRenderer.shouldStartSplit(
+                preferSplit: SettingsManager.shared.defaultSplitMode,
+                canSplit: HTMLRenderer.canSplit(markdown: markdown, originalText: originalText)
+            )
+            self.isSplitMode = startSplit
 
             let frame = self.computeFrame(avoidRect: screenshotRect)
 
@@ -273,7 +277,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
                                          target: self, action: #selector(self.splitModeChanged(_:)))
             seg.frame = NSRect(x: 12, y: 6, width: 150, height: 24)
             seg.segmentStyle = .rounded
-            seg.selectedSegment = 0
+            seg.selectedSegment = startSplit ? 1 : 0
             // 内容不适合拆分（表格/单词/单句）时禁用「拆分」段
             seg.setEnabled(HTMLRenderer.canSplit(markdown: markdown, originalText: originalText), forSegment: 1)
             toolbar.addSubview(seg)
@@ -284,7 +288,10 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             wv.autoresizingMask = [.width, .height]
             wv.setValue(false, forKey: "drawsBackground")
             let isDark = NSApp.effectiveAppearance.name == .darkAqua
-            wv.loadHTMLString(HTMLRenderer.render(markdown: markdown, originalText: originalText, isDark: isDark), baseURL: nil)
+            wv.loadHTMLString(startSplit
+                ? HTMLRenderer.renderSplit(markdown: markdown, originalText: originalText, isDark: isDark)
+                : HTMLRenderer.render(markdown: markdown, originalText: originalText, isDark: isDark),
+                baseURL: nil)
 
             container.addSubview(wv)
             container.addSubview(toolbar)
@@ -419,6 +426,11 @@ final class HTMLRenderer {
         guard !isTableBody(transSection.body) else { return false }
         let pairs = SentenceSplitter.pair(original: originalText, translation: transSection.body)
         return pairs.count >= 2
+    }
+
+    /// 弹窗初始模式决策：用户偏好拆分且内容可拆分时才从拆分起步，否则落回整段
+    static func shouldStartSplit(preferSplit: Bool, canSplit: Bool) -> Bool {
+        preferSplit && canSplit
     }
 
     /// 判断译文正文是否包含 Markdown 表格分隔行（|----|），含则视为表格内容

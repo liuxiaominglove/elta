@@ -220,4 +220,24 @@ func runSentenceSplitterTests() {
         try assertEqual(pairs[1].original, "Two.")
         try assertEqual(pairs[1].translation, "第二。")
     }
+
+    // MARK: - 左引号起始符（修复：句点后左引号+大写应拆句）
+
+    test("splitEnglish splits before quoted sentence (curly quotes)") {
+        let result = SentenceSplitter.splitEnglish("But instead he picked me. “Based on your previous career choice,” he said, “I suspect you are better prepared to deliver truly horrible news to people.”")
+        try assertEqual(result, [
+            "But instead he picked me.",
+            "“Based on your previous career choice,” he said, “I suspect you are better prepared to deliver truly horrible news to people.”"
+        ])
+    }
+
+    test("splitEnglish splits between two quoted sentences (straight quotes)") {
+        let result = SentenceSplitter.splitEnglish(#"He said "Stop." "Go now.""#)
+        try assertEqual(result, [#"He said "Stop.""#, #""Go now.""#])
+    }
+
+    test("splitEnglish does not split when opening quote followed by lowercase") {
+        let result = SentenceSplitter.splitEnglish(#"He said "hello." "world.""#)
+        try assertEqual(result, [#"He said "hello." "world.""#])
+    }
 }

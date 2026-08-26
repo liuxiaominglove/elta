@@ -118,7 +118,13 @@ func runSettingsManagerTests() {
         try assertTrue(prompt.contains("中文翻译"), "Should contain translation section")
         try assertTrue(prompt.contains("重要词汇"), "Should contain vocabulary section")
         try assertTrue(prompt.contains("常用短语与习语"), "Should contain phrases section")
-        try assertTrue(prompt.contains("核查"), "Should contain verification section")
+        try assertTrue(prompt.contains("音标"), "Should contain phonetic field in vocab")
+    }
+
+    test("defaultPrompt removed 核查 and table note") {
+        let prompt = SettingsManager.shared.defaultPrompt
+        try assertFalse(prompt.contains("核查"), "Should NOT contain verification section")
+        try assertFalse(prompt.contains("Markdown 表格"), "Should NOT contain table note")
     }
 
     test("systemPrompt returns default when not customized") {
@@ -362,5 +368,24 @@ func runSettingsManagerTests() {
         SettingsManager.shared.telemetryEnabled = false
         try assertFalse(SettingsManager.shared.telemetryEnabled)
         UserDefaults.standard.removeObject(forKey: "snaptranslate.telemetryEnabled")
+    }
+
+    // ━━━ 默认优先弹窗（defaultSplitMode，默认拆分）━━━━
+
+    test("defaultSplitMode defaults to true (split) when unset") {
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.defaultSplitMode")
+        try assertTrue(SettingsManager.shared.defaultSplitMode, "未设置时默认应为拆分")
+    }
+
+    test("defaultSplitMode persists false (whole)") {
+        SettingsManager.shared.defaultSplitMode = false
+        try assertFalse(SettingsManager.shared.defaultSplitMode)
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.defaultSplitMode")
+    }
+
+    test("defaultSplitMode persists true (split)") {
+        SettingsManager.shared.defaultSplitMode = true
+        try assertTrue(SettingsManager.shared.defaultSplitMode)
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.defaultSplitMode")
     }
 }

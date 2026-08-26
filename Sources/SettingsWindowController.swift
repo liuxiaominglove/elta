@@ -78,6 +78,9 @@ final class SettingsWindowController: NSObject {
     // Tab 3: 翻译模板
     private var templateTextView: NSTextView?
 
+    // Tab 2: 默认优先弹窗模式（整段 / 拆分）
+    private var defaultSplitSeg: NSSegmentedControl?
+
     func show() {
         if let w = window { w.close(); window = nil }
 
@@ -120,6 +123,12 @@ final class SettingsWindowController: NSObject {
         saveBtn.bezelStyle = .rounded
         saveBtn.keyEquivalent = "\r"  // Enter 键快捷保存
         win.contentView?.addSubview(saveBtn)
+
+        // 恢复默认按钮——窗口底部，保存按钮右侧，所有标签页通用（恢复 API Key 以外的设置）
+        let resetBtn = NSButton(title: "恢复默认", target: self, action: #selector(resetAll))
+        resetBtn.frame = NSRect(x: 16 + 120 + 8, y: 12, width: 120, height: 32)
+        resetBtn.bezelStyle = .rounded
+        win.contentView?.addSubview(resetBtn)
 
         // 版本号——底部居中，极简不干扰 UI
         let versionLabel = NSTextField(labelWithString: "ELTA \(APP_FULL_VERSION)")
@@ -591,6 +600,27 @@ final class SettingsWindowController: NSObject {
         v.addSubview(splitStatus)
         splitRecorder.statusLabel = splitStatus
 
+        // ---- 6. 默认优先弹窗模式 ----
+        let defaultSplitY = splitY - 135
+        let defaultSplitTitle = NSTextField(labelWithString: "🎯 默认优先弹窗")
+        defaultSplitTitle.frame = NSRect(x: 20, y: defaultSplitY, width: 300, height: 22)
+        defaultSplitTitle.font = .systemFont(ofSize: 15, weight: .semibold)
+        v.addSubview(defaultSplitTitle)
+
+        let defaultSplitDesc = NSTextField(labelWithString: "翻译完成后，优先显示「整段」还是「拆分」视图（内容不适合拆分时自动回退整段）")
+        defaultSplitDesc.frame = NSRect(x: 20, y: defaultSplitY - 24, width: w - 40, height: 16)
+        defaultSplitDesc.font = .systemFont(ofSize: 11)
+        defaultSplitDesc.textColor = .secondaryLabelColor
+        v.addSubview(defaultSplitDesc)
+
+        let defaultSplitSeg = NSSegmentedControl(labels: ["整段", "拆分"], trackingMode: .selectOne,
+                                                 target: nil, action: nil)
+        defaultSplitSeg.frame = NSRect(x: 20, y: defaultSplitY - 55, width: 180, height: 28)
+        defaultSplitSeg.segmentStyle = .rounded
+        defaultSplitSeg.selectedSegment = SettingsManager.shared.defaultSplitMode ? 1 : 0
+        v.addSubview(defaultSplitSeg)
+        self.defaultSplitSeg = defaultSplitSeg
+
         // ---- 统一提示 ----
         let infoLabel = NSTextField(labelWithString: """
         💡 提示：
@@ -679,6 +709,10 @@ final class SettingsWindowController: NSObject {
             settings.splitHotkeyDisplay = hotkeyDisplayString(keyCode: kc, modifiers: splitRecorder.recordedModifiers)
         }
 
+        if let seg = defaultSplitSeg {
+            settings.defaultSplitMode = (seg.selectedSegment == 1)
+        }
+
         DispatchQueue.main.async {
             (NSApp.delegate as? AppDelegate)?.reregisterHotkey()
         }
@@ -724,6 +758,9 @@ final class SettingsWindowController: NSObject {
         settings.splitHotkeyKeyCode = DEFAULT_SPLIT_HOTKEY_KEYCODE
         settings.splitHotkeyModifiers = Int(controlKey)
         settings.splitHotkeyDisplay = "⌃D"
+
+        settings.defaultSplitMode = true
+        defaultSplitSeg?.selectedSegment = 1
 
         screenshotRecorder.recordBtn?.title = "    ⌃T    "
         screenshotRecorder.statusLabel?.stringValue = "已恢复默认快捷键 ⌃T"
@@ -800,7 +837,7 @@ final class SettingsWindowController: NSObject {
         scrollView.borderType = .bezelBorder
         scrollView.drawsBackground = true
 
-        let textView = NSTextView(frame: NSRect(origin: .zero, size: scrollView.contentSize))
+        let textView = ShortcutTextView(frame: NSRect(origin: .zero, size: scrollView.contentSize))
         textView.isEditable = true
         textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         textView.isRichText = false

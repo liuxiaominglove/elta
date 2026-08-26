@@ -323,6 +323,24 @@ func runHTMLRendererTests() {
         try assertFalse(ok, "无中文翻译章节不可拆分")
     }
 
+    // MARK: - shouldStartSplit 初始模式决策
+
+    test("shouldStartSplit prefers split when content splittable") {
+        try assertTrue(HTMLRenderer.shouldStartSplit(preferSplit: true, canSplit: true))
+    }
+
+    test("shouldStartSplit falls back to whole when content not splittable") {
+        try assertFalse(HTMLRenderer.shouldStartSplit(preferSplit: true, canSplit: false))
+    }
+
+    test("shouldStartSplit returns whole when prefer whole") {
+        try assertFalse(HTMLRenderer.shouldStartSplit(preferSplit: false, canSplit: true))
+    }
+
+    test("shouldStartSplit returns whole when both false") {
+        try assertFalse(HTMLRenderer.shouldStartSplit(preferSplit: false, canSplit: false))
+    }
+
     // MARK: - renderSplit 表格回退
 
     test("renderSplit falls back to whole mode for table translation") {

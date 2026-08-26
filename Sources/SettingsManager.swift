@@ -31,6 +31,8 @@ final class SettingsManager {
         static let splitHotkeyKeyCode   = "snaptranslate.splitHotkeyKeyCode"
         static let splitHotkeyModifiers = "snaptranslate.splitHotkeyModifiers"
         static let splitHotkeyDisplay   = "snaptranslate.splitHotkeyDisplay"
+        // 默认优先弹窗模式（true=拆分，false=整段；默认拆分）
+        static let defaultSplitMode = "snaptranslate.defaultSplitMode"
         static let skipUpdateVersion = "snaptranslate.skipUpdateVersion"
         static let installID = "snaptranslate.installID"
         static let telemetryEnabled = "snaptranslate.telemetryEnabled"
@@ -198,18 +200,12 @@ final class SettingsManager {
         （遵循"信达雅"原则，自然流畅的中文翻译）
 
         ## 重要词汇
-        - **单词** ｜ 词性 ｜ 中文释义
+        单词：音标 ｜ 词性 ｜ 中文释义
         （列出句中较重要的词汇，跳过高中大纲基础词汇）
 
         ## 常用短语与习语
-        - 短语 / 习语：中文释义
+        短语 / 习语：中文释义
         （习语请标注【习语】）
-
-        ## 核查
-        核实翻译是否准确、通顺，无遗漏。
-
-        ---
-        如果原文是 Markdown 表格，请严格保持表格结构，对每个单元格独立翻译，输出同样列数的 Markdown 表格。不要合并列、不要打乱顺序，空单元格保留为空。
         """
     }
 
@@ -341,6 +337,20 @@ final class SettingsManager {
     var splitHotkeyDisplay: String {
         get { defaults.string(forKey: Keys.splitHotkeyDisplay) ?? "⌃D" }
         set { defaults.set(newValue, forKey: Keys.splitHotkeyDisplay) }
+    }
+
+    /// 弹窗默认优先模式：true=拆分，false=整段（默认拆分）
+    var defaultSplitMode: Bool {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            if defaults.object(forKey: Keys.defaultSplitMode) == nil { return true }
+            return defaults.bool(forKey: Keys.defaultSplitMode)
+        }
+        set {
+            lock.lock()
+            defaults.set(newValue, forKey: Keys.defaultSplitMode)
+            lock.unlock()
+        }
     }
 
     // MARK: 窗口

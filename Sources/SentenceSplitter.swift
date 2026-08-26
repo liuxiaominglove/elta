@@ -89,7 +89,13 @@ enum SentenceSplitter {
                         continue
                     }
                     let next = chars[k]
-                    if next.isUppercase || next.isNumber {
+                    // 跳过连续的左引号（如 “Based… / "Go…），取其后第一个字符判断是否开启新句
+                    var m = k
+                    while m < chars.count, isOpeningPunctuation(chars[m]) {
+                        m += 1
+                    }
+                    let effectiveNext = m < chars.count ? chars[m] : next
+                    if effectiveNext.isUppercase || effectiveNext.isNumber {
                         let sentence = String(chars[start..<j]).trimmingCharacters(in: .whitespaces)
                         if !sentence.isEmpty { sentences.append(sentence) }
                         start = j
@@ -147,6 +153,11 @@ enum SentenceSplitter {
     private static func isClosingPunctuation(_ c: Character) -> Bool {
         c == "\"" || c == "”" || c == "’" || c == ")" || c == "]" || c == "'"
             || c == "）" || c == "】" || c == "』" || c == "」" || c == "｣"
+    }
+
+    private static func isOpeningPunctuation(_ c: Character) -> Bool {
+        c == "\"" || c == "“" || c == "‘" || c == "'" || c == "(" || c == "[" || c == "{"
+            || c == "（" || c == "【" || c == "『" || c == "「" || c == "｢"
     }
 
     // MARK: - 中文分句
