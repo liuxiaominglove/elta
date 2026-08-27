@@ -8,6 +8,8 @@ function run(argv) {
   var testText = 'This is a golden path test sentence.';
 
   function keyExists(provider) {
+    // 校验 provider 是安全标识符（originalProvider 可能来自 defaults，含任意字符），防 shell 注入
+    if (!/^[a-z0-9-]+$/.test(provider)) { return false; }
     var code = runShell('/bin/bash', ['-c',
       'security find-generic-password -s "' + keychainService + '" -a "snaptranslate.apikey.' + provider + '" -w >/dev/null 2>&1'
     ]);
@@ -18,8 +20,13 @@ function run(argv) {
     return runShellCapture('/usr/bin/defaults', ['read', 'com.elta.app', 'snaptranslate.apiProvider']).trim();
   }
 
+  function providerKeyExists() {
+    return runShell('/usr/bin/defaults', ['read', 'com.elta.app', 'snaptranslate.apiProvider']) === 0;
+  }
+
   function writeProvider(p) {
-    runShell('/usr/bin/defaults', ['write', 'com.elta.app', 'snaptranslate.apiProvider', p]);
+    var code = runShell('/usr/bin/defaults', ['write', 'com.elta.app', 'snaptranslate.apiProvider', p]);
+    assert(code === 0, 'defaults write failed (code=' + code + ') for provider=' + p);
   }
 
   function eltaHasWindowTitle(title) {
@@ -66,8 +73,11 @@ function run(argv) {
     return false;
   }
 
-  var originalProvider = readProvider() || 'deepseek';
+  var originalProviderRaw = readProvider();
+  var providerWasSet = providerKeyExists();
+  var originalProvider = providerWasSet ? originalProviderRaw : 'deepseek';
   var switched = false;
+  var textEditWasRunning = processExists('TextEdit');
 
   try {
     if (!keyExists(originalProvider)) {
@@ -127,9 +137,16 @@ function run(argv) {
     return 'PASS: 划词翻译金路径走通（弹窗出现 + 流水线完成）';
   } finally {
     runShell('/usr/bin/killall', ['ELTA']);
-    runShell('/usr/bin/killall', ['TextEdit']);
+    // 只清理本测试启动的 TextEdit，不误杀用户已打开的实例（可能有未保存内容）
+    if (!textEditWasRunning) {
+      runShell('/usr/bin/killall', ['TextEdit']);
+    }
     if (switched) {
-      writeProvider(originalProvider);
+      if (providerWasSet) {
+        writeProvider(originalProvider);
+      } else {
+        runShell('/usr/bin/defaults', ['delete', 'com.elta.app', 'snaptranslate.apiProvider']);
+      }
     }
   }
 }

@@ -38,8 +38,10 @@ function run(argv) {
 
   runShell('/usr/bin/killall', ['ELTA']);
   runShell('/usr/bin/killall', ['Calculator']);
-  sleep(0.5);
+  // 等待进程真正退出，避免 launch 撞上未退完的旧实例（hung/慢退出/权限问题）
+  waitUntil(function () { return !processExists('ELTA') && !processExists('Calculator'); }, 5000);
 
+  try {
   launch('ELTA');
   assert(waitForProcess('ELTA', 8000), 'ELTA did not launch');
 
@@ -87,10 +89,11 @@ function run(argv) {
     ', calcIdx=' + calcIdx + ')\n' + dumpWindows(windowz)
   );
 
-  runShell('/usr/bin/killall', ['ELTA']);
-  runShell('/usr/bin/killall', ['Calculator']);
-
   return 'PASS: settings does not cover Calculator';
+  } finally {
+    runShell('/usr/bin/killall', ['ELTA']);
+    runShell('/usr/bin/killall', ['Calculator']);
+  }
 }
 
 function dumpWindows(windowz) {

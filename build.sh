@@ -104,6 +104,11 @@ sleep 0.5
 
 # 删除旧版本
 rm -rf "$APP_TARGET" 2>/dev/null || true
+# 校验删除成功：BSD cp 在目标已存在时会拷进目标内形成嵌套 bundle，必须确认旧版已移除（含悬空符号链接）
+if [ -e "$APP_TARGET" ] || [ -L "$APP_TARGET" ]; then
+    echo "错误：无法删除 $APP_TARGET（可能由 sudo/pkg 安装、属 root 所有；请 sudo rm -rf 后重试）" >&2
+    exit 1
+fi
 
 # 复制新版本
 cp -R "$APP_BUNDLE" "$APP_TARGET"
@@ -114,9 +119,13 @@ codesign --force --sign "$SIGN_IDENTITY" "$APP_TARGET" 2>/dev/null
 echo "安装完成: $APP_TARGET"
 echo ""
 
-# 询问是否启动
-read -p "是否立即启动？[Y/n] " -n 1 -r
-echo ""
+# 询问是否启动（仅在交互终端；CI/非交互环境 read 会因 EOF 返回非零，set -e 下导致构建误判失败）
+if [ -t 0 ]; then
+    read -p "是否立即启动？[Y/n] " -n 1 -r
+    echo ""
+else
+    REPLY=n
+fi
 if [[ $REPLY =~ ^[Yy] ]] || [[ -z $REPLY ]]; then
     open "$APP_TARGET"
     echo "已启动 $APP_NAME"

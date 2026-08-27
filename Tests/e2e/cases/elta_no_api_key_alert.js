@@ -6,6 +6,8 @@ function run(argv) {
   var keychainService = 'com.elta.snaptranslate';
 
   function keyExists(provider) {
+    // 校验 provider 是安全标识符（originalProvider 可能来自 defaults，含任意字符），防 shell 注入
+    if (!/^[a-z0-9-]+$/.test(provider)) { return false; }
     var code = runShell('/bin/bash', ['-c',
       'security find-generic-password -s "' + keychainService + '" -a "snaptranslate.apikey.' + provider + '" -w >/dev/null 2>&1'
     ]);
@@ -17,7 +19,8 @@ function run(argv) {
   }
 
   function writeProvider(p) {
-    runShell('/usr/bin/defaults', ['write', 'com.elta.app', 'snaptranslate.apiProvider', p]);
+    var code = runShell('/usr/bin/defaults', ['write', 'com.elta.app', 'snaptranslate.apiProvider', p]);
+    assert(code === 0, 'defaults write failed (code=' + code + ') for provider=' + p);
   }
 
   function eltaHasStaticText(text) {
@@ -53,7 +56,11 @@ function run(argv) {
     var lines = [];
     var wins = proc.windows;
     for (var i = 0; i < wins.length; i++) {
-      lines.push('win[' + i + '] name=' + wins[i].name());
+      try {
+        lines.push('win[' + i + '] name=' + wins[i].name());
+      } catch (e) {
+        lines.push('win[' + i + '] name=<inaccessible>');
+      }
       try {
         var sts = wins[i].staticTexts;
         for (var j = 0; j < sts.length; j++) {

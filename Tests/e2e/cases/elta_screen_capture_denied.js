@@ -27,7 +27,8 @@ function run(argv) {
 
   function triggerScreenshotTranslate(statusItem) {
     statusItem.click();
-    sleep(0.4);
+    // 等待菜单真正打开（而非硬编码 sleep），避免竞态导致误判「触发失败」
+    if (!waitUntil(function () { return statusItem.menus.length > 0; }, 3000)) { return false; }
     for (var m = 0; m < statusItem.menus.length; m++) {
       if (clickMenuLabel(statusItem.menus[m], '📷 截图翻译')) { return true; }
     }
@@ -61,6 +62,9 @@ function run(argv) {
     log1.indexOf('屏幕录制权限: 未授权，TCC 弹窗已触发') >= 0,
     '首次未触发 TCC 弹窗（primeAndAbort）\n--- new log ---\n' + log1
   );
+  // 关闭系统「屏幕录制」TCC 弹窗（modal 会挡住菜单栏，阻塞第二次触发）
+  try { SE.keystroke(String.fromCharCode(27)); } catch (e) {}
+  sleep(0.5);
 
   // 第二次触发：guideAndAbort（静默中止，无引导 alert）
   var base2 = fileLineCount(logPath);

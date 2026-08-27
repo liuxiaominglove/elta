@@ -59,7 +59,8 @@ function run(argv) {
 
   function triggerSelectionTranslate(statusItem) {
     statusItem.click();
-    sleep(0.4);
+    // 等待菜单真正打开（而非硬编码 sleep），避免竞态导致误判「触发失败」
+    if (!waitUntil(function () { return statusItem.menus.length > 0; }, 3000)) { return false; }
     for (var m = 0; m < statusItem.menus.length; m++) {
       if (clickMenuLabel(statusItem.menus[m], '📝 划词翻译')) { return true; }
     }
