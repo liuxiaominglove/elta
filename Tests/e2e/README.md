@@ -53,6 +53,16 @@ real API key — it deliberately targets the empty-key state — but does need
 TextEdit to stay frontmost when the translation is triggered (so the text
 selection is set up after ELTA has launched and grabbed focus).
 
+`elta_selection_golden_path.js` guards the 划词翻译 golden path: it picks a
+provider that *has* a key (opposite of the no-key case), selects text in
+TextEdit, triggers 划词翻译, then asserts the `翻译结果 — ELTA` panel appears
+and that the `划词翻译流水线完成` log line appears in this run's new log lines
+(proving the `.success` branch, not `.missingKey`). It needs a valid real API
+key and makes one real translation call, so it is a slow, paid gate — run it
+before release, not in the inner loop. It deliberately does not assert the
+panel's inner text (that is WebView-rendered HTML and not reliably readable via
+System Events).
+
 ## Case checklist（交卷六问）
 
 写/改一个 case 收工前，逐条确认。这六条来自「测试绿了 ≠ 测到了」的假阳性/空过教训：
