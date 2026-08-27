@@ -79,6 +79,13 @@ func runHTMLRendererTests() {
         try assertTrue(html.contains("<h2>中文翻译</h2>"), "Heading should still be converted")
     }
 
+    test("render keeps literal asterisks inside inline code (not bold)") {
+        let markdown = "参考 `**加粗**` 的用法"
+        let html = HTMLRenderer.render(markdown: markdown, originalText: "x", isDark: false)
+        try assertFalse(html.contains("<strong>加粗</strong>"), "代码内的 ** 不应被转成加粗")
+        try assertTrue(html.contains("<code>"), "应保留 code 标签")
+    }
+
     // MARK: - Markdown 表格 → HTML 表格
 
     test("render converts two-column markdown table to HTML table") {

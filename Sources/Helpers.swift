@@ -236,7 +236,8 @@ struct PasteboardSnapshot {
             pasteboard.clearContents()
             return true
         }
-        // 非空：直接用 writeObjects 原子替换（不先 clearContents，避免写失败丢原内容）
+        // 注意：writeObjects 会先清空剪贴板再写入，写失败时原内容已丢、只剩空/部分内容；
+        // 返回值供调用方判断是否恢复成功（失败应记日志告警）。
         return pasteboard.writeObjects(newItems)
     }
 }

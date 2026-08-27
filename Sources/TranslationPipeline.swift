@@ -203,13 +203,20 @@ final class TranslationPipeline {
     private func promptAccessibilityPermission() {
         guard !Self.accessibilityPrompted else { return }
         Self.accessibilityPrompted = true
+        // 临时切换激活策略为 regular，确保菜单栏(.accessory)应用的弹窗能获取焦点、不被其他窗口遮挡
+        let currentPolicy = NSApp.activationPolicy()
+        if currentPolicy != .regular { NSApp.setActivationPolicy(.regular) }
         let alert = NSAlert()
         alert.messageText = "需要辅助功能权限"
         alert.informativeText = "为了获取您在任意应用中选中的文本（划词翻译），ELTA 需要【辅助功能】权限。\n\n请前往 系统设置 → 隐私与安全性 → 辅助功能，找到并启用 ELTA。"
         alert.alertStyle = .informational
         alert.addButton(withTitle: "打开系统设置")
         alert.addButton(withTitle: "稍后")
-        if alert.runModal() == .alertFirstButtonReturn {
+        NSApp.activate(ignoringOtherApps: true)
+        let result = alert.runModal()
+        NSApp.deactivate()
+        if currentPolicy != .regular { NSApp.setActivationPolicy(currentPolicy) }
+        if result == .alertFirstButtonReturn {
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         }
     }
@@ -217,8 +224,8 @@ final class TranslationPipeline {
     /// 划词翻译：读取选中文本 → 直接翻译（跳过截图+OCR）
     func startTextTranslation() {
         logi("===== 划词翻译流水线开始 =====")
-        // 检查是否已有翻译弹窗
-        guard !ResultWindowController.shared.isPanelVisible else {
+        // 检查是否已有翻译弹窗或正在加载：避免新任务覆盖加载中状态、导致 loading 面板滞留
+        guard !ResultWindowController.shared.isPanelVisible, loadingPanel == nil else {
             showAlert("请先关闭上一个翻译弹窗", "关闭后即可开始新翻译。\n按 ESC 或点击弹窗左上角关闭按钮即可。")
             return
         }
@@ -364,8 +371,12 @@ final class TranslationPipeline {
         }
 
         // 恢复旧剪贴板（保留所有类型；空快照则恢复成空，清除 Cmd+C 残留）
-        oldSnapshot.restore(to: pasteboard)
-        logi("剪贴板已恢复（\(oldSnapshot.items.count) 个条目）")
+        let restored = oldSnapshot.restore(to: pasteboard)
+        if restored {
+            logi("剪贴板已恢复（\(oldSnapshot.items.count) 个条目）")
+        } else {
+            loge("剪贴板恢复失败：writeObjects 返回 false，原剪贴板内容可能已丢失")
+        }
 
         return selectedText
     }

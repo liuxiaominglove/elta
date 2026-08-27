@@ -122,6 +122,19 @@ func runSentenceSplitterTests() {
         try assertEqual(pairs[0].translation, "一和二。")
     }
 
+    test("mismatched-count alignment does not drop trailing Chinese sentences") {
+        let pairs = SentenceSplitter.pair(original: "Hi. Bye.", translation: "甲。你好你好你好。乙。")
+        try assertEqual(pairs.count, 2)
+        try assertEqual(pairs[0].translation, "甲。")
+        try assertTrue(pairs[1].translation.contains("乙。"), "尾部中文句「乙。」不应被丢弃")
+    }
+
+    test("mismatched-count alignment does not drop trailing English sentences") {
+        let pairs = SentenceSplitter.pair(original: "Hi. Bye bye bye. End.", translation: "甲。乙。")
+        try assertEqual(pairs.count, 2)
+        try assertTrue(pairs[1].original.contains("End."), "尾部英文句「End.」不应被丢弃")
+    }
+
     test("pair handles original-only input without translation") {
         let pairs = SentenceSplitter.pair(original: "One. Two.", translation: "")
         try assertEqual(pairs.count, 2)

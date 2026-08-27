@@ -265,6 +265,8 @@ enum SentenceSplitter {
                     break
                 }
             }
+            // 最后一个骨架句必须吞掉剩余全部，避免尾部译文被静默丢弃
+            if remainingEnglish == 0 { take = maxTake }
             let merged = translations[j..<(j + take)].joined(separator: "\n")
             pairs.append(SplitPair(original: originals[i], translation: merged))
             j += take
@@ -298,6 +300,8 @@ enum SentenceSplitter {
                     break
                 }
             }
+            // 最后一个骨架句必须吞掉剩余全部，避免尾部原文被静默丢弃
+            if remainingChinese == 0 { take = maxTake }
             let merged = originals[i..<(i + take)].joined(separator: " ")
             pairs.append(SplitPair(original: merged, translation: translations[j]))
             i += take

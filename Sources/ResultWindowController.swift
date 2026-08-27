@@ -440,12 +440,14 @@ final class HTMLRenderer {
 
     /// Markdown 正文 → HTML（转义 + 标题/加粗/行内代码/表格/段落）
     private static func markdownBodyToHTML(_ markdown: String) -> String {
-        var html = escapeHTML(markdown)
+        let escaped = escapeHTML(markdown)
+        // 先保护行内代码，避免后续标题/加粗替换污染 <code> 内容
+        let (protected, codes) = protectInlineCode(escaped)
+        var html = protected
         for keyword in ["中文翻译", "重要词汇", "常用短语与习语", "核查"] {
             html = html.replacingOccurrences(of: "## \(keyword)", with: "<h2>\(keyword)</h2>")
         }
         html = html.replacingOccurrences(of: #"\*\*(.+?)\*\*"#, with: "<strong>$1</strong>", options: .regularExpression)
-        html = html.replacingOccurrences(of: "`([^`]+)`", with: "<code>$1</code>", options: .regularExpression)
 
         // MD 表格 → HTML 表格（在换行处理前，因为表格是多行的）
         html = Self.convertMarkdownTables(in: html)
@@ -455,7 +457,33 @@ final class HTMLRenderer {
         html = "<p>" + html + "</p>"
         html = html.replacingOccurrences(of: "<p></p>", with: "")
         html = html.replacingOccurrences(of: "<p><br></p>", with: "")
-        return html
+        return restoreInlineCode(html, codes: codes)
+    }
+
+    /// 抽出行内代码为占位符，避免后续加粗/标题替换污染 <code> 内容。
+    /// 返回 (占位后的文本, 与占位 @@CODE{i}@@ 一一对应的 <code> HTML 数组)。
+    private static func protectInlineCode(_ text: String) -> (String, [String]) {
+        let regex = try! NSRegularExpression(pattern: "`([^`]+)`")
+        let ns = text as NSString
+        let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: ns.length))
+        guard !matches.isEmpty else { return (text, []) }
+        var codes = [String](repeating: "", count: matches.count)
+        var result = text
+        for idx in stride(from: matches.count - 1, through: 0, by: -1) {
+            let m = matches[idx]
+            codes[idx] = "<code>\(ns.substring(with: m.range(at: 1)))</code>"
+            // 用私用区字符做哨兵，避免与正文中的普通文本碰撞
+            result = (result as NSString).replacingCharacters(in: m.range, with: "\u{E000}\(idx)\u{E000}")
+        }
+        return (result, codes)
+    }
+
+    private static func restoreInlineCode(_ text: String, codes: [String]) -> String {
+        var out = text
+        for (i, c) in codes.enumerated() {
+            out = out.replacingOccurrences(of: "\u{E000}\(i)\u{E000}", with: c)
+        }
+        return out
     }
 
     /// 原文盒 HTML（拆分模式下不显示，原文已逐句内联）
@@ -560,11 +588,12 @@ final class HTMLRenderer {
 
     /// 句子级 Markdown 富文本 → HTML：转义 + 加粗 + 行内代码（不做标题/表格/段落，句子已是单行）
     static func inlineMarkdownToHTML(_ text: String) -> String {
-        var html = escapeHTML(text)
+        let escaped = escapeHTML(text)
+        let (protected, codes) = protectInlineCode(escaped)
+        var html = protected
         html = html.replacingOccurrences(of: "\n", with: "<br>")
         html = html.replacingOccurrences(of: #"\*\*(.+?)\*\*"#, with: "<strong>$1</strong>", options: .regularExpression)
-        html = html.replacingOccurrences(of: "`([^`]+)`", with: "<code>$1</code>", options: .regularExpression)
-        return html
+        return restoreInlineCode(html, codes: codes)
     }
 
     // MARK: - Markdown 表格 → HTML 表格

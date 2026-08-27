@@ -73,14 +73,16 @@ func runSettingsManagerTests() {
 
     test("selectionHotkeyModifiers=0 preserved, NOT ctrl+shift") {
         let orig = SettingsManager.shared.selectionHotkeyModifiers
+        defer {
+            // 恢复原始值；若 orig 也是 0 则清空 key 避免污染后续默认值测试
+            if orig == 0 {
+                UserDefaults.standard.removeObject(forKey: "snaptranslate.selectionHotkeyModifiers")
+            } else {
+                SettingsManager.shared.selectionHotkeyModifiers = orig
+            }
+        }
         SettingsManager.shared.selectionHotkeyModifiers = 0
         try assertEqual(SettingsManager.shared.selectionHotkeyModifiers, 0)
-        // 恢复原始值；若 orig 也是 0 则清空 key 避免污染后续默认值测试
-        if orig == 0 {
-            UserDefaults.standard.removeObject(forKey: "snaptranslate.selectionHotkeyModifiers")
-        } else {
-            SettingsManager.shared.selectionHotkeyModifiers = orig
-        }
     }
 
     test("closePanelHotkeyKeyCode=0 preserved, NOT ESC 0x35") {

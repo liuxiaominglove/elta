@@ -8,47 +8,47 @@ func runTranslationPipelineTests() {
     }
 
     test("extractRange valid range returns substring") {
-        let result = substringHelper("hello world", location: 0, length: 5)
+        let result = TranslationPipeline.substringInRange("hello world", cfLocation: 0, cfLength: 5)
         try assertEqual(result, "hello")
     }
 
     test("extractRange mid-string range") {
-        let result = substringHelper("hello world", location: 6, length: 5)
+        let result = TranslationPipeline.substringInRange("hello world", cfLocation: 6, cfLength: 5)
         try assertEqual(result, "world")
     }
 
     test("extractRange full string range") {
-        let result = substringHelper("abc", location: 0, length: 3)
+        let result = TranslationPipeline.substringInRange("abc", cfLocation: 0, cfLength: 3)
         try assertEqual(result, "abc")
     }
 
     test("extractRange zero-length returns nil") {
-        let result = substringHelper("hello", location: 2, length: 0)
+        let result = TranslationPipeline.substringInRange("hello", cfLocation: 2, cfLength: 0)
         try assertNil(result)
     }
 
     test("extractRange length=0 at start returns nil") {
-        let result = substringHelper("hello", location: 0, length: 0)
+        let result = TranslationPipeline.substringInRange("hello", cfLocation: 0, cfLength: 0)
         try assertNil(result)
     }
 
     test("extractRange out-of-bounds length returns nil") {
-        let result = substringHelper("abc", location: 1, length: 10)
+        let result = TranslationPipeline.substringInRange("abc", cfLocation: 1, cfLength: 10)
         try assertNil(result)
     }
 
     test("extractRange out-of-bounds location returns nil") {
-        let result = substringHelper("abc", location: 5, length: 1)
+        let result = TranslationPipeline.substringInRange("abc", cfLocation: 5, cfLength: 1)
         try assertNil(result)
     }
 
     test("extractRange negative location returns nil") {
-        let result = substringHelper("abc", location: -1, length: 1)
+        let result = TranslationPipeline.substringInRange("abc", cfLocation: -1, cfLength: 1)
         try assertNil(result)
     }
 
     test("extractRange empty string returns nil") {
-        let result = substringHelper("", location: 0, length: 0)
+        let result = TranslationPipeline.substringInRange("", cfLocation: 0, cfLength: 0)
         try assertNil(result)
     }
 
@@ -61,26 +61,26 @@ func runTranslationPipelineTests() {
         try assertNil(result, "未授权时预期返回 nil，不崩溃")
     }
 
-    test("getSelectedTextViaAccessibility with invalid pid returns nil, no crash") {
-        // 传入无效 PID（如极大值），函数应安全处理不崩溃
-        let result = TranslationPipeline.shared.getSelectedTextViaAccessibility(pid: 99999999)
-        try assertNil(result, "无效 PID 预期返回 nil，不崩溃")
+    test("getSelectedTextViaAccessibility with invalid pid does not crash") {
+        // 传入无效 PID（如极大值）时，实现会回退系统全局聚焦元素；AX 已授权时可能返回非 nil 文本。
+        // 此处只验证「不崩溃」（SIGSEGV 会直接杀死测试进程），不断言返回值。
+        _ = TranslationPipeline.shared.getSelectedTextViaAccessibility(pid: 99999999)
     }
 
     // ━━━ WI-D3 回归测试 ━━━
 
     test("substringInRange boundary: zero length returns nil") {
-        let result = substringHelper("hello", location: 0, length: 0)
+        let result = TranslationPipeline.substringInRange("hello", cfLocation: 0, cfLength: 0)
         try assertNil(result)
     }
 
     test("substringInRange boundary: length overflow returns nil") {
-        let result = substringHelper("abc", location: 0, length: 100)
+        let result = TranslationPipeline.substringInRange("abc", cfLocation: 0, cfLength: 100)
         try assertNil(result)
     }
 
     test("substringInRange boundary: negative location returns nil") {
-        let result = substringHelper("abc", location: -1, length: 2)
+        let result = TranslationPipeline.substringInRange("abc", cfLocation: -1, cfLength: 2)
         try assertNil(result)
     }
 
@@ -112,16 +112,4 @@ func runTranslationPipelineTests() {
     test("permission decision: not granted, already primed → guideAndAbort") {
         try assertEqual(TranslationPipeline.resolvePermissionAction(isGranted: false, wasPrimed: true), .guideAndAbort)
     }
-}
-
-private func substringHelper(_ fullText: String, location: Int, length: Int) -> String? {
-    guard location >= 0,
-          length > 0,
-          location + length <= fullText.count else {
-        return nil
-    }
-    let start = fullText.index(fullText.startIndex, offsetBy: location)
-    let end = fullText.index(start, offsetBy: length)
-    let selected = String(fullText[start..<end])
-    return selected.isEmpty ? nil : selected
 }

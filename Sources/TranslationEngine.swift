@@ -76,6 +76,9 @@ final class TranslationEngine {
             DispatchQueue.main.async {
                 if let t = task, self?.currentTask === t { self?.currentTask = nil }
                 if let e = error {
+                    // ESC 取消（NSURLErrorDomain 的 NSURLErrorCancelled）不是失败，静默返回；调用方 generation 守卫会兜底丢弃陈旧结果
+                    let nsErr = e as NSError
+                    if nsErr.domain == NSURLErrorDomain && nsErr.code == NSURLErrorCancelled { return }
                     loge("API 失败: 网络: \(e.localizedDescription)")
                     completion(.failure)
                     return

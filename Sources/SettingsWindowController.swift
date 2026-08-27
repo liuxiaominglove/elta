@@ -426,6 +426,9 @@ final class SettingsWindowController: NSObject {
         let task = URLSession.shared.dataTask(with: request) { _, response, error in
             DispatchQueue.main.async {
                 if let error = error {
+                    // 取消（重复点击测试）触发的错误不是失败，静默返回，避免过期取消结果覆盖新结果
+                    let nsErr = error as NSError
+                    if nsErr.domain == NSURLErrorDomain && nsErr.code == NSURLErrorCancelled { return }
                     statusLabel?.stringValue = "连接失败: \(error.localizedDescription)"
                     statusLabel?.textColor = .systemRed
                     return
