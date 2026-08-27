@@ -86,17 +86,20 @@ final class TranslationPipeline {
 
                 // 翻译
                 logi("[Step 3] AI 翻译...")
-                TranslationEngine.shared.translate(text: text) { [weak self] result in
+                TranslationEngine.shared.translate(text: text) { [weak self] outcome in
                     guard let self = self, generation == self.currentTaskGeneration else { return }
-                    guard let result = result else {
+                    switch outcome {
+                    case .success(let markdown):
+                        self.hideLoading()
+                        ResultWindowController.shared.show(markdown: markdown, originalText: text, screenshotRect: rect)
+                        NotificationManager.shared.show(title: APP_DISPLAY_NAME, body: "翻译完成，点击查看结果")
+                        logi("流水线完成")
+                    case .failure:
                         self.hideLoading()
                         self.showError("AI 翻译失败。\nOCR 已识别文本：\n\(text.prefix(200))")
-                        return
+                    case .missingKey:
+                        self.hideLoading()
                     }
-                    self.hideLoading()
-                    ResultWindowController.shared.show(markdown: result, originalText: text, screenshotRect: rect)
-                    NotificationManager.shared.show(title: APP_DISPLAY_NAME, body: "翻译完成，点击查看结果")
-                    logi("流水线完成")
                 }
             }
         }
@@ -282,18 +285,21 @@ final class TranslationPipeline {
 
         // 5. 直接翻译
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            TranslationEngine.shared.translate(text: processedText) { [weak self] result in
+            TranslationEngine.shared.translate(text: processedText) { [weak self] outcome in
                 guard let self = self, generation == self.currentTaskGeneration else { return }
-                guard let result = result else {
+                switch outcome {
+                case .success(let markdown):
+                    self.hideLoading()
+                    let mouseRect = NSRect(x: mouseLocation.x - 5, y: mouseLocation.y - 5, width: 10, height: 10)
+                    ResultWindowController.shared.show(markdown: markdown, originalText: text, screenshotRect: mouseRect)
+                    NotificationManager.shared.show(title: APP_DISPLAY_NAME, body: "划词翻译完成，点击查看结果")
+                    logi("划词翻译流水线完成")
+                case .failure:
                     self.hideLoading()
                     self.showError("AI 翻译失败。\n选中文本长度：\(text.count)")
-                    return
+                case .missingKey:
+                    self.hideLoading()
                 }
-                self.hideLoading()
-                let mouseRect = NSRect(x: mouseLocation.x - 5, y: mouseLocation.y - 5, width: 10, height: 10)
-                ResultWindowController.shared.show(markdown: result, originalText: text, screenshotRect: mouseRect)
-                NotificationManager.shared.show(title: APP_DISPLAY_NAME, body: "划词翻译完成，点击查看结果")
-                logi("划词翻译流水线完成")
             }
         }
     }

@@ -3,6 +3,14 @@ import Foundation
 
 // MARK: - 翻译引擎（多 AI 提供商支持）
 
+/// 翻译结果，区分「真失败」与「key 未配置」：后者已由 translate 内部弹 alert 提示，
+/// 调用方不应再叠加「翻译失败」弹窗。
+enum TranslationOutcome {
+    case success(String)
+    case failure
+    case missingKey
+}
+
 final class TranslationEngine {
     static let shared = TranslationEngine()
 
@@ -15,7 +23,7 @@ final class TranslationEngine {
         currentTask = nil
     }
 
-    func translate(text: String, completion: @escaping (String?) -> Void) {
+    func translate(text: String, completion: @escaping (TranslationOutcome) -> Void) {
         let settings = SettingsManager.shared
         let provider = settings.apiProvider
         let key = settings.activeApiKey ?? ""
@@ -37,7 +45,7 @@ final class TranslationEngine {
                 } else {
                     NSApp.deactivate()
                 }
-                completion(nil)
+                completion(.missingKey)
             }
             return
         }
@@ -48,7 +56,7 @@ final class TranslationEngine {
         ]
 
         let endpoint = provider.endpoint
-        guard let url = URL(string: endpoint) else { loge("无效 API 地址"); completion(nil); return }
+        guard let url = URL(string: endpoint) else { loge("无效 API 地址"); completion(.failure); return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -58,7 +66,7 @@ final class TranslationEngine {
         request.timeoutInterval = 120
 
         do { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
-        catch { loge("JSON 序列化失败: \(error)"); completion(nil); return }
+        catch { loge("JSON 序列化失败: \(error)"); completion(.failure); return }
 
         logi("调用 \(provider.displayName) API...")
 
@@ -69,28 +77,28 @@ final class TranslationEngine {
                 if let t = task, self?.currentTask === t { self?.currentTask = nil }
                 if let e = error {
                     loge("API 失败: 网络: \(e.localizedDescription)")
-                    completion(nil)
+                    completion(.failure)
                     return
                 }
                 guard let http = response as? HTTPURLResponse else {
                     loge("API 失败: 无效响应")
-                    completion(nil)
+                    completion(.failure)
                     return
                 }
                 guard let data = data else {
                     loge("API 失败: 无数据")
-                    completion(nil)
+                    completion(.failure)
                     return
                 }
                 if http.statusCode != 200 {
                     loge("API 失败: HTTP \(http.statusCode), 响应体长度=\(data.count) 字节")
-                    completion(nil)
+                    completion(.failure)
                     return
                 }
 
                 let result = ResponseParser.parse(data: data)
                 logi("API 返回 \(result?.count ?? 0) 字符")
-                completion(result)
+                completion(result.map { .success($0) } ?? .failure)
             }
         }
         // 取消上一次仍在飞的请求，避免陈旧结果与新请求竞争（旧回调经调用方 generation 守卫兜底丢弃）
