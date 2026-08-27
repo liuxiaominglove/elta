@@ -47,6 +47,7 @@ final class SettingsWindowController: NSObject {
     private var providerCardView: NSView?          // 当前提供商的卡片容器
     private var providerCardHeight: CGFloat = 0
     private var cardLayout: ProviderCardLayout?    // 通用标签页卡片布局（模型严格居中）
+    private var testConnectionTask: URLSessionDataTask?   // 「测试连接」进行中的请求，用于重复点击时取消旧请求
 
     // Tab 2: 快捷键 — 4 个 HotkeyRecorder 实例
     let screenshotRecorder = HotkeyRecorder(
@@ -426,7 +427,10 @@ final class SettingsWindowController: NSObject {
         // 若不捕获，迟到回调会把 A 的测试结果写进 B 的标签，造成假阳性「连接成功」。
         let statusLabel = testStatusLabel
 
-        URLSession.shared.dataTask(with: request) { _, response, error in
+        // 取消上一次仍在飞的测试请求，避免网络乱序时过期结果覆盖新结果
+        testConnectionTask?.cancel()
+
+        let task = URLSession.shared.dataTask(with: request) { _, response, error in
             DispatchQueue.main.async {
                 if let error = error {
                     statusLabel?.stringValue = "连接失败: \(error.localizedDescription)"
@@ -447,7 +451,9 @@ final class SettingsWindowController: NSObject {
                     }
                 }
             }
-        }.resume()
+        }
+        testConnectionTask = task
+        task.resume()
     }
 
     // MARK: - Tab 2: Hotkeys
@@ -654,6 +660,9 @@ final class SettingsWindowController: NSObject {
         let recorded: [(keyCode: Int?, modifiers: Int)] = [
             (screenshotRecorder.recordedKeyCode, screenshotRecorder.recordedModifiers),
             (selectionRecorder.recordedKeyCode, selectionRecorder.recordedModifiers),
+            (closePanelRecorder.recordedKeyCode, closePanelRecorder.recordedModifiers),
+            (togglePanelRecorder.recordedKeyCode, togglePanelRecorder.recordedModifiers),
+            (splitRecorder.recordedKeyCode, splitRecorder.recordedModifiers),
         ]
         let conflicts = collectHotkeyConflicts(recorded)
         if !conflicts.isEmpty {
