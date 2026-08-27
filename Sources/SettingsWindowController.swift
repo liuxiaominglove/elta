@@ -92,7 +92,6 @@ final class SettingsWindowController: NSObject {
         win.title = "\(APP_DISPLAY_NAME) 偏好设置"
         win.center()
         win.isReleasedWhenClosed = false
-        win.level = .floating
         win.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         win.delegate = self
 
@@ -143,12 +142,6 @@ final class SettingsWindowController: NSObject {
 
         win.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        win.level = .floating
-        let f = win.level
-        DispatchQueue.main.async {
-            win.level = f
-            win.makeKeyAndOrderFront(nil)
-        }
 
         // 初始化 API Key 字段（同时填充密文/明文两个字段，避免显示空框）
         loadKey(for: SettingsManager.shared.apiProvider)
