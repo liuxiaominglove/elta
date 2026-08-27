@@ -57,7 +57,7 @@ security find-generic-password -s "com.elta.snaptranslate" -w >/dev/null 2>&1 &&
 - `.env`、`ghp_*` token、`sk-*` key 不得写入文件、commit、或在对话中完整打印。
 - 如不慎暴露 Key，立即提醒用户去对应平台重置。
 
-The app requires macOS **Screen Recording** and **Accessibility** permissions (TCC). These are requested at first use in `TranslationPipeline.primePermissionsIfNeeded()`. Both must be granted for all features to work.
+The app requires macOS **Screen Recording** and **Accessibility** permissions (TCC). Each is requested on first use of the corresponding hotkey: 截图翻译 (`start()`) triggers Screen Recording, 划词翻译 (`startTextTranslation()`) triggers Accessibility. Both must be granted for all features to work.
 
 ## Swift & CF 安全规则
 

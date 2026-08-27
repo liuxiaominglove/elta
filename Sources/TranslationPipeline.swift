@@ -21,38 +21,17 @@ final class TranslationPipeline {
     /// 是否已触发过辅助功能权限预检（TCC 弹窗只出现一次）
     private static var accessibilityPrimed = false
 
-    /// 在首次截图或划词操作时，同时触发两个系统权限弹窗：
-    /// 1. 辅助功能（Accessibility）— 划词翻译需要
-    /// 2. 屏幕录制（Screen Recording）— 截图翻译需要
-    /// 两者均使用非阻塞 API，确保无论用户先按哪个快捷键，两次 TCC 弹窗都会出现
-    private func primePermissionsIfNeeded() {
-        // 1. 屏幕录制权限（截图翻译需要）— 使用非阻塞 API 避免卡住后续的 Accessibility 弹窗
-        if !Self.screenCapturePrimed {
-            Self.screenCapturePrimed = true
-            logi("Prime: 预触发屏幕录制权限")
-            if !CGPreflightScreenCaptureAccess() {
-                CGRequestScreenCaptureAccess()
-                logi("屏幕录制权限: 未授权，TCC 弹窗已触发")
-            } else {
-                logi("屏幕录制权限: 已授权")
-            }
-        }
+    /// 权限决策结果：根据「是否已授权」与「本次调用前是否已触发过 TCC 弹窗」决定动作
+    enum PermissionAction: Equatable {
+        case proceed          // 已授权，继续翻译
+        case primeAndAbort    // 首次未授权：触发系统 TCC 弹窗后中止（静默，只留系统弹窗）
+        case guideAndAbort    // 已触发过 TCC 仍未授权（用户拒绝）：引导去系统设置后中止
+    }
 
-        // 2. 辅助功能权限（划词翻译需要）— AXUIElement 调用是非阻塞的，不会互相干扰
-        if !Self.accessibilityPrimed {
-            Self.accessibilityPrimed = true
-            logi("Prime: 预触发辅助功能权限")
-            if !AXIsProcessTrusted() {
-                let sys = AXUIElementCreateSystemWide()
-                var ref: CFTypeRef?
-                AXUIElementCopyAttributeValue(sys, kAXFocusedUIElementAttribute as CFString, &ref)
-                logi("Accessibility 权限: 未授权，TCC 弹窗已触发")
-            } else {
-                logi("Accessibility 权限: 已授权")
-            }
-        }
-
-
+    /// 纯决策函数：把「是否授权 + 是否已触发过 TCC」映射为动作。可单测。
+    static func resolvePermissionAction(isGranted: Bool, wasPrimed: Bool) -> PermissionAction {
+        if isGranted { return .proceed }
+        return wasPrimed ? .guideAndAbort : .primeAndAbort
     }
 
     func start() {
@@ -62,7 +41,20 @@ final class TranslationPipeline {
             showAlert("请先关闭上一个翻译弹窗", "关闭后即可开始新翻译。\n按 ESC 或点击弹窗左上角关闭按钮即可。")
             return
         }
-        primePermissionsIfNeeded()
+        // 屏幕录制权限（截图翻译）：首次未授权触发 TCC 后静默中止，只留系统弹窗
+        switch Self.resolvePermissionAction(isGranted: CGPreflightScreenCaptureAccess(),
+                                            wasPrimed: Self.screenCapturePrimed) {
+        case .proceed:
+            break
+        case .primeAndAbort:
+            Self.screenCapturePrimed = true
+            CGRequestScreenCaptureAccess()
+            logi("屏幕录制权限: 未授权，TCC 弹窗已触发")
+            return
+        case .guideAndAbort:
+            logi("屏幕录制权限: 仍未授权，静默中止")
+            return
+        }
         currentTaskGeneration += 1
         let generation = currentTaskGeneration
         ScreenshotEngine.shared.start { [weak self] rect, cgImage in
@@ -114,12 +106,9 @@ final class TranslationPipeline {
     /// - Parameter pid: 目标应用的进程 PID；传 nil 则回退为系统全局聚焦元素（兼容旧逻辑）
     /// 不依赖剪贴板，也不需要模拟 Cmd+C，兼容性更好
     func getSelectedTextViaAccessibility(pid: pid_t? = nil) -> String? {
-        // 检查辅助功能权限
+        // 检查辅助功能权限（权限提示已在 startTextTranslation 上游统一处理）
         guard AXIsProcessTrusted() else {
-            logi("Accessibility：未获得辅助功能权限，提示用户授权")
-            DispatchQueue.main.async {
-                self.promptAccessibilityPermission()
-            }
+            logi("Accessibility：未获得辅助功能权限")
             return nil
         }
 
@@ -230,7 +219,23 @@ final class TranslationPipeline {
             showAlert("请先关闭上一个翻译弹窗", "关闭后即可开始新翻译。\n按 ESC 或点击弹窗左上角关闭按钮即可。")
             return
         }
-        primePermissionsIfNeeded()
+        // 辅助功能权限（划词翻译）：首次未授权触发 TCC 后静默中止，只留系统弹窗；
+        // 已触发过仍未授权（用户拒绝）则弹引导框去系统设置
+        switch Self.resolvePermissionAction(isGranted: AXIsProcessTrusted(),
+                                            wasPrimed: Self.accessibilityPrimed) {
+        case .proceed:
+            break
+        case .primeAndAbort:
+            Self.accessibilityPrimed = true
+            let sys = AXUIElementCreateSystemWide()
+            var ref: CFTypeRef?
+            AXUIElementCopyAttributeValue(sys, kAXFocusedUIElementAttribute as CFString, &ref)
+            logi("Accessibility 权限: 未授权，TCC 弹窗已触发")
+            return
+        case .guideAndAbort:
+            promptAccessibilityPermission()
+            return
+        }
         currentTaskGeneration += 1
         let generation = currentTaskGeneration
 

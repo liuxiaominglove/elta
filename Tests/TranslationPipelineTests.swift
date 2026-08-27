@@ -97,6 +97,21 @@ func runTranslationPipelineTests() {
         let s = TranslationPipeline.substringInRange("😀a", cfLocation: 2, cfLength: 1)
         try assertEqual(s, "a")
     }
+
+    // ━━━ 权限决策：拆分截图/划词各自的 TCC 弹窗 ━━━
+
+    test("permission decision: granted always proceeds (regardless of primed)") {
+        try assertEqual(TranslationPipeline.resolvePermissionAction(isGranted: true, wasPrimed: false), .proceed)
+        try assertEqual(TranslationPipeline.resolvePermissionAction(isGranted: true, wasPrimed: true), .proceed)
+    }
+
+    test("permission decision: not granted, first trigger → primeAndAbort") {
+        try assertEqual(TranslationPipeline.resolvePermissionAction(isGranted: false, wasPrimed: false), .primeAndAbort)
+    }
+
+    test("permission decision: not granted, already primed → guideAndAbort") {
+        try assertEqual(TranslationPipeline.resolvePermissionAction(isGranted: false, wasPrimed: true), .guideAndAbort)
+    }
 }
 
 private func substringHelper(_ fullText: String, location: Int, length: Int) -> String? {
