@@ -73,6 +73,16 @@ Recording permission, and an app showing English text on screen (e.g. Apple
 Books). Like the selection golden path, it makes a real translation call and is
 a slow, paid gate.
 
+`elta_screen_capture_denied.js` and `elta_accessibility_denied.js` guard the
+TCC-permission-denied degradation paths. Each runs `tccutil reset` to revoke
+ELTA's Screen Recording / Accessibility permission, relaunches ELTA, triggers
+the corresponding translation twice, and asserts: first trigger logs
+`TCC 弹窗已触发` (primeAndAbort), second trigger logs `静默中止` (screen
+capture) or shows the `需要辅助功能权限` guide alert (accessibility). No API
+call is made. **Side effect**: they revoke ELTA's real TCC grants, so after
+running them you must re-grant Screen Recording / Accessibility for ELTA (and
+dismiss the system TCC dialog the first trigger leaves on screen).
+
 ## Case checklist（交卷七问）
 
 写/改一个 case 收工前，逐条确认。这七条来自「测试绿了 ≠ 测到了」的假阳性/空过教训：
