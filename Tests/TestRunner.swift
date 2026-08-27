@@ -53,6 +53,9 @@ func assertNil<T>(_ value: T?, _ msg: String = "Expected nil", file: StaticStrin
 func runAllTests() -> Int32 {
     print("========== ELTA Unit Tests ==========\n")
 
+    // 隔离真实 Keychain：测试只读写测试专用 service，避免覆盖/删除用户真实 API Key，也避免跨身份钥匙串弹窗
+    KeychainHelper.service = "com.elta.snaptranslate.test"
+
     runAIProviderTests()
     runHotkeyHelpersTests()
     runSettingsManagerTests()

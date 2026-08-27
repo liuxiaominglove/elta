@@ -145,7 +145,8 @@ enum TextNormalizer {
 // MARK: - Keychain 安全存储
 
 struct KeychainHelper {
-    static let service = "com.elta.snaptranslate"
+    // 供测试覆盖的接缝：run_tests.sh 会改成 .test 服务以隔离真实 Keychain；生产代码从不重新赋值
+    static var service = "com.elta.snaptranslate"
 
     static func save(key: String, account: String) -> Bool {
         let valueData = key.data(using: .utf8) ?? Data()

@@ -16,6 +16,14 @@ PLIST="$PROJECT_DIR/Resources/Info.plist"
 ICONS_DIR="$PROJECT_DIR/Resources"
 MIN_TARGET="13.0"   # 与 Info.plist LSMinimumSystemVersion 保持一致
 
+# 本地稳定签名身份：让 TCC（屏幕录制/辅助功能）与 Keychain「始终允许」授权跨重建持久化。
+# ad-hoc（--sign -）每次重建都会生成新的代码身份，macOS 视为新 App，重新弹授权。
+# 优先用 "Apple Development" 证书；找不到则回退 ad-hoc。
+SIGN_IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | grep -oE '"Apple Development[^"]*"' | head -1 | tr -d '"')
+if [ -z "$SIGN_IDENTITY" ]; then
+    SIGN_IDENTITY="-"
+fi
+
 # 通用编译参数
 HOST_ARCH=$(uname -m)
 SWIFT_FLAGS="-framework Cocoa -framework Carbon -framework WebKit -framework Vision -framework UserNotifications -O -whole-module-optimization"
@@ -78,9 +86,9 @@ echo "[4/6] 安装 Info.plist..."
 cp "$PLIST" "$APP_BUNDLE/Contents/"
 echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
 
-# 5. 代码签名（本地开发用 ad-hoc 签名）
-echo "[5/6] 签名..."
-codesign --force --sign - "$APP_BUNDLE" 2>/dev/null && echo "   签名成功" || echo "   签名跳过"
+# 5. 代码签名（本地开发用稳定签名身份，避免重建后 TCC/Keychain 重复弹授权）
+echo "[5/6] 签名（身份: ${SIGN_IDENTITY}）..."
+codesign --force --sign "$SIGN_IDENTITY" "$APP_BUNDLE" 2>/dev/null && echo "   签名成功" || echo "   签名跳过"
 
 echo ""
 echo "=========================================="
@@ -101,7 +109,7 @@ rm -rf "$APP_TARGET" 2>/dev/null || true
 cp -R "$APP_BUNDLE" "$APP_TARGET"
 
 # 签名
-codesign --force --sign - "$APP_TARGET" 2>/dev/null
+codesign --force --sign "$SIGN_IDENTITY" "$APP_TARGET" 2>/dev/null
 
 echo "安装完成: $APP_TARGET"
 echo ""
