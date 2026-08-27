@@ -53,15 +53,16 @@ real API key — it deliberately targets the empty-key state — but does need
 TextEdit to stay frontmost when the translation is triggered (so the text
 selection is set up after ELTA has launched and grabbed focus).
 
-## Case checklist（交卷五问）
+## Case checklist（交卷六问）
 
-写/改一个 case 收工前，逐条确认。这五条来自「测试绿了 ≠ 测到了」的假阳性/空过教训：
+写/改一个 case 收工前，逐条确认。这六条来自「测试绿了 ≠ 测到了」的假阳性/空过教训：
 
 1. **绿是真测到了吗** — 跑完回日志确认「被测路径真的执行了」，不要只看 exit 0。
 2. **断言锚定本次了吗** — 读有历史累积的状态（日志/剪贴板/文件）前记基线，只读增量。用 `fileLineCount` + `fileTailSince`（见 `lib/jxa/ui.js`），不要直接 `tail`/`grep` 全量。
 3. **有路径证明吗** — 除结果断言外，必须有一条证明「中间环节真的发生」的断言，否则会静默空过。
 4. **环境前置显式构造了吗** — 前置条件要主动造出来（如激活 Finder 让 AX 确定性读不到），不能靠环境碰巧。
 5. **做过负向验证吗** — 临时改错一个断言（或注入一个 bug），确认测试会 fail，证明它非恒真。
+6. **断言的是「状态转变」还是「状态存在」** — 若断言对象在动作发生前就存在（或本就不存在），说明没咬住因果，是恒真/假阴性风险。用 `assertAppears` / `assertDisappears`（见 `lib/jxa/ui.js`）断言「从无到有 / 从有到无」。
 
 ## Known limitation
 
