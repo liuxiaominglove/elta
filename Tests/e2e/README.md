@@ -34,6 +34,27 @@ the Calculator window is above the ELTA settings window (settings does not cover
 other apps). It matches ELTA's settings by owner `ELTA` + layer 0, deliberately
 excluding the floating translation panel (layer 3).
 
+`elta_pasteboard_roundtrip.js` guards the pasteboard round-trip in the Cmd+C
+fallback path (`getSelectedTextViaCopyPasteboard`): it seeds the pasteboard with
+a unique marker, triggers 划词翻译 from the menu bar, then asserts the pasteboard
+is still exactly the marker after the Cmd+C → restore cycle. It also asserts the
+`剪贴板已恢复` log line appears in the log lines written during this run (not
+historical ones), proving the Cmd+C fallback path was actually exercised rather
+than skipped via the Accessibility path. To make that path deterministic, the
+case activates Finder before triggering — Finder has no selected text, so the
+Accessibility read fails and the fallback runs. It needs no API key and no
+Screen Recording permission.
+
+## Case checklist（交卷五问）
+
+写/改一个 case 收工前，逐条确认。这五条来自「测试绿了 ≠ 测到了」的假阳性/空过教训：
+
+1. **绿是真测到了吗** — 跑完回日志确认「被测路径真的执行了」，不要只看 exit 0。
+2. **断言锚定本次了吗** — 读有历史累积的状态（日志/剪贴板/文件）前记基线，只读增量。用 `fileLineCount` + `fileTailSince`（见 `lib/jxa/ui.js`），不要直接 `tail`/`grep` 全量。
+3. **有路径证明吗** — 除结果断言外，必须有一条证明「中间环节真的发生」的断言，否则会静默空过。
+4. **环境前置显式构造了吗** — 前置条件要主动造出来（如激活 Finder 让 AX 确定性读不到），不能靠环境碰巧。
+5. **做过负向验证吗** — 临时改错一个断言（或注入一个 bug），确认测试会 fail，证明它非恒真。
+
 ## Known limitation
 
 The case cold-starts Calculator after ELTA's settings window is frontmost, and
