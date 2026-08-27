@@ -45,6 +45,14 @@ case activates Finder before triggering — Finder has no selected text, so the
 Accessibility read fails and the fallback runs. It needs no API key and no
 Screen Recording permission.
 
+`elta_no_api_key_alert.js` guards the "no API key" degradation path: it switches
+the provider to one without a key (dynamically picked, restored in `finally`),
+selects text in TextEdit, triggers 划词翻译, then asserts the `未配置 API Key`
+alert appears and that clicking `打开偏好设置` dismisses it. It needs no
+real API key — it deliberately targets the empty-key state — but does need
+TextEdit to stay frontmost when the translation is triggered (so the text
+selection is set up after ELTA has launched and grabbed focus).
+
 ## Case checklist（交卷五问）
 
 写/改一个 case 收工前，逐条确认。这五条来自「测试绿了 ≠ 测到了」的假阳性/空过教训：
