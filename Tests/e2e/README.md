@@ -63,6 +63,16 @@ before release, not in the inner loop. It deliberately does not assert the
 panel's inner text (that is WebView-rendered HTML and not reliably readable via
 System Events).
 
+`elta_screenshot_golden_path.js` guards the 截图翻译 golden path (screenshot →
+OCR → translate → panel). It triggers 截图翻译 from the menu bar, waits for the
+full-screen overlay, then drags a selection rectangle across the middle of the
+screen via `dragMouse` (synthetic CGEvent mouse down/drag/up), and asserts the
+`翻译结果 — ELTA` panel appears plus the `OCR: 识别到` and `流水线完成` log
+lines appear in this run's new log lines. It needs a valid real API key, Screen
+Recording permission, and an app showing English text on screen (e.g. Apple
+Books). Like the selection golden path, it makes a real translation call and is
+a slow, paid gate.
+
 ## Case checklist（交卷六问）
 
 写/改一个 case 收工前，逐条确认。这六条来自「测试绿了 ≠ 测到了」的假阳性/空过教训：
