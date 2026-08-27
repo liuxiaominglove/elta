@@ -128,6 +128,11 @@ func runSettingsManagerTests() {
         try assertFalse(prompt.contains("Markdown 表格"), "Should NOT contain table note")
     }
 
+    test("defaultPrompt contains sentence-by-sentence hint") {
+        let prompt = SettingsManager.shared.defaultPrompt
+        try assertTrue(prompt.contains("逐句"), "Should contain sentence-by-sentence hint")
+    }
+
     test("systemPrompt returns default when not customized") {
         // Ensure no custom prompt is set
         UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt")

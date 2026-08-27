@@ -206,20 +206,101 @@ enum SentenceSplitter {
 
     // MARK: - 配对
 
-    /// 原文句与译文句按下标配对，缺失的一侧留空字符串
+    /// 原文句与译文句配对。
+    /// 句数一致时按下标逐句 1:1；句数不一致时按「字符数比例」贪心对齐，支持一对多/多对一合并。
     static func pair(original: String, translation: String) -> [SplitPair] {
         let originals = splitEnglish(original)
         let translations = splitChinese(translation)
-        let count = max(originals.count, translations.count)
-        guard count > 0 else { return [] }
+
+        // 单侧为空：退回下标补齐（无长度可对齐）
+        if originals.isEmpty {
+            return translations.map { SplitPair(original: "", translation: $0) }
+        }
+        if translations.isEmpty {
+            return originals.map { SplitPair(original: $0, translation: "") }
+        }
+
+        // 句数一致：快路径逐句 1:1
+        if originals.count == translations.count {
+            var pairs: [SplitPair] = []
+            pairs.reserveCapacity(originals.count)
+            for i in 0..<originals.count {
+                pairs.append(SplitPair(original: originals[i], translation: translations[i]))
+            }
+            return pairs
+        }
+
+        // 句数不一致：长度比例贪心对齐
+        if originals.count < translations.count {
+            return alignConsumingTranslations(originals: originals, translations: translations)
+        } else {
+            return alignConsumingOriginals(originals: originals, translations: translations)
+        }
+    }
+
+    /// 英文句少、中文句多：以英文句为骨架，每个英文句吃 ≥1 个中文句（一对多）
+    private static func alignConsumingTranslations(originals: [String], translations: [String]) -> [SplitPair] {
+        let eLens = originals.map { Double($0.count) }
+        let cLens = translations.map { Double($0.count) }
+        let totalE = eLens.reduce(0, +)
+        let totalC = cLens.reduce(0, +)
+        let ratio = totalE > 0 ? totalC / totalE : 1.0
 
         var pairs: [SplitPair] = []
-        pairs.reserveCapacity(count)
-        for i in 0..<count {
-            pairs.append(SplitPair(
-                original: i < originals.count ? originals[i] : "",
-                translation: i < translations.count ? translations[i] : ""
-            ))
+        pairs.reserveCapacity(originals.count)
+        var j = 0
+        for i in 0..<originals.count {
+            let remainingEnglish = originals.count - i - 1
+            // 最多吃掉的中文句数，保证后续每个英文句至少 1 个中文句
+            let maxTake = translations.count - j - remainingEnglish
+            let expected = eLens[i] * ratio
+            var take = 1
+            var acc = cLens[j]
+            while take < maxTake {
+                let next = cLens[j + take]
+                if abs(acc + next - expected) < abs(acc - expected) {
+                    acc += next
+                    take += 1
+                } else {
+                    break
+                }
+            }
+            let merged = translations[j..<(j + take)].joined(separator: "\n")
+            pairs.append(SplitPair(original: originals[i], translation: merged))
+            j += take
+        }
+        return pairs
+    }
+
+    /// 英文句多、中文句少：以中文句为骨架，每个中文句吃 ≥1 个英文句（多对一）
+    private static func alignConsumingOriginals(originals: [String], translations: [String]) -> [SplitPair] {
+        let eLens = originals.map { Double($0.count) }
+        let cLens = translations.map { Double($0.count) }
+        let totalE = eLens.reduce(0, +)
+        let totalC = cLens.reduce(0, +)
+        let ratio = totalC > 0 ? totalC / totalE : 1.0
+
+        var pairs: [SplitPair] = []
+        pairs.reserveCapacity(translations.count)
+        var i = 0
+        for j in 0..<translations.count {
+            let remainingChinese = translations.count - j - 1
+            let maxTake = originals.count - i - remainingChinese
+            let expected = cLens[j] / ratio   // 中文句应占的英文字符数
+            var take = 1
+            var acc = eLens[i]
+            while take < maxTake {
+                let next = eLens[i + take]
+                if abs(acc + next - expected) < abs(acc - expected) {
+                    acc += next
+                    take += 1
+                } else {
+                    break
+                }
+            }
+            let merged = originals[i..<(i + take)].joined(separator: " ")
+            pairs.append(SplitPair(original: merged, translation: translations[j]))
+            i += take
         }
         return pairs
     }

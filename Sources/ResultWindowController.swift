@@ -394,7 +394,7 @@ final class HTMLRenderer {
 
         var splitHTML = preambleHTML
         if !SentenceSplitter.sentenceCountsMatch(original: originalText, translation: transSection.body) {
-            splitHTML += "<div class=\"split-warning\">⚠️ 原文与译文句数不一致，逐句对照可能错位</div>"
+            splitHTML += "<div class=\"split-warning\">⚠️ 原文与译文句数不一致，已自动对齐，请留意对照</div>"
         }
         splitHTML += "<h2>中文翻译</h2>"
         splitHTML += "<div class=\"split-list\">"
@@ -561,6 +561,7 @@ final class HTMLRenderer {
     /// 句子级 Markdown 富文本 → HTML：转义 + 加粗 + 行内代码（不做标题/表格/段落，句子已是单行）
     static func inlineMarkdownToHTML(_ text: String) -> String {
         var html = escapeHTML(text)
+        html = html.replacingOccurrences(of: "\n", with: "<br>")
         html = html.replacingOccurrences(of: #"\*\*(.+?)\*\*"#, with: "<strong>$1</strong>", options: .regularExpression)
         html = html.replacingOccurrences(of: "`([^`]+)`", with: "<code>$1</code>", options: .regularExpression)
         return html

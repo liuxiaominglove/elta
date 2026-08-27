@@ -88,19 +88,53 @@ func runSentenceSplitterTests() {
         try assertEqual(pairs[1].translation, "世界。")
     }
 
-    test("pair fills empty translation when original has more sentences") {
+    test("pair merges multiple English sentences into one translation when translation shorter") {
         let pairs = SentenceSplitter.pair(original: "One. Two. Three.", translation: "第一句。")
-        try assertEqual(pairs.count, 3)
+        try assertEqual(pairs.count, 1)
+        try assertEqual(pairs[0].original, "One. Two. Three.")
         try assertEqual(pairs[0].translation, "第一句。")
-        try assertEqual(pairs[1].translation, "")
-        try assertEqual(pairs[2].original, "Three.")
     }
 
-    test("pair fills empty original when translation has more sentences") {
+    test("pair merges multiple Chinese sentences into one original when original shorter") {
         let pairs = SentenceSplitter.pair(original: "One.", translation: "第一句。第二句。")
+        try assertEqual(pairs.count, 1)
+        try assertEqual(pairs[0].original, "One.")
+        try assertEqual(pairs[0].translation, "第一句。\n第二句。")
+    }
+
+    test("pair aligns one long English sentence to two Chinese sentences (1:2)") {
+        let pairs = SentenceSplitter.pair(
+            original: "Consider the case of poor Ignaz Semmelweis, a Viennese obstetrician who was troubled by the fact that so many new mothers were dying in the hospital where he worked. He concluded that their strange “childbed fever” might somehow be linked to the autopsies that he and his colleagues performed in the mornings, before delivering babies in the afternoons—without washing their hands in between. The existence of germs had not yet been discovered, but Semmelweis nonetheless believed that the doctors were transmitting something to these women that caused their illness. His observations were most unwelcome. His colleagues ostracized him, and Semmelweis died in an insane asylum in 1865.",
+            translation: "想想可怜的伊格纳兹·塞麦尔维斯吧。这位维也纳产科医生深感困扰，因为在他工作的医院里，有太多新妈妈相继离世。他得出结论，她们所患的诡异“产褥热”或许与他及同事们上午进行尸检、下午接生婴儿——期间从不洗手——之间存在某种关联。当时细菌尚未被发现，但塞麦尔维斯仍然坚信，是医生们将某种致病之物传给了这些女性。他的观察结果极不受欢迎。同事们将他排挤在外，而塞麦尔维斯最终于1865年死于精神病院。"
+        )
+        try assertEqual(pairs.count, 5)
+        try assertEqual(pairs[0].translation, "想想可怜的伊格纳兹·塞麦尔维斯吧。\n这位维也纳产科医生深感困扰，因为在他工作的医院里，有太多新妈妈相继离世。")
+        try assertEqual(pairs[1].translation, "他得出结论，她们所患的诡异“产褥热”或许与他及同事们上午进行尸检、下午接生婴儿——期间从不洗手——之间存在某种关联。")
+        try assertEqual(pairs[2].translation, "当时细菌尚未被发现，但塞麦尔维斯仍然坚信，是医生们将某种致病之物传给了这些女性。")
+        try assertEqual(pairs[3].translation, "他的观察结果极不受欢迎。")
+        try assertEqual(pairs[4].translation, "同事们将他排挤在外，而塞麦尔维斯最终于1865年死于精神病院。")
+    }
+
+    test("pair aligns multiple short English sentences to one Chinese sentence (2:1)") {
+        let pairs = SentenceSplitter.pair(original: "One. Two.", translation: "一和二。")
+        try assertEqual(pairs.count, 1)
+        try assertEqual(pairs[0].original, "One. Two.")
+        try assertEqual(pairs[0].translation, "一和二。")
+    }
+
+    test("pair handles original-only input without translation") {
+        let pairs = SentenceSplitter.pair(original: "One. Two.", translation: "")
         try assertEqual(pairs.count, 2)
         try assertEqual(pairs[0].original, "One.")
-        try assertEqual(pairs[1].original, "")
+        try assertEqual(pairs[0].translation, "")
+        try assertEqual(pairs[1].original, "Two.")
+    }
+
+    test("pair handles translation-only input without original") {
+        let pairs = SentenceSplitter.pair(original: "", translation: "第一句。第二句。")
+        try assertEqual(pairs.count, 2)
+        try assertEqual(pairs[0].original, "")
+        try assertEqual(pairs[0].translation, "第一句。")
         try assertEqual(pairs[1].translation, "第二句。")
     }
 
