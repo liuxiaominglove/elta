@@ -73,9 +73,9 @@ Recording permission, and an app showing English text on screen (e.g. Apple
 Books). Like the selection golden path, it makes a real translation call and is
 a slow, paid gate.
 
-## Case checklist（交卷六问）
+## Case checklist（交卷七问）
 
-写/改一个 case 收工前，逐条确认。这六条来自「测试绿了 ≠ 测到了」的假阳性/空过教训：
+写/改一个 case 收工前，逐条确认。这七条来自「测试绿了 ≠ 测到了」的假阳性/空过教训：
 
 1. **绿是真测到了吗** — 跑完回日志确认「被测路径真的执行了」，不要只看 exit 0。
 2. **断言锚定本次了吗** — 读有历史累积的状态（日志/剪贴板/文件）前记基线，只读增量。用 `fileLineCount` + `fileTailSince`（见 `lib/jxa/ui.js`），不要直接 `tail`/`grep` 全量。
@@ -83,6 +83,7 @@ a slow, paid gate.
 4. **环境前置显式构造了吗** — 前置条件要主动造出来（如激活 Finder 让 AX 确定性读不到），不能靠环境碰巧。
 5. **做过负向验证吗** — 临时改错一个断言（或注入一个 bug），确认测试会 fail，证明它非恒真。
 6. **断言的是「状态转变」还是「状态存在」** — 若断言对象在动作发生前就存在（或本就不存在），说明没咬住因果，是恒真/假阴性风险。用 `assertAppears` / `assertDisappears`（见 `lib/jxa/ui.js`）断言「从无到有 / 从有到无」。
+7. **异步/token 守卫流程只触发一次了吗** — 有 generation/token 守卫的异步流程（如截图翻译的 `currentTaskGeneration`），触发两次会让第一次的结果被静默丢弃、表现为「没反应」。case 里 killall 清场后只触发一次被测动作。
 
 ## Known limitation
 
@@ -96,7 +97,10 @@ was originally built to guard against is fixed in v5.5.3.
 
 ## Notes
 
-- Window owner names are locale-dependent (`计算器` = Calculator on a zh-CN
-  system). Adjust `calcOwner` in the case if your locale differs.
+- Window owner names are locale-dependent (`计算器` = Calculator, `图书` = Books
+  on a zh-CN system). Don't hardcode an app's English display name — prefer its
+  stable bundle id (e.g. Apple Books is `com.apple.iBooksX`) or probe the owner
+  name at runtime, and use the display name only as a last resort. Adjust
+  `calcOwner` in the case if your locale differs.
 - The Swift z-order helper `lib/jxa/windowz` is compiled automatically from
   `windowz.swift` on first run.
