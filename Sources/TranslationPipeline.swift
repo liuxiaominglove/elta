@@ -7,6 +7,7 @@ final class TranslationPipeline {
     static let shared = TranslationPipeline()
 
     private var loadingPanel: NSPanel?
+    private var accessibilityPromptPanel: NSPanel?
 
     /// 翻译任务代号：每次新任务 +1，用于 ESC 取消后丢弃旧任务结果
     private var currentTaskGeneration = 0
@@ -18,8 +19,6 @@ final class TranslationPipeline {
 
     /// 是否已触发过屏幕录制权限预检（TCC 弹窗只出现一次）
     private static var screenCapturePrimed = false
-    /// 是否已触发过辅助功能权限预检（TCC 弹窗只出现一次）
-    private static var accessibilityPrimed = false
 
     /// 权限决策结果：根据「是否已授权」与「本次调用前是否已触发过 TCC 弹窗」决定动作
     enum PermissionAction: Equatable {
@@ -196,29 +195,50 @@ final class TranslationPipeline {
         return selected.isEmpty ? nil : selected
     }
 
-    /// 引导用户前往系统设置开启辅助功能权限
-    /// 引导用户前往系统设置开启辅助功能权限（同一会话仅提示一次）
-    private static var accessibilityPrompted = false
-
+    /// 引导用户前往系统设置开启辅助功能权限（每次未授权都提示）
+    /// 用自定义 NSPanel（非模态）而非 NSAlert.runModal：模态会话无法可靠跨全屏 Space 置前，
+    /// 且层级/collectionBehavior 不受 NSAlert 内部行为干扰。
     private func promptAccessibilityPermission() {
-        guard !Self.accessibilityPrompted else { return }
-        Self.accessibilityPrompted = true
-        // 临时切换激活策略为 regular，确保菜单栏(.accessory)应用的弹窗能获取焦点、不被其他窗口遮挡
-        let currentPolicy = NSApp.activationPolicy()
-        if currentPolicy != .regular { NSApp.setActivationPolicy(.regular) }
-        let alert = NSAlert()
-        alert.messageText = "需要辅助功能权限"
-        alert.informativeText = "为了获取您在任意应用中选中的文本（划词翻译），ELTA 需要【辅助功能】权限。\n\n请前往 系统设置 → 隐私与安全性 → 辅助功能，找到并启用 ELTA。"
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "打开系统设置")
-        alert.addButton(withTitle: "稍后")
-        NSApp.activate(ignoringOtherApps: true)
-        let result = alert.runModal()
-        NSApp.deactivate()
-        if currentPolicy != .regular { NSApp.setActivationPolicy(currentPolicy) }
-        if result == .alertFirstButtonReturn {
-            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        DispatchQueue.main.async {
+            guard self.accessibilityPromptPanel == nil else { return }  // 防重复弹
+            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 460, height: 190),
+                                styleMask: [.titled, .nonactivatingPanel],
+                                backing: .buffered, defer: false)
+            panel.isFloatingPanel = true
+            panel.level = .floating
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            panel.title = "需要辅助功能权限"
+
+            let info = NSTextField(wrappingLabelWithString: "为了获取您在任意应用中选中的文本（划词翻译），ELTA 需要【辅助功能】权限。\n\n请前往 系统设置 → 隐私与安全性 → 辅助功能，找到并启用 ELTA。")
+            info.frame = NSRect(x: 24, y: 66, width: 412, height: 90)
+            info.font = .systemFont(ofSize: 13)
+            panel.contentView?.addSubview(info)
+
+            let openBtn = NSButton(title: "打开系统设置", target: self, action: #selector(TranslationPipeline.openAccessibilitySettingsAction(_:)))
+            openBtn.frame = NSRect(x: 24, y: 20, width: 140, height: 32)
+            openBtn.bezelStyle = .rounded
+            panel.contentView?.addSubview(openBtn)
+
+            let laterBtn = NSButton(title: "稍后", target: self, action: #selector(TranslationPipeline.dismissAccessibilityPromptAction(_:)))
+            laterBtn.frame = NSRect(x: 320, y: 20, width: 100, height: 32)
+            laterBtn.bezelStyle = .rounded
+            panel.contentView?.addSubview(laterBtn)
+
+            panel.center()
+            self.accessibilityPromptPanel = panel
+            panel.makeKeyAndOrderFront(nil)
         }
+    }
+
+    @objc private func openAccessibilitySettingsAction(_ sender: Any?) {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        dismissAccessibilityPromptAction(sender)
+    }
+
+    @objc private func dismissAccessibilityPromptAction(_ sender: Any?) {
+        accessibilityPromptPanel?.orderOut(nil)
+        accessibilityPromptPanel?.close()
+        accessibilityPromptPanel = nil
     }
 
     /// 划词翻译：读取选中文本 → 直接翻译（跳过截图+OCR）
@@ -229,20 +249,8 @@ final class TranslationPipeline {
             showAlert("请先关闭上一个翻译弹窗", "关闭后即可开始新翻译。\n按 ESC 或点击弹窗左上角关闭按钮即可。")
             return
         }
-        // 辅助功能权限（划词翻译）：首次未授权触发 TCC 后静默中止，只留系统弹窗；
-        // 已触发过仍未授权（用户拒绝）则弹引导框去系统设置
-        switch Self.resolvePermissionAction(isGranted: AXIsProcessTrusted(),
-                                            wasPrimed: Self.accessibilityPrimed) {
-        case .proceed:
-            break
-        case .primeAndAbort:
-            Self.accessibilityPrimed = true
-            let sys = AXUIElementCreateSystemWide()
-            var ref: CFTypeRef?
-            AXUIElementCopyAttributeValue(sys, kAXFocusedUIElementAttribute as CFString, &ref)
-            logi("Accessibility 权限: 未授权，TCC 弹窗已触发")
-            return
-        case .guideAndAbort:
+        // 辅助功能无法内联授权，未授权时直接弹引导框去系统设置（不依赖不可靠的系统 TCC 框），每次未授权都提示
+        guard AXIsProcessTrusted() else {
             promptAccessibilityPermission()
             return
         }

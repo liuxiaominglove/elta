@@ -2,8 +2,6 @@ function run(argv) {
   var shotDir = argv[0] || 'shots';
   var windowz = argv[1];
 
-  var logPath = ObjC.unwrap($.NSHomeDirectory()) + '/Library/Logs/elta.log';
-
   function eltaHasStaticText(text) {
     var proc = SE.processes['ELTA'];
     if (!proc.exists()) { return false; }
@@ -85,18 +83,8 @@ function run(argv) {
     'ELTA status item 📖 not found'
   );
 
-  // 第一次触发：primeAndAbort（TCC 弹窗 + 静默中止）
-  var base1 = fileLineCount(logPath);
-  assert(triggerSelectionTranslate(statusItem), '第一次触发划词翻译失败');
-  sleep(2);
-  var log1 = fileTailSince(logPath, base1);
-  assert(
-    log1.indexOf('Accessibility 权限: 未授权，TCC 弹窗已触发') >= 0,
-    '首次未触发 TCC 弹窗（primeAndAbort）\n--- new log ---\n' + log1
-  );
-
-  // 第二次触发：guideAndAbort（弹「需要辅助功能权限」引导 alert）
-  assert(triggerSelectionTranslate(statusItem), '第二次触发划词翻译失败');
+  // 未授权触发划词 → 直接弹「需要辅助功能权限」引导框（每次未授权都提示）
+  assert(triggerSelectionTranslate(statusItem), '触发划词翻译失败');
   assert(
     waitUntil(function () { return eltaHasStaticText('需要辅助功能权限'); }, 8000),
     '引导 alert「需要辅助功能权限」未出现\n--- ELTA UI ---\n' + dumpEltaUI()
@@ -104,5 +92,5 @@ function run(argv) {
 
   runShell('/usr/bin/killall', ['ELTA']);
 
-  return 'PASS: 划词翻译权限拒绝降级（primeAndAbort + guideAndAbort 引导）';
+  return 'PASS: 划词翻译未授权时直接弹引导框';
 }
