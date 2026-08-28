@@ -45,4 +45,43 @@ func runSettingsWindowControllerTests() {
         try assertTrue(layout.keyTitleY > layout.keyFieldY, "API Key 标题应在输入框上方")
         try assertTrue(layout.keyFieldY > layout.testButtonY, "API Key 输入框应在测试按钮上方")
     }
+
+    // ━━━ 模板双态：显示内容决策 ━━━
+
+    test("templateContent returns default when usesDefault true even with custom") {
+        let r = SettingsWindowController.templateContent(usesDefault: true, custom: "custom", defaultPrompt: "DEFAULT")
+        try assertEqual(r, "DEFAULT")
+    }
+
+    test("templateContent returns custom when usesDefault false and custom set") {
+        let r = SettingsWindowController.templateContent(usesDefault: false, custom: "MY", defaultPrompt: "DEFAULT")
+        try assertEqual(r, "MY")
+    }
+
+    test("templateContent returns default when usesDefault false but custom nil") {
+        let r = SettingsWindowController.templateContent(usesDefault: false, custom: nil, defaultPrompt: "DEFAULT")
+        try assertEqual(r, "DEFAULT")
+    }
+
+    test("templateContent returns default when usesDefault false but custom empty") {
+        let r = SettingsWindowController.templateContent(usesDefault: false, custom: "", defaultPrompt: "DEFAULT")
+        try assertEqual(r, "DEFAULT")
+    }
+
+    // ━━━ 模板双态：保存决策 ━━━
+
+    test("resolveTemplateSave keepDefault when usesDefault true") {
+        let a = SettingsWindowController.resolveTemplateSave(usesDefault: true, content: "x")
+        try assertEqual(a, TemplateSaveAction.keepDefault)
+    }
+
+    test("resolveTemplateSave saveCustom when content non-empty") {
+        let a = SettingsWindowController.resolveTemplateSave(usesDefault: false, content: "hello")
+        try assertEqual(a, TemplateSaveAction.saveCustom("hello"))
+    }
+
+    test("resolveTemplateSave clearCustom when content whitespace") {
+        let a = SettingsWindowController.resolveTemplateSave(usesDefault: false, content: "   \n ")
+        try assertEqual(a, TemplateSaveAction.clearCustom)
+    }
 }

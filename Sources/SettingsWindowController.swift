@@ -16,6 +16,14 @@ enum ConnectionResult: Equatable {
     }
 }
 
+// MARK: - 模板双态保存决策
+
+enum TemplateSaveAction: Equatable {
+    case keepDefault        // usesDefault=true，自定义保持不变
+    case saveCustom(String) // usesDefault=false，写入自定义
+    case clearCustom        // usesDefault=true，清空自定义
+}
+
 // MARK: - 通用标签页卡片布局
 
 struct ProviderCardLayout {
@@ -78,6 +86,8 @@ final class SettingsWindowController: NSObject {
 
     // Tab 3: 翻译模板
     private var templateTextView: NSTextView?
+    private var templateModeSeg: NSSegmentedControl?
+    private var templateModeStatusLabel: NSTextField?
 
     // Tab 2: 默认优先弹窗模式（整段 / 拆分）
     private var defaultSplitSeg: NSSegmentedControl?
@@ -722,11 +732,18 @@ final class SettingsWindowController: NSObject {
             (NSApp.delegate as? AppDelegate)?.reregisterHotkey()
         }
 
-        if let template = templateTextView?.string, !template.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            settings.systemPrompt = template
-        } else {
-            // 清空模板时重置为默认模板，避免空内容被静默忽略、旧模板残留
-            settings.systemPrompt = settings.defaultPrompt
+        let usesDefault = (templateModeSeg?.selectedSegment ?? 0) == 0
+        let content = templateTextView?.string ?? ""
+        switch Self.resolveTemplateSave(usesDefault: usesDefault, content: content) {
+        case .keepDefault:
+            settings.usesDefaultPrompt = true
+        case .saveCustom(let template):
+            settings.customPrompt = template
+            settings.usesDefaultPrompt = false
+        case .clearCustom:
+            // 自定义态下清空模板：回退默认，避免空内容被静默忽略、旧模板残留
+            settings.customPrompt = nil
+            settings.usesDefaultPrompt = true
             templateTextView?.string = settings.defaultPrompt
         }
 
@@ -746,8 +763,10 @@ final class SettingsWindowController: NSObject {
         if alert.runModal() != .alertFirstButtonReturn { return }
 
         let settings = SettingsManager.shared
-        settings.systemPrompt = settings.defaultPrompt
-        templateTextView?.string = settings.defaultPrompt
+        settings.customPrompt = nil
+        settings.usesDefaultPrompt = true
+        templateModeSeg?.selectedSegment = 0
+        applyTemplateMode(usesDefault: true)
         settings.hotkeyKeyCode = DEFAULT_HOTKEY_KEYCODE
         settings.hotkeyModifiers = Int(controlKey)
         settings.hotkeyDisplay = "⌃T"
@@ -828,18 +847,31 @@ final class SettingsWindowController: NSObject {
         let v = NSView(frame: NSRect(origin: .zero, size: size))
         let w = size.width
 
-        let titleLabel = NSTextField(labelWithString: "翻译提示词模板（可编辑）")
+        let titleLabel = NSTextField(labelWithString: "翻译提示词模板")
         titleLabel.frame = NSRect(x: 20, y: size.height - 30, width: 400, height: 22)
         titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         v.addSubview(titleLabel)
 
-        let descLabel = NSTextField(labelWithString: "编辑翻译指令与输出格式。修改后点击窗口底部「保存并应用」使更改生效。")
+        let descLabel = NSTextField(labelWithString: "在「默认模板」与「自定义模板」之间切换。修改后点击窗口底部「保存并应用」使更改生效。")
         descLabel.frame = NSRect(x: 20, y: size.height - 52, width: w - 40, height: 16)
         descLabel.font = .systemFont(ofSize: 11)
         descLabel.textColor = .secondaryLabelColor
         v.addSubview(descLabel)
 
-        let tvH = size.height - 80
+        let seg = NSSegmentedControl(labels: ["默认模板", "自定义模板"], trackingMode: .selectOne, target: self, action: #selector(templateModeChanged(_:)))
+        seg.frame = NSRect(x: 20, y: size.height - 80, width: 200, height: 24)
+        seg.segmentStyle = .rounded
+        v.addSubview(seg)
+        templateModeSeg = seg
+
+        let statusLabel = NSTextField(labelWithString: "")
+        statusLabel.frame = NSRect(x: 232, y: size.height - 76, width: w - 252, height: 16)
+        statusLabel.font = .systemFont(ofSize: 11)
+        statusLabel.textColor = .secondaryLabelColor
+        v.addSubview(statusLabel)
+        templateModeStatusLabel = statusLabel
+
+        let tvH = size.height - 132
         let scrollView = NSScrollView(frame: NSRect(x: 20, y: 20, width: w - 40, height: tvH))
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
@@ -847,17 +879,48 @@ final class SettingsWindowController: NSObject {
         scrollView.drawsBackground = true
 
         let textView = ShortcutTextView(frame: NSRect(origin: .zero, size: scrollView.contentSize))
-        textView.isEditable = true
         textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         textView.isRichText = false
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
-        textView.string = SettingsManager.shared.systemPrompt
         scrollView.documentView = textView
         v.addSubview(scrollView)
         templateTextView = textView
 
+        let usesDefault = SettingsManager.shared.usesDefaultPrompt
+        seg.selectedSegment = usesDefault ? 0 : 1
+        applyTemplateMode(usesDefault: usesDefault)
+
         return v
+    }
+
+    @objc private func templateModeChanged(_ sender: NSSegmentedControl) {
+        applyTemplateMode(usesDefault: sender.selectedSegment == 0)
+    }
+
+    /// 模板编辑视图应显示的内容：自定义态且有自定义内容 → 自定义；否则内置默认。
+    static func templateContent(usesDefault: Bool, custom: String?, defaultPrompt: String) -> String {
+        if !usesDefault, let c = custom, !c.isEmpty { return c }
+        return defaultPrompt
+    }
+
+    /// 保存时的决策：根据当前态与编辑内容，决定写什么状态。
+    static func resolveTemplateSave(usesDefault: Bool, content: String) -> TemplateSaveAction {
+        if usesDefault { return .keepDefault }
+        if content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .clearCustom }
+        return .saveCustom(content)
+    }
+
+    /// 切换模板编辑视图：默认态只读展示内置模板，自定义态可编辑（初始值 = 内置模板）。
+    private func applyTemplateMode(usesDefault: Bool) {
+        let settings = SettingsManager.shared
+        templateTextView?.string = Self.templateContent(
+            usesDefault: usesDefault,
+            custom: settings.customPrompt,
+            defaultPrompt: settings.defaultPrompt
+        )
+        templateTextView?.isEditable = !usesDefault
+        templateModeStatusLabel?.stringValue = usesDefault ? "内置默认模板（只读）" : "自定义模板（可编辑）"
     }
 }
 

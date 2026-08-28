@@ -136,16 +136,114 @@ func runSettingsManagerTests() {
     }
 
     test("systemPrompt returns default when not customized") {
-        // Ensure no custom prompt is set
         UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt")
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt.custom")
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt.usesDefault")
         try assertEqual(SettingsManager.shared.systemPrompt, SettingsManager.shared.defaultPrompt)
     }
 
-    test("systemPrompt returns custom when set") {
-        let custom = "Custom prompt"
-        defer { UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt") }
-        SettingsManager.shared.systemPrompt = custom
-        try assertEqual(SettingsManager.shared.systemPrompt, custom)
+    test("systemPrompt returns custom when customized via customPrompt") {
+        defer {
+            UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt.custom")
+            UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt.usesDefault")
+        }
+        SettingsManager.shared.customPrompt = "Custom prompt"
+        SettingsManager.shared.usesDefaultPrompt = false
+        try assertEqual(SettingsManager.shared.systemPrompt, "Custom prompt")
+    }
+
+    // ━━━ 模板双态：默认模板（只读）vs 自定义模板（可编辑）━━━━
+
+    test("usesDefaultPrompt defaults to true when unset") {
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt.usesDefault")
+        defer { UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt.usesDefault") }
+        try assertTrue(SettingsManager.shared.usesDefaultPrompt, "未设置时应默认使用默认模板")
+    }
+
+    test("usesDefaultPrompt roundtrip") {
+        defer { UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt.usesDefault") }
+        SettingsManager.shared.usesDefaultPrompt = false
+        try assertFalse(SettingsManager.shared.usesDefaultPrompt)
+        SettingsManager.shared.usesDefaultPrompt = true
+        try assertTrue(SettingsManager.shared.usesDefaultPrompt)
+    }
+
+    test("customPrompt defaults to nil when unset") {
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt.custom")
+        defer { UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt.custom") }
+        try assertNil(SettingsManager.shared.customPrompt as Any?)
+    }
+
+    test("customPrompt roundtrip") {
+        defer { UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt.custom") }
+        SettingsManager.shared.customPrompt = "my custom template"
+        try assertEqual(SettingsManager.shared.customPrompt, "my custom template")
+    }
+
+    test("customPrompt empty string clears to nil") {
+        defer { UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt.custom") }
+        SettingsManager.shared.customPrompt = "x"
+        SettingsManager.shared.customPrompt = ""
+        try assertNil(SettingsManager.shared.customPrompt as Any?)
+    }
+
+    test("systemPrompt returns default when usesDefaultPrompt true even if customPrompt set") {
+        defer {
+            UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt.custom")
+            UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt.usesDefault")
+        }
+        SettingsManager.shared.customPrompt = "custom"
+        SettingsManager.shared.usesDefaultPrompt = true
+        try assertEqual(SettingsManager.shared.systemPrompt, SettingsManager.shared.defaultPrompt)
+    }
+
+    test("systemPrompt returns custom when usesDefaultPrompt false and customPrompt set") {
+        defer {
+            UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt.custom")
+            UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt.usesDefault")
+        }
+        SettingsManager.shared.customPrompt = "custom template"
+        SettingsManager.shared.usesDefaultPrompt = false
+        try assertEqual(SettingsManager.shared.systemPrompt, "custom template")
+    }
+
+    test("systemPrompt falls back to default when usesDefaultPrompt false but customPrompt empty") {
+        defer {
+            UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt.custom")
+            UserDefaults.standard.removeObject(forKey: "snaptranslate.prompt.usesDefault")
+        }
+        SettingsManager.shared.customPrompt = nil
+        SettingsManager.shared.usesDefaultPrompt = false
+        try assertEqual(SettingsManager.shared.systemPrompt, SettingsManager.shared.defaultPrompt)
+    }
+
+    // ━━━ 旧数据迁移：snaptranslate.prompt → customPrompt + usesDefault=false ━━━
+
+    test("migrateLegacyPrompt migrates old prompt and deactivates default") {
+        let ud = UserDefaults.standard
+        defer {
+            ud.removeObject(forKey: "snaptranslate.prompt")
+            ud.removeObject(forKey: "snaptranslate.prompt.custom")
+            ud.removeObject(forKey: "snaptranslate.prompt.usesDefault")
+        }
+        ud.set("old-custom", forKey: "snaptranslate.prompt")
+        SettingsManager.migrateLegacyPrompt()
+        try assertEqual(SettingsManager.shared.customPrompt, "old-custom")
+        try assertFalse(SettingsManager.shared.usesDefaultPrompt, "迁移后应激活自定义模板")
+        try assertNil(ud.string(forKey: "snaptranslate.prompt") as Any?, "迁移后应删除旧 key")
+    }
+
+    test("migrateLegacyPrompt no-op when old prompt empty") {
+        let ud = UserDefaults.standard
+        defer {
+            ud.removeObject(forKey: "snaptranslate.prompt")
+            ud.removeObject(forKey: "snaptranslate.prompt.custom")
+            ud.removeObject(forKey: "snaptranslate.prompt.usesDefault")
+        }
+        ud.removeObject(forKey: "snaptranslate.prompt")
+        SettingsManager.migrateLegacyPrompt()
+        try assertNil(SettingsManager.shared.customPrompt as Any?, "无旧数据时不应产生自定义模板")
+        try assertTrue(SettingsManager.shared.usesDefaultPrompt, "无旧数据时仍应默认使用默认模板")
     }
 
     test("setApiKey stores to Keychain and retrieves via activeApiKey") {

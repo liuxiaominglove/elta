@@ -11,6 +11,8 @@ final class SettingsManager {
     private enum Keys {
         static let apiProvider      = "snaptranslate.apiProvider"
         static let prompt           = "snaptranslate.prompt"
+        static let customPrompt     = "snaptranslate.prompt.custom"
+        static let usesDefaultPrompt = "snaptranslate.prompt.usesDefault"
         static let windowFrame      = "snaptranslate.windowFrame"
         static let hotkeyKeyCode    = "snaptranslate.hotkeyKeyCode"
         static let hotkeyModifiers  = "snaptranslate.hotkeyModifiers"
@@ -40,6 +42,7 @@ final class SettingsManager {
 
     private init() {
         migrateAPIKeysToKeychain()
+        Self.migrateLegacyPrompt()
     }
 
     // MARK: AI 提供商
@@ -176,19 +179,66 @@ final class SettingsManager {
     // MARK: 旧版兼容：迁移旧的单一 apiKey → deepseek
     // 注：旧 `apiKey` 读写不一致（getter 返回当前 provider 的 key、setter 写死 deepseek），且已无调用方，故移除。
 
-    var systemPrompt: String {
+    // MARK: 翻译模板（双态：默认模板只读 / 自定义模板可编辑）
+
+    /// 用户自定义模板（nil / 空串表示未自定义）
+    var customPrompt: String? {
         get {
             lock.lock(); defer { lock.unlock() }
-            if let saved = defaults.string(forKey: Keys.prompt), !saved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return saved
-            }
-            return defaultPrompt
+            return _customPromptUnlocked()
         }
         set {
             lock.lock()
-            defaults.set(newValue, forKey: Keys.prompt)
+            if let v = newValue, !v.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                defaults.set(v, forKey: Keys.customPrompt)
+            } else {
+                defaults.removeObject(forKey: Keys.customPrompt)
+            }
             lock.unlock()
         }
+    }
+
+    /// 当前生效模板是否为内置默认（true=默认，false=自定义）
+    var usesDefaultPrompt: Bool {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            return _usesDefaultPromptUnlocked()
+        }
+        set {
+            lock.lock()
+            defaults.set(newValue, forKey: Keys.usesDefaultPrompt)
+            lock.unlock()
+        }
+    }
+
+    /// 实际生效的翻译模板（只读派生：自定义态且非空 → 自定义；否则默认）
+    var systemPrompt: String {
+        lock.lock(); defer { lock.unlock() }
+        if !_usesDefaultPromptUnlocked(), let c = _customPromptUnlocked() {
+            return c
+        }
+        return defaultPrompt
+    }
+
+    private func _customPromptUnlocked() -> String? {
+        guard let v = defaults.string(forKey: Keys.customPrompt),
+              !v.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return v
+    }
+
+    private func _usesDefaultPromptUnlocked() -> Bool {
+        return defaults.object(forKey: Keys.usesDefaultPrompt) as? Bool ?? true
+    }
+
+    /// 把旧版单一 prompt（snaptranslate.prompt）一次性迁移为「自定义模板 + 激活自定义」。
+    /// 幂等：迁移后删除旧 key，下次不再触发。
+    static func migrateLegacyPrompt() {
+        let defaults = UserDefaults.standard
+        guard let old = defaults.string(forKey: Keys.prompt),
+              !old.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        defaults.set(old, forKey: Keys.customPrompt)
+        defaults.set(false, forKey: Keys.usesDefaultPrompt)
+        defaults.removeObject(forKey: Keys.prompt)
     }
 
     /// 用户可编辑的默认翻译模板
@@ -202,6 +252,7 @@ final class SettingsManager {
         ## 重要词汇
         单词：音标 ｜ 词性 ｜ 中文释义
         （列出句中较重要的词汇，跳过高中大纲基础词汇）
+        （动词一律以原形列出（如 went → go）；原文为过去式 / 过去分词 / 现在分词时，请在释义中注明原文形态（如「went：go 的过去式」））
 
         ## 常用短语与习语
         短语 / 习语：中文释义
