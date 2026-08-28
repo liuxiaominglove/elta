@@ -465,11 +465,19 @@ final class SettingsWindowController: NSObject {
     // MARK: - Tab 2: Hotkeys
 
     private func buildHotkeysTab(size: NSSize) -> NSView {
-        // 内容比可视区略高，外包 NSScrollView 以容纳新增的「拆分翻译」快捷键行
-        let contentHeight = size.height + 160
-        let v = NSView(frame: NSRect(x: 0, y: 0, width: size.width, height: contentHeight))
+        // 统一垂直节奏：单一 sectionPitch 常量 + 内容驱动高度，避免魔法数字导致的间距不均与底部死区
         let w = size.width
-        let y0 = contentHeight - 30
+        let topMargin: CGFloat = 30
+        let bottomPadding: CGFloat = 16
+        let sectionPitch: CGFloat = 120
+        let infoLabelHeight: CGFloat = 96
+        let infoGap: CGFloat = 20
+        let defaultSplitSegOffset: CGFloat = 55   // 最后一块标题 → 分段控件顶
+        let defaultSplitSegHeight: CGFloat = 28   // 分段控件高
+        // 内容总高 = 顶部留白 + 6 块内容（第 1 块标题 → 第 6 块分段控件底 = 5 间距 + 分段控件偏移/高）+ 提示块间隙 + 提示块高 + 底部留白
+        let contentHeight = topMargin + (sectionPitch * 5 + defaultSplitSegOffset + defaultSplitSegHeight) + infoGap + infoLabelHeight + bottomPadding
+        let v = NSView(frame: NSRect(x: 0, y: 0, width: size.width, height: contentHeight))
+        let y0 = contentHeight - topMargin
 
         // ---- 1. Screenshot hotkey ----
         let titleLabel = NSTextField(labelWithString: "📸 截图翻译快捷键")
@@ -484,15 +492,15 @@ final class SettingsWindowController: NSObject {
         v.addSubview(descLabel)
 
         let currentDisplay = SettingsManager.shared.hotkeyDisplay
-        let recordBtn = NSButton(title: "    \(currentDisplay)    ", target: screenshotRecorder, action: #selector(HotkeyRecorder.start))
-        recordBtn.frame = NSRect(x: 20, y: y0 - 80, width: 180, height: 42)
+        let recordBtn = NSButton(title: "  \(currentDisplay)  ", target: screenshotRecorder, action: #selector(HotkeyRecorder.start))
+        recordBtn.frame = NSRect(x: 20, y: y0 - 65, width: 180, height: 32)
         recordBtn.bezelStyle = .rounded
-        recordBtn.font = .systemFont(ofSize: 20, weight: .medium)
+        recordBtn.font = .systemFont(ofSize: 18, weight: .medium)
         v.addSubview(recordBtn)
         screenshotRecorder.recordBtn = recordBtn
 
         let statusLabel = NSTextField(labelWithString: "点击上方按钮开始录制新快捷键")
-        statusLabel.frame = NSRect(x: 210, y: y0 - 88, width: w - 230, height: 48)
+        statusLabel.frame = NSRect(x: 210, y: y0 - 78, width: w - 230, height: 48)
         statusLabel.font = .systemFont(ofSize: 12)
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.lineBreakMode = .byWordWrapping
@@ -500,7 +508,7 @@ final class SettingsWindowController: NSObject {
         screenshotRecorder.statusLabel = statusLabel
 
         // ---- 2. Selection hotkey ----
-        let selY = y0 - 150
+        let selY = y0 - sectionPitch
         let sTitle = NSTextField(labelWithString: "📝 划词翻译快捷键")
         sTitle.frame = NSRect(x: 20, y: selY, width: 300, height: 22)
         sTitle.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -513,15 +521,15 @@ final class SettingsWindowController: NSObject {
         v.addSubview(sDesc)
 
         let selDisplay = SettingsManager.shared.selectionHotkeyDisplay
-        let selRecordBtn = NSButton(title: "    \(selDisplay)    ", target: selectionRecorder, action: #selector(HotkeyRecorder.start))
-        selRecordBtn.frame = NSRect(x: 20, y: selY - 80, width: 180, height: 42)
+        let selRecordBtn = NSButton(title: "  \(selDisplay)  ", target: selectionRecorder, action: #selector(HotkeyRecorder.start))
+        selRecordBtn.frame = NSRect(x: 20, y: selY - 65, width: 180, height: 32)
         selRecordBtn.bezelStyle = .rounded
-        selRecordBtn.font = .systemFont(ofSize: 20, weight: .medium)
+        selRecordBtn.font = .systemFont(ofSize: 18, weight: .medium)
         v.addSubview(selRecordBtn)
         selectionRecorder.recordBtn = selRecordBtn
 
         let selStatus = NSTextField(labelWithString: "点击上方按钮开始录制新快捷键")
-        selStatus.frame = NSRect(x: 210, y: selY - 88, width: w - 230, height: 48)
+        selStatus.frame = NSRect(x: 210, y: selY - 78, width: w - 230, height: 48)
         selStatus.font = .systemFont(ofSize: 12)
         selStatus.textColor = .secondaryLabelColor
         selStatus.lineBreakMode = .byWordWrapping
@@ -529,7 +537,7 @@ final class SettingsWindowController: NSObject {
         selectionRecorder.statusLabel = selStatus
 
         // ---- 3. Close panel hotkey ----
-        let escY = selY - 175
+        let escY = selY - sectionPitch
         let escTitle = NSTextField(labelWithString: "🚪 关闭翻译面板")
         escTitle.frame = NSRect(x: 20, y: escY, width: 300, height: 22)
         escTitle.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -557,7 +565,7 @@ final class SettingsWindowController: NSObject {
         closePanelRecorder.statusLabel = escStatus
 
         // ---- 4. Toggle panel position ----
-        let toggleY = escY - 120
+        let toggleY = escY - sectionPitch
         let toggleTitle = NSTextField(labelWithString: "↔️ 切换弹窗位置")
         toggleTitle.frame = NSRect(x: 20, y: toggleY, width: 300, height: 22)
         toggleTitle.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -585,7 +593,7 @@ final class SettingsWindowController: NSObject {
         togglePanelRecorder.statusLabel = toggleStatus
 
         // ---- 5. Split translation hotkey ----
-        let splitY = toggleY - 120
+        let splitY = toggleY - sectionPitch
         let splitTitle = NSTextField(labelWithString: "🔀 拆分翻译")
         splitTitle.frame = NSRect(x: 20, y: splitY, width: 300, height: 22)
         splitTitle.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -613,7 +621,7 @@ final class SettingsWindowController: NSObject {
         splitRecorder.statusLabel = splitStatus
 
         // ---- 6. 默认优先弹窗模式 ----
-        let defaultSplitY = splitY - 135
+        let defaultSplitY = splitY - sectionPitch
         let defaultSplitTitle = NSTextField(labelWithString: "🎯 默认优先弹窗")
         defaultSplitTitle.frame = NSRect(x: 20, y: defaultSplitY, width: 300, height: 22)
         defaultSplitTitle.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -627,7 +635,7 @@ final class SettingsWindowController: NSObject {
 
         let defaultSplitSeg = NSSegmentedControl(labels: ["整段", "拆分"], trackingMode: .selectOne,
                                                  target: nil, action: nil)
-        defaultSplitSeg.frame = NSRect(x: 20, y: defaultSplitY - 55, width: 180, height: 28)
+        defaultSplitSeg.frame = NSRect(x: 20, y: defaultSplitY - defaultSplitSegOffset, width: 180, height: defaultSplitSegHeight)
         defaultSplitSeg.segmentStyle = .rounded
         defaultSplitSeg.selectedSegment = SettingsManager.shared.defaultSplitMode ? 1 : 0
         v.addSubview(defaultSplitSeg)
@@ -642,7 +650,7 @@ final class SettingsWindowController: NSObject {
         • 切换弹窗：翻译浮动面板显示时，按下快捷键可在左右侧之间切换
         • 拆分翻译：翻译浮动面板显示时，按快捷键可在「整段 / 拆分」之间切换
         """)
-        infoLabel.frame = NSRect(x: 20, y: 10, width: w - 40, height: 96)
+        infoLabel.frame = NSRect(x: 20, y: defaultSplitY - defaultSplitSegOffset - defaultSplitSegHeight - infoGap - infoLabelHeight, width: w - 40, height: infoLabelHeight)
         infoLabel.font = .systemFont(ofSize: 11)
         infoLabel.textColor = .secondaryLabelColor
         infoLabel.lineBreakMode = .byWordWrapping
@@ -792,15 +800,15 @@ final class SettingsWindowController: NSObject {
         settings.defaultSplitMode = true
         defaultSplitSeg?.selectedSegment = 1
 
-        screenshotRecorder.recordBtn?.title = "    ⌃T    "
+        screenshotRecorder.recordBtn?.title = "  ⌃T  "
         screenshotRecorder.statusLabel?.stringValue = "已恢复默认快捷键 ⌃T"
-        selectionRecorder.recordBtn?.title = "    ⇧⌃T    "
+        selectionRecorder.recordBtn?.title = "  ⇧⌃T  "
         selectionRecorder.statusLabel?.stringValue = "已恢复默认快捷键 ⇧⌃T"
-        closePanelRecorder.recordBtn?.title = "    Esc    "
+        closePanelRecorder.recordBtn?.title = "  Esc  "
         closePanelRecorder.statusLabel?.stringValue = "已恢复默认快捷键 Esc"
-        togglePanelRecorder.recordBtn?.title = "    `    "
+        togglePanelRecorder.recordBtn?.title = "  `  "
         togglePanelRecorder.statusLabel?.stringValue = "已恢复默认快捷键 `"
-        splitRecorder.recordBtn?.title = "    ⌃D    "
+        splitRecorder.recordBtn?.title = "  ⌃D  "
         splitRecorder.statusLabel?.stringValue = "已恢复默认快捷键 ⌃D"
 
         screenshotRecorder.reset()
@@ -1024,7 +1032,7 @@ final class HotkeyRecorder: NSObject {
         }
 
         let display = hotkeyDisplayString(keyCode: recordedKeyCode ?? 0, modifiers: recordedModifiers)
-        recordBtn?.title = "    \(display)    "
+        recordBtn?.title = "  \(display)  "
         recordBtn?.bezelColor = .systemGreen
         var status = "✅ 已录制：\(display)\n点击「保存并应用」使快捷键生效"
         if let conflict = checkSystemHotkeyConflict(modifiers: recordedModifiers, keyCode: recordedKeyCode ?? 0) {
@@ -1047,7 +1055,7 @@ final class HotkeyRecorder: NSObject {
             monitor = nil
         }
         let display = defaultDisplay()
-        recordBtn?.title = "    \(display)    "
+        recordBtn?.title = "  \(display)  "
         recordBtn?.bezelColor = nil
         statusLabel?.stringValue = "录制超时，请重试"
     }
