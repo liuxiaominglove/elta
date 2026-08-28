@@ -149,16 +149,40 @@ final class TranslationPipeline {
     }
 
     /// 从指定元素提取选中文本（通用逻辑）
+    /// 针对浏览器（Chrome 等）跨节点/多行选区：沿 AX 父链向上遍历，
+    /// 因为浏览器把跨节点选区暴露在 AXWebArea（文档层），而非某个聚焦的文本节点。
     private func extractSelectedText(from element: AXUIElement) -> String? {
+        var current: AXUIElement? = element
+        for depth in 0..<10 {
+            guard let node = current else { break }
+            if let text = Self.selectedText(from: node) {
+                logi("Accessibility：获取选中文本 \(text.count) 字符（role=\(Self.role(of: node)), depth=\(depth)）")
+                return text
+            }
+            // 向上找父元素（浏览器跨节点选区暴露在 AXWebArea 层）
+            var parentRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(node, kAXParentAttribute as CFString, &parentRef) == .success,
+                  let parentRef = parentRef else {
+                break
+            }
+            let parent = parentRef as! AXUIElement
+            if CFEqual(parent, node) { break }  // 父指向自己，防死循环
+            current = parent
+        }
+        logi("Accessibility：未找到任何文本（含祖先遍历）")
+        return nil
+    }
+
+    /// 从单个 AX 元素读取选中文本（不含祖先遍历）
+    private static func selectedText(from element: AXUIElement) -> String? {
         // 先尝试 kAXSelectedTextAttribute
         var selectedValue: CFTypeRef?
         if AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute as CFString, &selectedValue) == .success,
            let text = selectedValue as? String, !text.isEmpty {
-            logi("Accessibility：直接获取选中文本 \(text.count) 字符")
             return text
         }
 
-        // 兜底：尝试 kAXValueAttribute，再过滤选中的部分
+        // 兜底：kAXValueAttribute + kAXSelectedTextRangeAttribute 截取选中部分
         var valueRef: CFTypeRef?
         if AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &valueRef) == .success,
            let fullText = valueRef as? String, !fullText.isEmpty {
@@ -169,16 +193,21 @@ final class TranslationPipeline {
                 var range = CFRange(location: 0, length: 0)
                 if AXValueGetValue(axValue, .cfRange, &range),
                    let selected = Self.substringInRange(fullText, cfLocation: range.location, cfLength: range.length) {
-                    logi("Accessibility：按范围截取选中文本 \(selected.count) 字符")
                     return selected
                 }
             }
-            logi("Accessibility：无选中范围，回退到 Cmd+C")
-            return nil
         }
-
-        logi("Accessibility：未找到任何文本")
         return nil
+    }
+
+    /// 读取 AX 元素角色（用于诊断日志）
+    private static func role(of element: AXUIElement) -> String {
+        var ref: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &ref) == .success,
+           let role = ref as? String {
+            return role
+        }
+        return "?"
     }
 
     /// 从 fullText 按 CFRange 截取子串，范围无效时返回 nil
@@ -376,6 +405,10 @@ final class TranslationPipeline {
            !oldTextItems.contains(newText) {
             selectedText = newText
             logi("Cmd+C 获取成功（兜底读取）")
+        }
+
+        if selectedText == nil {
+            logi("Cmd+C 兜底失败：oldChangeCount=\(oldChangeCount) → finalChangeCount=\(pasteboard.changeCount)，剪贴板当前文本长度=\(pasteboard.string(forType: .string)?.count ?? -1)")
         }
 
         // 恢复旧剪贴板（保留所有类型；空快照则恢复成空，清除 Cmd+C 残留）
