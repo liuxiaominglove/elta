@@ -44,6 +44,8 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
     private var splitTap: CFMachPort?
     private var splitRunLoopSource: CFRunLoopSource?
     private var splitControl: NSSegmentedControl?
+    private var fontMinusButton: NSButton?
+    private var fontPlusButton: NSButton?
     private var currentMarkdown = ""
     private var currentOriginalText = ""
     private var isSplitMode = false
@@ -227,14 +229,35 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
         reloadWebView()
     }
 
+    @objc private func increaseFontSize() {
+        let s = SettingsManager.shared
+        s.popupFontSize = min(s.popupFontSize + 1, SettingsManager.popupFontSizeMax)
+        reloadWebView()
+        updateFontButtonStates()
+    }
+
+    @objc private func decreaseFontSize() {
+        let s = SettingsManager.shared
+        s.popupFontSize = max(s.popupFontSize - 1, SettingsManager.popupFontSizeMin)
+        reloadWebView()
+        updateFontButtonStates()
+    }
+
+    private func updateFontButtonStates() {
+        let size = SettingsManager.shared.popupFontSize
+        fontMinusButton?.isEnabled = size > SettingsManager.popupFontSizeMin
+        fontPlusButton?.isEnabled = size < SettingsManager.popupFontSizeMax
+    }
+
     private func reloadWebView() {
         guard let wv = webView else { return }
         let isDark = NSApp.effectiveAppearance.name == .darkAqua
+        let fontSize = SettingsManager.shared.popupFontSize
         let html: String
         if isSplitMode {
-            html = HTMLRenderer.renderSplit(markdown: currentMarkdown, originalText: currentOriginalText, isDark: isDark)
+            html = HTMLRenderer.renderSplit(markdown: currentMarkdown, originalText: currentOriginalText, isDark: isDark, fontSize: fontSize)
         } else {
-            html = HTMLRenderer.render(markdown: currentMarkdown, originalText: currentOriginalText, isDark: isDark)
+            html = HTMLRenderer.render(markdown: currentMarkdown, originalText: currentOriginalText, isDark: isDark, fontSize: fontSize)
         }
         wv.loadHTMLString(html, baseURL: nil)
     }
@@ -283,14 +306,33 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             toolbar.addSubview(seg)
             self.splitControl = seg
 
+            // 右上角字号调整按钮（A− / A＋）
+            let plusBtn = NSButton(title: "A＋", target: self, action: #selector(self.increaseFontSize))
+            plusBtn.bezelStyle = .rounded
+            plusBtn.setButtonType(.momentaryPushIn)
+            plusBtn.frame = NSRect(x: toolbar.bounds.width - 12 - 60, y: 6, width: 60, height: 24)
+            plusBtn.autoresizingMask = [.minXMargin]
+            toolbar.addSubview(plusBtn)
+            self.fontPlusButton = plusBtn
+
+            let minusBtn = NSButton(title: "A−", target: self, action: #selector(self.decreaseFontSize))
+            minusBtn.bezelStyle = .rounded
+            minusBtn.setButtonType(.momentaryPushIn)
+            minusBtn.frame = NSRect(x: toolbar.bounds.width - 12 - 60 - 8 - 60, y: 6, width: 60, height: 24)
+            minusBtn.autoresizingMask = [.minXMargin]
+            toolbar.addSubview(minusBtn)
+            self.fontMinusButton = minusBtn
+            self.updateFontButtonStates()
+
+            let fontSize = SettingsManager.shared.popupFontSize
             let wv = ResultWebView(frame: NSRect(x: 0, y: 0, width: frame.width, height: frame.height - toolbarHeight),
                                    configuration: config)
             wv.autoresizingMask = [.width, .height]
             wv.setValue(false, forKey: "drawsBackground")
             let isDark = NSApp.effectiveAppearance.name == .darkAqua
             wv.loadHTMLString(startSplit
-                ? HTMLRenderer.renderSplit(markdown: markdown, originalText: originalText, isDark: isDark)
-                : HTMLRenderer.render(markdown: markdown, originalText: originalText, isDark: isDark),
+                ? HTMLRenderer.renderSplit(markdown: markdown, originalText: originalText, isDark: isDark, fontSize: fontSize)
+                : HTMLRenderer.render(markdown: markdown, originalText: originalText, isDark: isDark, fontSize: fontSize),
                 baseURL: nil)
 
             container.addSubview(wv)
@@ -317,6 +359,8 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
             self.panel = nil
             self.webView = nil
             self.splitControl = nil
+            self.fontMinusButton = nil
+            self.fontPlusButton = nil
             self.isSplitMode = false
         }
     }
@@ -351,6 +395,8 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
         panel = nil
         webView = nil
         splitControl = nil
+        fontMinusButton = nil
+        fontPlusButton = nil
         isSplitMode = false
     }
 
@@ -369,20 +415,20 @@ struct MarkdownSection {
 }
 
 final class HTMLRenderer {
-    static func render(markdown: String, originalText: String, isDark: Bool) -> String {
+    static func render(markdown: String, originalText: String, isDark: Bool, fontSize: Int = SettingsManager.popupFontSizeDefault) -> String {
         let body = markdownBodyToHTML(markdown)
-        return shell(body: body, originalBox: originalBoxHTML(originalText), isDark: isDark)
+        return shell(body: body, originalBox: originalBoxHTML(originalText), isDark: isDark, fontSize: fontSize)
     }
 
     /// 拆分翻译视图：把「中文翻译」章节按句拆分，与原文逐句对照；其余章节（词汇/短语/核查）原样保留。
     /// 不重新请求 AI；若译文无「中文翻译」章节（自定义模板）或拆分结果为空，则回退整段渲染。
-    static func renderSplit(markdown: String, originalText: String, isDark: Bool) -> String {
+    static func renderSplit(markdown: String, originalText: String, isDark: Bool, fontSize: Int = SettingsManager.popupFontSizeDefault) -> String {
         guard canSplit(markdown: markdown, originalText: originalText) else {
-            return render(markdown: markdown, originalText: originalText, isDark: isDark)
+            return render(markdown: markdown, originalText: originalText, isDark: isDark, fontSize: fontSize)
         }
         let sections = parseSections(markdown)
         guard let transSection = sections.first(where: { $0.heading?.contains("中文翻译") == true }) else {
-            return render(markdown: markdown, originalText: originalText, isDark: isDark)
+            return render(markdown: markdown, originalText: originalText, isDark: isDark, fontSize: fontSize)
         }
         let pairs = SentenceSplitter.pair(original: originalText, translation: transSection.body)
 
@@ -414,7 +460,7 @@ final class HTMLRenderer {
         let otherMarkdown = otherSections.map { "## \($0.heading!)\n\($0.body)" }.joined(separator: "\n\n")
         let otherHTML = otherMarkdown.isEmpty ? "" : markdownBodyToHTML(otherMarkdown)
 
-        return shell(body: splitHTML + otherHTML, originalBox: nil, isDark: isDark)
+        return shell(body: splitHTML + otherHTML, originalBox: nil, isDark: isDark, fontSize: fontSize)
     }
 
     /// 判定当前内容是否适合拆分翻译：有「中文翻译」章节、非表格、且能拆出 ≥2 句
@@ -497,29 +543,29 @@ final class HTMLRenderer {
         return "<strong>📝 原文：</strong><br>\(escaped)"
     }
 
-    /// 公共 HTML 外壳（head/CSS/body 结构 + footer）
-    private static func shell(body: String, originalBox: String?, isDark: Bool) -> String {
+    /// 公共 HTML 外壳（head/CSS/body 结构 + footer）。fontSize 为根字号（px），其余字号按 rem 相对缩放。
+    private static func shell(body: String, originalBox: String?, isDark: Bool, fontSize: Int) -> String {
         let themeClass = isDark ? "dark" : "light"
         let originalBoxHTML = originalBox.map { "<div class=\"original-box\">\($0)</div>" } ?? ""
         return """
         <!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
         <style>
-            :root{color-scheme:light dark}*{box-sizing:border-box;margin:0;padding:0}
-            body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.7;padding:0}
+            :root{color-scheme:light dark}html{font-size:\(fontSize)px}*{box-sizing:border-box;margin:0;padding:0}
+            body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;font-size:1rem;line-height:1.7;padding:0}
             body.light{color:#1d1d1f;background:#fff}
             body.dark{color:#e5e5e7;background:#1c1c1e}
-            .original-box{position:sticky;top:0;z-index:10;border-bottom:1px solid;padding:14px 24px;font-size:15px;font-style:italic;max-height:50vh;overflow-y:auto;overflow-wrap:break-word}
+            .original-box{position:sticky;top:0;z-index:10;border-bottom:1px solid;padding:14px 24px;font-size:1.07rem;font-style:italic;max-height:50vh;overflow-y:auto;overflow-wrap:break-word}
             body.light .original-box{background:#e8f0fe;border-bottom-color:#b8d4fe;color:#1a3a6b}
             body.dark .original-box{background:#1c1c1e;border-bottom-color:#3a3a3c;color:#e5e5e7}
             .content{padding:18px 24px 20px}
-            h2{font-size:17px;font-weight:600;margin:20px 0 12px;padding-bottom:8px;border-bottom:2px solid #0071e3}
+            h2{font-size:1.21rem;font-weight:600;margin:20px 0 12px;padding-bottom:8px;border-bottom:2px solid #0071e3}
             body.dark h2{color:#fff;border-bottom-color:#0a84ff}
-            code{padding:2px 6px;border-radius:4px;font-family:"SF Mono",Menlo,monospace;font-size:13px}
+            code{padding:2px 6px;border-radius:4px;font-family:"SF Mono",Menlo,monospace;font-size:0.93rem}
             body.light code{background:#f0f0f2;color:#9b4d1c}
             body.dark code{background:#3a3a3c;color:#ff9f0a}
             body.light strong{color:#0071e3}
             body.dark strong{color:#5eafff}
-            blockquote{border-left:4px solid;padding:10px 16px;margin:8px 0 12px;border-radius:0 8px 8px 0;font-size:15px}
+            blockquote{border-left:4px solid;padding:10px 16px;margin:8px 0 12px;border-radius:0 8px 8px 0;font-size:1.07rem}
             body.light blockquote{background:#f9f9fb;border-left-color:#0071e3;color:#3a3a3c}
             body.dark blockquote{background:#2c2c2e;border-left-color:#0a84ff;color:#c0c0c5}
             .split-list{display:flex;flex-direction:column;gap:10px;margin:8px 0 4px}
@@ -532,13 +578,13 @@ final class HTMLRenderer {
             .split-translation{overflow-wrap:break-word}
             body.light .split-translation{color:#1d1d1f}
             body.dark .split-translation{color:#e5e5e7}
-            .split-warning{padding:10px 14px;margin:0 0 8px;border-radius:8px;font-size:13px;border:1px solid}
+            .split-warning{padding:10px 14px;margin:0 0 8px;border-radius:8px;font-size:0.93rem;border:1px solid}
             body.light .split-warning{background:#fff3cd;color:#8a6d3b;border-color:#ffe08a}
             body.dark .split-warning{background:#3a2f00;color:#ffd75e;border-color:#5c4a00}
-            table{width:100%;border-collapse:collapse;margin:10px 0 16px;font-size:13px}th{padding:10px 12px;text-align:left;font-weight:600}td{padding:8px 12px;border-bottom:1px solid;vertical-align:top}
+            table{width:100%;border-collapse:collapse;margin:10px 0 16px;font-size:0.93rem}th{padding:10px 12px;text-align:left;font-weight:600}td{padding:8px 12px;border-bottom:1px solid;vertical-align:top}
             body.light th{background:#f5f5f7;color:#1d1d1f}body.light td{border-color:#e5e5e7;color:#1d1d1f}
             body.dark th{background:#2c2c2e;color:#fff}body.dark td{border-color:#3a3a3c;color:#e5e5e7}
-            p{margin:6px 0}ul,ol{margin:8px 0;padding-left:20px}li{margin:4px 0}.footer{margin-top:20px;padding-top:12px;border-top:1px solid;font-size:11px;text-align:center}
+            p{margin:6px 0}ul,ol{margin:8px 0;padding-left:20px}li{margin:4px 0}.footer{margin-top:20px;padding-top:12px;border-top:1px solid;font-size:0.79rem;text-align:center}
             body.light .footer{border-top-color:#e5e5e7;color:#86868b}
             body.dark .footer{border-top-color:#3a3a3c;color:#8e8e93}
         </style>

@@ -35,6 +35,8 @@ final class SettingsManager {
         static let splitHotkeyDisplay   = "snaptranslate.splitHotkeyDisplay"
         // 默认优先弹窗模式（true=拆分，false=整段；默认拆分）
         static let defaultSplitMode = "snaptranslate.defaultSplitMode"
+        // 弹窗字号（范围 12–22，默认 14）
+        static let popupFontSize = "snaptranslate.popupFontSize"
         static let skipUpdateVersion = "snaptranslate.skipUpdateVersion"
         static let installID = "snaptranslate.installID"
         static let telemetryEnabled = "snaptranslate.telemetryEnabled"
@@ -400,6 +402,24 @@ final class SettingsManager {
         set {
             lock.lock()
             defaults.set(newValue, forKey: Keys.defaultSplitMode)
+            lock.unlock()
+        }
+    }
+
+    /// 弹窗字号：最小 12，最大 22，默认 14（超出范围自动夹紧）
+    static let popupFontSizeMin = 12
+    static let popupFontSizeMax = 22
+    static let popupFontSizeDefault = 14
+
+    var popupFontSize: Int {
+        get {
+            lock.lock(); defer { lock.unlock() }
+            let v = defaults.object(forKey: Keys.popupFontSize) as? Int ?? Self.popupFontSizeDefault
+            return min(max(v, Self.popupFontSizeMin), Self.popupFontSizeMax)
+        }
+        set {
+            lock.lock()
+            defaults.set(min(max(newValue, Self.popupFontSizeMin), Self.popupFontSizeMax), forKey: Keys.popupFontSize)
             lock.unlock()
         }
     }

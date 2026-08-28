@@ -434,4 +434,29 @@ func runHTMLRendererTests() {
         let html = HTMLRenderer.renderSplit(markdown: markdown, originalText: "One. Two.", isDark: false)
         try assertFalse(html.contains("句数不一致"), "句数一致不应显示提示条")
     }
+
+    // MARK: - 弹窗字号缩放（fontSize 参数 + rem 相对字号）
+
+    test("render defaults to 14px root font-size") {
+        let html = HTMLRenderer.render(markdown: "## 中文翻译\n\n你好", originalText: "Hi", isDark: false)
+        try assertTrue(html.contains("font-size:14px"), "默认根字号应为 14px")
+    }
+
+    test("render emits root font-size matching fontSize param") {
+        let html = HTMLRenderer.render(markdown: "## 中文翻译\n\n你好", originalText: "Hi", isDark: false, fontSize: 20)
+        try assertTrue(html.contains("font-size:20px"), "根字号应随 fontSize 参数变化")
+    }
+
+    test("render body uses relative 1rem not fixed px") {
+        let html = HTMLRenderer.render(markdown: "## 中文翻译\n\n你好", originalText: "Hi", isDark: false, fontSize: 20)
+        let bodyRule = try assertNotNil(cssRule("body", in: html), "应存在 body 规则")
+        try assertTrue(bodyRule.contains("font-size:1rem"), "body 应用 1rem 相对字号")
+        try assertFalse(bodyRule.contains("font-size:14px"), "body 不应再写死 14px")
+    }
+
+    test("renderSplit emits root font-size matching fontSize param") {
+        let markdown = "## 中文翻译\n\n你好。世界。"
+        let html = HTMLRenderer.renderSplit(markdown: markdown, originalText: "Hello. World.", isDark: false, fontSize: 18)
+        try assertTrue(html.contains("font-size:18px"), "拆分渲染也应支持字号缩放")
+    }
 }

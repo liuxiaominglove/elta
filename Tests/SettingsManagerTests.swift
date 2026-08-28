@@ -498,4 +498,29 @@ func runSettingsManagerTests() {
         try assertTrue(SettingsManager.shared.defaultSplitMode)
         UserDefaults.standard.removeObject(forKey: "snaptranslate.defaultSplitMode")
     }
+
+    // ━━━ 弹窗字号（popupFontSize，默认 14，范围 12–22）━━━━
+
+    test("popupFontSize defaults to 14 when unset") {
+        UserDefaults.standard.removeObject(forKey: "snaptranslate.popupFontSize")
+        try assertEqual(SettingsManager.shared.popupFontSize, 14)
+    }
+
+    test("popupFontSize persists in-range value") {
+        defer { UserDefaults.standard.removeObject(forKey: "snaptranslate.popupFontSize") }
+        SettingsManager.shared.popupFontSize = 18
+        try assertEqual(SettingsManager.shared.popupFontSize, 18)
+    }
+
+    test("popupFontSize clamps high value to max 22") {
+        defer { UserDefaults.standard.removeObject(forKey: "snaptranslate.popupFontSize") }
+        SettingsManager.shared.popupFontSize = 30
+        try assertEqual(SettingsManager.shared.popupFontSize, 22)
+    }
+
+    test("popupFontSize clamps low value to min 12") {
+        defer { UserDefaults.standard.removeObject(forKey: "snaptranslate.popupFontSize") }
+        SettingsManager.shared.popupFontSize = 1
+        try assertEqual(SettingsManager.shared.popupFontSize, 12)
+    }
 }
