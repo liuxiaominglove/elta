@@ -35,9 +35,14 @@ final class TranslationPipeline {
 
     func start() {
         logi("===== 翻译流水线开始 =====")
-        // 检查是否已有翻译弹窗或正在加载：避免新任务覆盖加载中状态、导致 loading 面板滞留
-        guard !ResultWindowController.shared.isPanelVisible, loadingPanel == nil else {
+        // 已有结果弹窗：提示先关闭（结果面板有关闭按钮，提示成立）
+        guard !ResultWindowController.shared.isPanelVisible else {
             showAlert("请先关闭上一个翻译弹窗", "关闭后即可开始新翻译。\n按 ESC 或点击弹窗左上角关闭按钮即可。")
+            return
+        }
+        // 已有翻译任务加载中：静默忽略，避免新任务覆盖加载中状态；不弹模态框以免阻断 loading 的 ESC 取消
+        guard loadingPanel == nil else {
+            logi("翻译任务加载中，忽略本次截图翻译请求")
             return
         }
         // 屏幕录制权限（截图翻译）：首次未授权触发 TCC 后静默中止，只留系统弹窗
@@ -273,9 +278,14 @@ final class TranslationPipeline {
     /// 划词翻译：读取选中文本 → 直接翻译（跳过截图+OCR）
     func startTextTranslation() {
         logi("===== 划词翻译流水线开始 =====")
-        // 检查是否已有翻译弹窗或正在加载：避免新任务覆盖加载中状态、导致 loading 面板滞留
-        guard !ResultWindowController.shared.isPanelVisible, loadingPanel == nil else {
+        // 已有结果弹窗：提示先关闭（结果面板有关闭按钮，提示成立）
+        guard !ResultWindowController.shared.isPanelVisible else {
             showAlert("请先关闭上一个翻译弹窗", "关闭后即可开始新翻译。\n按 ESC 或点击弹窗左上角关闭按钮即可。")
+            return
+        }
+        // 已有翻译任务加载中：静默忽略，避免新任务覆盖加载中状态；不弹模态框以免阻断 loading 的 ESC 取消
+        guard loadingPanel == nil else {
+            logi("翻译任务加载中，忽略本次划词翻译请求")
             return
         }
         // 辅助功能无法内联授权，未授权时直接弹引导框去系统设置（不依赖不可靠的系统 TCC 框），每次未授权都提示
