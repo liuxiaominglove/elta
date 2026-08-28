@@ -2,6 +2,23 @@
 
 All notable changes to ELTA will be documented in this file.
 
+## [v5.5.5] — 2026-08-29
+
+### Added
+- 翻译模板双态——内置默认模板只读 / 自定义模板可编辑，旧自定义 prompt 自动迁移
+- 弹窗字号可调——翻译面板右上角 A− / A＋ 按钮，12–22 级持久化
+
+### Fixed
+- 划词翻译在浏览器长段落下取不到选中文本——AX 读选沿父链遍历至 AXWebArea
+- 截图翻译入口补 loadingPanel 守卫；原文不再解析 markdown；快捷键 Tab 打开时滚动到顶部
+- 翻译加载中再次触发不再弹模态框，避免阻断 loading 的 ESC 取消
+
+### Changed
+- 快捷键设置页统一垂直节奏——各功能间距统一 120、按钮尺寸一致、内容驱动高度（消除底部留白）
+
+### Chore
+- 纳管 nginx 站点配置（含 HTML no-cache 缓存修复）
+
 ## [v5.5.4] — 2026-08-27
 
 ### Fixed
