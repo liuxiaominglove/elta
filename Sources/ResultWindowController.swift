@@ -447,7 +447,7 @@ final class HTMLRenderer {
         for (idx, pair) in pairs.enumerated() {
             splitHTML += "<div class=\"split-pair\">"
             if !pair.original.isEmpty {
-                splitHTML += "<div class=\"split-original\">\(idx + 1). \(inlineMarkdownToHTML(pair.original))</div>"
+                splitHTML += "<div class=\"split-original\">\(idx + 1). \(plainTextToHTML(pair.original))</div>"
             }
             if !pair.translation.isEmpty {
                 splitHTML += "<div class=\"split-translation\">\(inlineMarkdownToHTML(pair.translation))</div>"
@@ -640,6 +640,11 @@ final class HTMLRenderer {
         html = html.replacingOccurrences(of: "\n", with: "<br>")
         html = html.replacingOccurrences(of: #"\*\*(.+?)\*\*"#, with: "<strong>$1</strong>", options: .regularExpression)
         return restoreInlineCode(html, codes: codes)
+    }
+
+    /// 纯文本 → HTML：只做 HTML 转义 + 换行转 <br>，不解析任何 Markdown（用于原文，原文非 Markdown）
+    static func plainTextToHTML(_ text: String) -> String {
+        escapeHTML(text).replacingOccurrences(of: "\n", with: "<br>")
     }
 
     // MARK: - Markdown 表格 → HTML 表格

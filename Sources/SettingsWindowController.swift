@@ -654,6 +654,8 @@ final class SettingsWindowController: NSObject {
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = false
         scrollView.documentView = v
+        // 非 flipped 文档视图默认停在原点(0,0)即底部；滚动到顶部让「截图翻译」快捷键区首先可见
+        v.scroll(NSPoint(x: 0, y: contentHeight - size.height))
         return scrollView
     }
 

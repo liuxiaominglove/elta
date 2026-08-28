@@ -35,8 +35,8 @@ final class TranslationPipeline {
 
     func start() {
         logi("===== 翻译流水线开始 =====")
-        // 检查是否已有翻译弹窗
-        guard !ResultWindowController.shared.isPanelVisible else {
+        // 检查是否已有翻译弹窗或正在加载：避免新任务覆盖加载中状态、导致 loading 面板滞留
+        guard !ResultWindowController.shared.isPanelVisible, loadingPanel == nil else {
             showAlert("请先关闭上一个翻译弹窗", "关闭后即可开始新翻译。\n按 ESC 或点击弹窗左上角关闭按钮即可。")
             return
         }

@@ -222,7 +222,7 @@ func runHTMLRendererTests() {
     test("render orders original box before translation before vocab before phrases") {
         let markdown = "## 中文翻译\n\n翻译\n\n## 重要词汇\n\n- **word** ｜ n ｜ 词\n\n## 常用短语与习语\n\n- phrase：短语"
         let html = HTMLRenderer.render(markdown: markdown, originalText: "Original", isDark: false)
-        let ob = try assertNotNil(htmlOffset("original-box", in: html), "应存在原文盒")
+        let ob = try assertNotNil(htmlOffset("<div class=\"original-box\">", in: html), "应存在原文盒")
         let t = try assertNotNil(htmlOffset("<h2>中文翻译</h2>", in: html), "应存在译文标题")
         let v = try assertNotNil(htmlOffset("<h2>重要词汇</h2>", in: html), "应存在词汇标题")
         let p = try assertNotNil(htmlOffset("<h2>常用短语与习语</h2>", in: html), "应存在短语标题")
@@ -284,6 +284,13 @@ func runHTMLRendererTests() {
         try assertFalse(html.contains("<script>"), "原文脚本标签应转义")
         try assertTrue(html.contains("&lt;script&gt;"), "原文应转义为实体")
         try assertFalse(html.contains("<b>"), "译文标签应转义")
+    }
+
+    test("renderSplit renders original as plain text, not markdown bold") {
+        let markdown = "## 中文翻译\n\n你好。世界。"
+        let html = HTMLRenderer.renderSplit(markdown: markdown, originalText: "Hello **bold** world. Second.", isDark: false)
+        try assertFalse(html.contains("<strong>bold</strong>"), "原文含 ** 不应被解析为 Markdown 加粗")
+        try assertTrue(html.contains("**bold**"), "原文的 ** 应原样保留")
     }
 
     test("renderSplit falls back to whole mode when no 中文翻译 section") {
