@@ -5,7 +5,7 @@ import Foundation
 // 从源 PNG 生成 macOS AppIcon.icns
 
 let projectDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-let sourcePNG = projectDir.appendingPathComponent("generated-images/ELTA_icon_rounded_v3.png")
+let sourcePNG = projectDir.appendingPathComponent("generated-images/ELTA_icon_rounded_v3_v31.png")
 let outputDir = projectDir.appendingPathComponent("Resources")
 let iconsetDir = outputDir.appendingPathComponent("AppIcon.iconset")
 
