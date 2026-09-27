@@ -19,7 +19,7 @@
 | A5 | HtmlRenderer（markdown→HTML） | ✅ 64 测试 |
 | A6 | SettingsManager / Store / 密钥抽象 | ✅ 84 测试 |
 | C0 | 托盘外壳入口点 + WPF 构建 CI | ✅ 真机编译通过 |
-| B1 | 截图选区（Core 几何 + GDI overlay） | ✅ 260 测试 + 编译过；运行期待 A 机手测 |
+| B1 | 截图选区（Core 几何 + GDI overlay） | ✅ 260 测试 + 编译 + **A 机手测全通过** |
 | B2–B4 | 取词 / OCR / 热键平台服务 | ⬜ 下一步 |
 
 ## 命令
@@ -70,7 +70,10 @@ windows/
 - `Elta.Windows/Program.cs`（`[STAThread]` + WPF `Application` + WinForms `NotifyIcon` 托盘图标/退出菜单）+ `app.manifest`（PerMonitorV2）。
 - CI 已在 windows-latest 真机编译通过（🟡 编译级）。运行期（托盘图标可见）待 A 机手测。
 
-### B1：截图选区 ✅（Core TDD 完成，运行期待手测）
+### B1：截图选区 ✅（含 A 机真机验证）
+- **A 机手测结果（`回传-B1.txt`，Win10 / 双屏扩展 / 100%+150%）**：托盘图标✓、气泡✓、Ctrl+T✓；
+  主屏正向拖拽✓、反向拖拽✓、极小区域取消✓、ESC/右键取消✓、
+  副屏（主屏触发后移过去）✓、副屏（Ctrl+T 触发）✓、150% 缩放✓、无报错。→ B1 收尾。
 - **Core（Mac 可测，TDD）**：`ScreenshotGeometry.cs` —— `NormalizeSelection` / `IsSelectionUsable`（>10）/
   `MapSelectionToImage`（选区→像素裁剪，`originBottomLeft` 区分 mac/Windows，`round` 远离零）/ `IndexOfScreenContaining`。
   20 单测见 `ScreenshotGeometryTests.cs`。
