@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Threading;
 using System.Windows;
 using Forms = System.Windows.Forms;
 
@@ -7,11 +8,17 @@ namespace Elta.Windows
 {
     /// <summary>
     /// ELTA Windows 外壳入口：托盘常驻程序。
-    /// C0：托盘图标 + 退出菜单；B1：截图选区（菜单项，验证 GDI 截图 + 几何裁剪）。
-    /// 后续 B2–B4 接入取词 / OCR / 热键。
+    /// 截图选区 = Ctrl+T；划词翻译 = Ctrl+Shift+T。
+    /// C0 托盘骨架；B1 截图；B2 取词（UIA → Ctrl+C 兜底）。
     /// </summary>
     public static class Program
     {
+        private const uint MOD_CONTROL = 0x0002;
+        private const uint MOD_SHIFT = 0x0004;
+        private const uint VK_T = 0x54;
+        private const int ID_SCREENSHOT = 0x4A17;
+        private const int ID_SELECTION = 0x4A18;
+
         [STAThread]
         public static void Main()
         {
@@ -22,11 +29,15 @@ namespace Elta.Windows
 
             var menu = new Forms.ContextMenuStrip();
 
-            var shotItem = new Forms.ToolStripMenuItem("截图选区（B1 测试 · Ctrl+T）");
+            var shotItem = new Forms.ToolStripMenuItem("截图选区（Ctrl+T）");
             shotItem.Click += (_, _) => RunScreenshot();
             menu.Items.Add(shotItem);
-            menu.Items.Add(new Forms.ToolStripSeparator());
 
+            var selectItem = new Forms.ToolStripMenuItem("划词翻译（Ctrl+Shift+T）");
+            selectItem.Click += (_, _) => RunSelection();
+            menu.Items.Add(selectItem);
+
+            menu.Items.Add(new Forms.ToolStripSeparator());
             var exitItem = new Forms.ToolStripMenuItem("退出 ELTA");
             exitItem.Click += (_, _) => app.Shutdown();
             menu.Items.Add(exitItem);
@@ -39,14 +50,14 @@ namespace Elta.Windows
                 ContextMenuStrip = menu,
             };
 
-            // 全局热键 Ctrl+T：托盘只在主屏可点，副屏触发靠热键（B1 测试临时热键）
             var hotkey = new HotkeyHost();
-            hotkey.Triggered += () => app.Dispatcher.BeginInvoke((Action)RunScreenshot);
+            bool shotKey = hotkey.Register(ID_SCREENSHOT, MOD_CONTROL, VK_T,
+                () => app.Dispatcher.BeginInvoke((Action)RunScreenshot));
+            bool selectKey = hotkey.Register(ID_SELECTION, MOD_CONTROL | MOD_SHIFT, VK_T,
+                () => app.Dispatcher.BeginInvoke((Action)RunSelection));
 
-            tray.ShowBalloonTip(3000, "ELTA",
-                hotkey.Registered
-                    ? "已启动：按 Ctrl+T 截图选区（鼠标在哪块屏就截哪块）"
-                    : "已启动：热键 Ctrl+T 被占用，请用托盘菜单",
+            tray.ShowBalloonTip(3500, "ELTA",
+                $"Ctrl+T 截图；Ctrl+Shift+T 划词{(shotKey && selectKey ? "" : "（部分热键被占用，可用托盘菜单）")}",
                 Forms.ToolTipIcon.Info);
 
             app.Exit += (_, _) =>
@@ -67,6 +78,28 @@ namespace Elta.Windows
 
             using var preview = new PreviewForm(cropped);
             preview.ShowDialog();
+        }
+
+        private static void RunSelection()
+        {
+            // 等用户松开热键（对应 mac 的 RunLoop 0.3s），否则合成的 Ctrl+C 会带上 Shift
+            Thread.Sleep(300);
+
+            string? text = SelectionReader.ReadSelectedText();
+            if (string.IsNullOrEmpty(text))
+            {
+                Forms.MessageBox.Show(
+                    "未取到选中文本。\n请先选中一段文字，再按 Ctrl+Shift+T。",
+                    "ELTA — 划词取词（B2）",
+                    Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Warning);
+                return;
+            }
+
+            string preview = text!.Length > 300 ? text.Substring(0, 300) + "…" : text;
+            Forms.MessageBox.Show(
+                $"取到 {text.Length} 字符：\n\n{preview}",
+                "ELTA — 划词取词（B2）",
+                Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Information);
         }
     }
 }

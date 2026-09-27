@@ -1,22 +1,18 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace Elta.Windows
 {
     /// <summary>
-    /// 全局热键宿主（B1 测试用临时热键 Ctrl+T）。
-    /// 托盘菜单只能在主屏点击（Windows 托盘只在主屏任务栏），无法在副屏触发截图；
-    /// 全局热键让「鼠标停在任何屏」都能触发，<see cref="ScreenshotService"/> 再按
-    /// 鼠标位置选取对应屏幕。正式热键默认值在 B4 统一。
+    /// 全局热键宿主（可注册多个）。托盘图标只在主屏任务栏，副屏/任意前台程序下都靠全局热键触发。
+    /// 用 <see cref="NativeWindow"/> 承载 WM_HOTKEY。B4 会用 SettingsManager 的默认值统一管理。
     /// </summary>
     internal sealed class HotkeyHost : NativeWindow, IDisposable
     {
         private const int WM_HOTKEY = 0x0312;
-        private const uint MOD_CONTROL = 0x0002;
         private const uint MOD_NOREPEAT = 0x4000;
-        private const int HOTKEY_ID = 0x4A17;
-        private const uint VK_T = 0x54;
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -24,25 +20,29 @@ namespace Elta.Windows
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
-        private bool _registered;
-
-        /// <summary>热键是否注册成功（被其他程序占用时为 false，托盘菜单仍可用）。</summary>
-        public bool Registered => _registered;
-
-        public event Action? Triggered;
+        private readonly Dictionary<int, Action> _handlers = new();
+        private readonly List<int> _registered = new();
 
         public HotkeyHost()
         {
             var cp = new CreateParams { Caption = "EltaHotkeyHost", Parent = IntPtr.Zero };
             CreateHandle(cp);
-            _registered = RegisterHotKey(Handle, HOTKEY_ID, MOD_CONTROL | MOD_NOREPEAT, VK_T);
+        }
+
+        /// <summary>注册一个全局热键；返回是否成功（被其他程序占用时为 false）。</summary>
+        public bool Register(int id, uint modifiers, uint virtualKey, Action onTriggered)
+        {
+            if (!RegisterHotKey(Handle, id, modifiers | MOD_NOREPEAT, virtualKey)) return false;
+            _handlers[id] = onTriggered;
+            _registered.Add(id);
+            return true;
         }
 
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == WM_HOTKEY && m.WParam.ToInt32() == HOTKEY_ID)
+            if (m.Msg == WM_HOTKEY && _handlers.TryGetValue(m.WParam.ToInt32(), out Action? handler))
             {
-                Triggered?.Invoke();
+                handler();
                 return;
             }
             base.WndProc(ref m);
@@ -50,11 +50,9 @@ namespace Elta.Windows
 
         public void Dispose()
         {
-            if (_registered)
-            {
-                UnregisterHotKey(Handle, HOTKEY_ID);
-                _registered = false;
-            }
+            foreach (int id in _registered) UnregisterHotKey(Handle, id);
+            _registered.Clear();
+            _handlers.Clear();
             DestroyHandle();
         }
     }
