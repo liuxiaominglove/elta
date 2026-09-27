@@ -18,7 +18,8 @@
 | A4 | TableExtractor | ✅ 14 测试 |
 | A5 | HtmlRenderer（markdown→HTML） | ✅ 64 测试 |
 | A6 | SettingsManager / Store / 密钥抽象 | ✅ 84 测试 |
-| B1–B4 | 截图 / 取词 / 热键 / OCR 平台服务 | ⬜ 需 Windows |
+| C0 | 托盘外壳入口点 + WPF 构建 CI | ✅ 真机编译通过 |
+| B1–B4 | 截图 / 取词 / 热键 / OCR 平台服务 | ⬜ 下一步 |
 
 ## 命令
 ```sh
@@ -26,7 +27,9 @@
 sh windows/test-core.sh
 ```
 - .NET SDK 8.0.425 已**用户级**装在 `~/.dotnet`（无需 sudo）；若 PATH 无 `dotnet`，脚本会自动用 `~/.dotnet/dotnet`。
-- CI：`.github/workflows/windows-ci.yml`（ubuntu + windows 各跑一遍 Core 测试）。
+- CI：`.github/workflows/windows-ci.yml`：ubuntu/windows 各跑 Core 测试 + **windows-latest 构建 Elta.Windows**。
+  → 推送 `windows/**` 即自动真机编译验证外壳（C0 已由此验证通过）；运行期行为仍需真机手测。
+- 真机验证通道：Mac 写代码 → `git push origin main` → Windows A 机 `cd C:\elta-spike && git pull` → `dotnet build windows\src\Elta.Windows -c Release` → 运行。
 
 ## 目录
 ```
@@ -62,13 +65,20 @@ windows/
 
 ## 下一步（按序）
 
+### C0：托盘外壳入口点 ✅
+- `Elta.Windows/Program.cs`（`[STAThread]` + WPF `Application` + WinForms `NotifyIcon` 托盘图标/退出菜单）+ `app.manifest`（PerMonitorV2）。
+- CI 已在 windows-latest 真机编译通过（🟡 编译级）。运行期（托盘图标可见）待 A 机手测。
+
 ### WI-B1–B4：平台服务（Windows 真机）
 - 源：`Sources/ScreenshotEngine.swift`、`OverlayView.swift`、`TranslationPipeline.swift`（取词/剪贴板）、
   `HotkeyHelpers.swift`、`OCREngine.swift`、`Helpers.swift`（PasteboardSnapshot 对应剪贴板快照）。
 - 做法：把可测的**纯逻辑**（坐标/DPI 换算、剪贴板快照序列化、热键解析、OCR 语言策略）放 `Elta.Core` 用假实现单测；
   Win32/WinRT 调用放 `Elta.Windows`，在 Windows 上做集成测试。
+- **建议顺序 B1 截图 → B2 取词 → B3 OCR → B4 热键**（B1 风险最低，P0.5 已铺路）。
 - B4 需同时落地：**Windows 配置存储实现 + 密钥库实现 + Windows 版 `SettingsDefaults`**（A6 只定了接口）。
 - A6 未移植（归 B4/C）：`HotkeyRecorder`（UI）、`computeProviderCardLayout`（UI 布局）。
+- 可复用 P0.5 已验证代码：`windows/spike/SpikeWindow.cs` 的 P/Invoke（`RegisterHotKey`/`SetWindowsHookEx`/
+  `keybd_event`/`MonitorFromPoint`/`GetDpiForMonitor`）、截图、UIA、剪贴板快照。
 
 ## P0.5 已验证结论（真机）
 - 🟢 截图：GDI `CopyFromScreen` + 物理像素换算，100%/150% 均正确；**多屏热切换会错位** → 正式实现要截「鼠标所在屏」。
@@ -79,5 +89,6 @@ windows/
 - Demo 与结果：`windows/spike/`（源码）；结果 txt 另见 U 盘 / `~/relay-handoff/`。
 
 ## 待办 / 风险
-- `Elta.Windows` 目前只有 csproj，**无入口点**，Windows 构建会在加 Main 后才通过（子计划 C 的托盘程序）。
-- 未提交 git；提交前请 `git status` 核对。
+- Windows 仓库策略：**方案 B**——移植期先留 `windows/` 于主仓库，B/C 完成后用 `git subtree split -P windows`
+  拆成独立仓库 `elta-windows`（保留历史）。
+- 运行期验证需 A 机手测（CI 只做编译级）。
