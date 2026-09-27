@@ -19,7 +19,8 @@
 | A5 | HtmlRenderer（markdown→HTML） | ✅ 64 测试 |
 | A6 | SettingsManager / Store / 密钥抽象 | ✅ 84 测试 |
 | C0 | 托盘外壳入口点 + WPF 构建 CI | ✅ 真机编译通过 |
-| B1–B4 | 截图 / 取词 / 热键 / OCR 平台服务 | ⬜ 下一步 |
+| B1 | 截图选区（Core 几何 + GDI overlay） | ✅ 260 测试 + 编译过；运行期待 A 机手测 |
+| B2–B4 | 取词 / OCR / 热键平台服务 | ⬜ 下一步 |
 
 ## 命令
 ```sh
@@ -69,12 +70,26 @@ windows/
 - `Elta.Windows/Program.cs`（`[STAThread]` + WPF `Application` + WinForms `NotifyIcon` 托盘图标/退出菜单）+ `app.manifest`（PerMonitorV2）。
 - CI 已在 windows-latest 真机编译通过（🟡 编译级）。运行期（托盘图标可见）待 A 机手测。
 
-### WI-B1–B4：平台服务（Windows 真机）
+### B1：截图选区 ✅（Core TDD 完成，运行期待手测）
+- **Core（Mac 可测，TDD）**：`ScreenshotGeometry.cs` —— `NormalizeSelection` / `IsSelectionUsable`（>10）/
+  `MapSelectionToImage`（选区→像素裁剪，`originBottomLeft` 区分 mac/Windows，`round` 远离零）/ `IndexOfScreenContaining`。
+  20 单测见 `ScreenshotGeometryTests.cs`。
+- **外壳**：`ScreenCapture.cs`（GDI）、`ScreenshotSelector.cs`（**WinForms** 全屏 overlay，物理像素坐标——
+  刻意不用 WPF Window 以规避多屏 DIP 错位）、`ScreenshotService.cs`、`PreviewForm.cs`；托盘菜单加了「截图选区（B1 测试）」。
+- **A 机手测步骤**：
+  ```
+  cd C:\elta-spike && git pull
+  dotnet run --project windows\src\Elta.Windows -c Release
+  ```
+  右键托盘 → 截图选区 → 拖拽框选 → 弹出预览（标题显示 WxH）；ESC / 右键取消。
+  **重点在双屏 + 150% 缩放下**在**副屏**框选，确认预览内容与所选区域一致（P0.5 曾在此暴露错位）。
+
+### WI-B2–B4：平台服务（Windows 真机）
 - 源：`Sources/ScreenshotEngine.swift`、`OverlayView.swift`、`TranslationPipeline.swift`（取词/剪贴板）、
   `HotkeyHelpers.swift`、`OCREngine.swift`、`Helpers.swift`（PasteboardSnapshot 对应剪贴板快照）。
 - 做法：把可测的**纯逻辑**（坐标/DPI 换算、剪贴板快照序列化、热键解析、OCR 语言策略）放 `Elta.Core` 用假实现单测；
   Win32/WinRT 调用放 `Elta.Windows`，在 Windows 上做集成测试。
-- **建议顺序 B1 截图 → B2 取词 → B3 OCR → B4 热键**（B1 风险最低，P0.5 已铺路）。
+- **建议顺序 B1 截图 ✅ → B2 取词 → B3 OCR → B4 热键**。
 - B4 需同时落地：**Windows 配置存储实现 + 密钥库实现 + Windows 版 `SettingsDefaults`**（A6 只定了接口）。
 - A6 未移植（归 B4/C）：`HotkeyRecorder`（UI）、`computeProviderCardLayout`（UI 布局）。
 - 可复用 P0.5 已验证代码：`windows/spike/SpikeWindow.cs` 的 P/Invoke（`RegisterHotKey`/`SetWindowsHookEx`/
