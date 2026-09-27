@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Automation;
+using System.Windows.Automation.Text;
 using Elta.Core;
 
 namespace Elta.Windows
