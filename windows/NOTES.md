@@ -8,7 +8,7 @@
 （Core 纯逻辑 / 平台外壳 / 共享 HTML）。
 
 ## 当前进度（子计划 A：Mac 可测的 Core）
-已完成 **A1–A4**，Mac 上 **92 个测试全绿**。
+已完成 **A1–A6**，Mac 上 **240 个测试全绿**。**子计划 A 收尾**。
 
 | WI | 内容 | 状态 |
 |----|------|------|
@@ -16,8 +16,8 @@
 | A2 | TextNormalizer / TextPreprocessor / ResponseParser / AIProviders | ✅ 26 测试 |
 | A3 | SentenceSplitter | ✅ 52 测试 |
 | A4 | TableExtractor | ✅ 14 测试 |
-| **A5** | **HtmlRenderer（markdown→HTML）** | ⬜ 下一步 |
-| A6 | SettingsManager / Store / DPAPI 密钥抽象 | ⬜ |
+| A5 | HtmlRenderer（markdown→HTML） | ✅ 64 测试 |
+| A6 | SettingsManager / Store / 密钥抽象 | ✅ 84 测试 |
 | B1–B4 | 截图 / 取词 / 热键 / OCR 平台服务 | ⬜ 需 Windows |
 
 ## 命令
@@ -46,31 +46,29 @@ windows/
 - **字符串模型**：分句用 `char`（UTF-16）；已知与 Swift `Character`(字素) 在 emoji/组合字符上有差异，暂未处理（测试未覆盖）。
 - **JSON**：System.Text.Json。
 - **HTML**：手写移植 `HTMLRenderer`（要与 Mac 输出逐字节对齐，不用 Markdig）。
+  - shell 字面量已脚本比对 Swift 原文，**逐字节一致**（3370 B）。A6 之前 `render`/`renderSplit` 的
+    `providerShortName` 是显式参数（默认 `"DeepSeek"`），待 SettingsManager 落地后由调用方注入。
 - **密钥**：DPAPI（Windows）替代 macOS Keychain。
 - **OCR**：A+B 方案（优先系统 en-US 引擎 → 缺包时引导安装 → 自带兜底引擎）。
 - **取词**：先 UIA（父链遍历）→ 失败回退 Ctrl+C + 剪贴板**深拷贝**恢复。
 - **热键**：组合键 `RegisterHotKey`；裸键（ESC/`）用 `WH_KEYBOARD_LL`。
+- **配置/密钥/默认值分层**（A6 定）：核心原则——**平台「方言」一律下沉到 Windows 外壳，Core 只管机制**。
+  - 配置：Core 只定 `ISettingsStore`；Windows 具体实现（注册表 或 %APPDATA% JSON）留到 B/C。
+  - 密钥：Core 只定 `ISecretStore`；Windows 实现（凭据管理器 CredMan〔更像 mac Keychain〕或 DPAPI 加密文件）留到 B/C。
+  - 默认值：`SettingsDefaults` 参数化——测试用 `MacParity`（对齐 mac，供黄金测试），B4 用
+    `MacParity with { ... }` 注入 Windows 键位/显示（如 `Ctrl+T`、Windows VK）。
+  - 已知差异：`WindowFrame` 序列化为 `x,y,w,h`（invariant），**不兼容** mac `NSRect` 字符串；
+    `installID` 用 `Guid`（小写）vs mac 大写 UUID，行为等价。键名沿用 `snaptranslate.*`。
 
 ## 下一步（按序）
-
-### WI-A5：HtmlRenderer
-- 源：`Sources/ResultWindowController.swift` 的 `HTMLRenderer`（约 409 行起）+
-  `Sources/SentenceSplitter.swift`（拆分视图用）。
-- 黄金测试：`Tests/HTMLRendererTests.swift`。
-- 产出：`windows/src/Elta.Core/HtmlRenderer.cs` + `tests/Elta.Core.Tests/HtmlRendererTests.cs`。
-- 关注：`render` / `renderSplit` / `shouldStartSplit` / `canSplit`；HTML 转义（防注入）；深色/字号参数。
-
-### WI-A6：SettingsManager
-- 源：`Sources/SettingsManager.swift`。
-- 黄金测试：`Tests/SettingsManagerTests.swift`、`Tests/SettingsManagerThreadSafetyTests.swift`。
-- 产出：`SettingsManager.cs` + `SettingsStore.cs`（持久化抽象）+ `ISecretStore.cs`。
-- 关注：默认值、字号夹紧 12–22、旧 prompt 迁移幂等、线程安全、密钥写失败不丢旧值。
 
 ### WI-B1–B4：平台服务（Windows 真机）
 - 源：`Sources/ScreenshotEngine.swift`、`OverlayView.swift`、`TranslationPipeline.swift`（取词/剪贴板）、
   `HotkeyHelpers.swift`、`OCREngine.swift`、`Helpers.swift`（PasteboardSnapshot 对应剪贴板快照）。
 - 做法：把可测的**纯逻辑**（坐标/DPI 换算、剪贴板快照序列化、热键解析、OCR 语言策略）放 `Elta.Core` 用假实现单测；
   Win32/WinRT 调用放 `Elta.Windows`，在 Windows 上做集成测试。
+- B4 需同时落地：**Windows 配置存储实现 + 密钥库实现 + Windows 版 `SettingsDefaults`**（A6 只定了接口）。
+- A6 未移植（归 B4/C）：`HotkeyRecorder`（UI）、`computeProviderCardLayout`（UI 布局）。
 
 ## P0.5 已验证结论（真机）
 - 🟢 截图：GDI `CopyFromScreen` + 物理像素换算，100%/150% 均正确；**多屏热切换会错位** → 正式实现要截「鼠标所在屏」。

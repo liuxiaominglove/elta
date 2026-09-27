@@ -13,6 +13,22 @@ namespace Elta.Core
     /// <summary>提供商的静态元数据与模型选择（不依赖设置持久化，覆盖值由调用方传入）。</summary>
     public static class AIProviders
     {
+        /// <summary>持久化用的原始字符串值（macOS 版 AIProvider.rawValue）。</summary>
+        public static string RawValue(AIProvider provider) => provider switch
+        {
+            AIProvider.Deepseek => "deepseek",
+            AIProvider.Qwen => "qwen",
+            _ => throw new ArgumentOutOfRangeException(nameof(provider)),
+        };
+
+        /// <summary>把持久化的原始字符串解析回枚举；无法识别返回 null（调用方回退默认）。</summary>
+        public static AIProvider? ParseRaw(string? raw) => raw switch
+        {
+            "deepseek" => AIProvider.Deepseek,
+            "qwen" => AIProvider.Qwen,
+            _ => null,
+        };
+
         public static string DisplayName(AIProvider provider) => provider switch
         {
             AIProvider.Deepseek => "DeepSeek（国内 · 推荐）",

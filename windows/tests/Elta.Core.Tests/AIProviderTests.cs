@@ -44,5 +44,21 @@ namespace Elta.Core.Tests
         [Fact]
         public void AvailableModels_Qwen()
             => Assert.Equal(new[] { "qwen-turbo", "qwen-plus", "qwen-max" }, AIProviders.AvailableModels(AIProvider.Qwen));
+
+        [Fact]
+        public void RawValue_MatchesPersistedStrings()
+        {
+            Assert.Equal("deepseek", AIProviders.RawValue(AIProvider.Deepseek));
+            Assert.Equal("qwen", AIProviders.RawValue(AIProvider.Qwen));
+        }
+
+        [Fact]
+        public void ParseRaw_RoundtripsAndRejectsUnknown()
+        {
+            Assert.Equal(AIProvider.Deepseek, AIProviders.ParseRaw("deepseek"));
+            Assert.Equal(AIProvider.Qwen, AIProviders.ParseRaw("qwen"));
+            Assert.Null(AIProviders.ParseRaw("nonexistent"));
+            Assert.Null(AIProviders.ParseRaw(null));
+        }
     }
 }
