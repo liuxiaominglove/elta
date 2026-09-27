@@ -74,10 +74,12 @@ windows/
 - **Core（Mac 可测，TDD）**：`ScreenshotGeometry.cs` —— `NormalizeSelection` / `IsSelectionUsable`（>10）/
   `MapSelectionToImage`（选区→像素裁剪，`originBottomLeft` 区分 mac/Windows，`round` 远离零）/ `IndexOfScreenContaining`。
   20 单测见 `ScreenshotGeometryTests.cs`。
-- **外壳**：`ScreenCapture.cs`（GDI）、`ScreenshotSelector.cs`（**WinForms** 全屏 overlay，物理像素坐标——
-  刻意不用 WPF Window 以规避多屏 DIP 错位）、`ScreenshotService.cs`、`PreviewForm.cs`；
-  `HotkeyHost.cs`（全局热键 **Ctrl+T**，B1 临时；正式默认值归 B4）。托盘菜单 + 热键两条触发路径。
-- ⚠️ **Windows 托盘图标只在主屏任务栏** → 副屏测试必须用热键 Ctrl+T（鼠标在哪块屏就截哪块）。
+- **外壳**：`ScreenCapture.cs`（GDI）、`ScreenshotSelector.cs`（**WinForms** overlay，横跨**整个虚拟桌面**
+  `SystemInformation.VirtualScreen`，物理像素坐标——刻意不用 WPF Window，并设 `AutoScaleMode.None` 规避多屏 DIP 错位）、
+  `ScreenshotService.cs`、`PreviewForm.cs`；`HotkeyHost.cs`（全局热键 **Ctrl+T**，B1 临时；正式默认值归 B4）。
+  托盘菜单 + 热键两条触发路径。
+- ⚠️ 覆盖层必须横跨所有显示器：否则从主屏（托盘所在的屏）触发后，副屏上十字光标会消失、无法框选。
+- Windows 托盘图标只在主屏任务栏；热键 Ctrl+T 让鼠标停在哪块屏都能触发（非必需，但更方便）。
 - **运行方式**（两条，代码同源）：
   1. `git clone https://github.com/liuxiaominglove/elta.git`（public）→ 仓库内 `windows\运行ELTA.bat`，或
      `dotnet run --project windows\src\Elta.Windows\Elta.Windows.csproj -c Release`。

@@ -7,7 +7,8 @@ using Elta.Core;
 namespace Elta.Windows
 {
     /// <summary>
-    /// 全屏选区覆盖层（B1）。冻结当前屏截图作背景，拖拽框选，返回物理像素选区。
+    /// 全屏选区覆盖层（B1）。冻结整个虚拟桌面截图作背景，拖拽框选，返回物理像素选区。
+    /// 覆盖层横跨所有显示器（Bounds = 虚拟桌面），因此在主屏触发后仍可把鼠标移到副屏框选。
     /// 用 WinForms <see cref="Form"/> 而非 WPF Window：Form 的 Bounds 直接是物理像素，
     /// 与 GDI 截图/选区坐标同一坐标系，规避多屏 DIP 换算错位（P0.5 已暴露该坑）。
     /// 取消方式：ESC 或右键。
@@ -23,17 +24,18 @@ namespace Elta.Windows
         /// <summary>选区（客户端坐标 = 物理像素）；取消时为 null。</summary>
         public RectF? Selection { get; private set; }
 
-        public ScreenshotSelector(Bitmap background, Rectangle screenBounds)
+        public ScreenshotSelector(Bitmap background, Rectangle virtualBounds)
         {
             _background = background;
 
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.Manual;
-            Bounds = screenBounds;          // 物理像素
+            Bounds = virtualBounds;         // 整个虚拟桌面（物理像素，可为负原点）
             TopMost = true;
             ShowInTaskbar = false;
             KeyPreview = true;
             DoubleBuffered = true;
+            AutoScaleMode = AutoScaleMode.None;   // 固定像素坐标，禁止 WinForms 按 DPI 缩放
             Cursor = Cursors.Cross;
             BackColor = Color.Black;
         }
