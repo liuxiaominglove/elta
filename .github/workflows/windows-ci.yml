@@ -1,0 +1,35 @@
+name: Windows CI
+
+# 只跑 Elta.Core（跨平台纯逻辑）的测试；Elta.Windows 是 WPF，待其有入口点后再加构建作业。
+on:
+  push:
+    paths:
+      - 'windows/**'
+      - '.github/workflows/windows-ci.yml'
+  pull_request:
+    paths:
+      - 'windows/**'
+  workflow_dispatch:
+
+jobs:
+  core-tests-linux:
+    name: Core tests (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Test Elta.Core
+        run: dotnet test windows/tests/Elta.Core.Tests/Elta.Core.Tests.csproj -c Release --logger "console;verbosity=normal"
+
+  core-tests-windows:
+    name: Core tests (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Test Elta.Core
+        run: dotnet test windows/tests/Elta.Core.Tests/Elta.Core.Tests.csproj -c Release --logger "console;verbosity=normal"

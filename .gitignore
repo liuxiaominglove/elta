@@ -2,6 +2,11 @@
 build/
 *.dmg
 
+# .NET / Windows 客户端构建产物
+bin/
+obj/
+*.user
+
 # Python 字节码
 __pycache__/
 *.pyc
