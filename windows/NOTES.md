@@ -75,14 +75,14 @@ windows/
   `MapSelectionToImage`（选区→像素裁剪，`originBottomLeft` 区分 mac/Windows，`round` 远离零）/ `IndexOfScreenContaining`。
   20 单测见 `ScreenshotGeometryTests.cs`。
 - **外壳**：`ScreenCapture.cs`（GDI）、`ScreenshotSelector.cs`（**WinForms** 全屏 overlay，物理像素坐标——
-  刻意不用 WPF Window 以规避多屏 DIP 错位）、`ScreenshotService.cs`、`PreviewForm.cs`；托盘菜单加了「截图选区（B1 测试）」。
-- **A 机手测步骤**：
-  ```
-  cd C:\elta-spike && git pull
-  dotnet run --project windows\src\Elta.Windows -c Release
-  ```
-  右键托盘 → 截图选区 → 拖拽框选 → 弹出预览（标题显示 WxH）；ESC / 右键取消。
-  **重点在双屏 + 150% 缩放下**在**副屏**框选，确认预览内容与所选区域一致（P0.5 曾在此暴露错位）。
+  刻意不用 WPF Window 以规避多屏 DIP 错位）、`ScreenshotService.cs`、`PreviewForm.cs`；
+  `HotkeyHost.cs`（全局热键 **Ctrl+T**，B1 临时；正式默认值归 B4）。托盘菜单 + 热键两条触发路径。
+- ⚠️ **Windows 托盘图标只在主屏任务栏** → 副屏测试必须用热键 Ctrl+T（鼠标在哪块屏就截哪块）。
+- **运行方式**（两条，代码同源）：
+  1. `git clone https://github.com/liuxiaominglove/elta.git`（public）→ 仓库内 `windows\运行ELTA.bat`，或
+     `dotnet run --project windows\src\Elta.Windows\Elta.Windows.csproj -c Release`。
+  2. U 盘 `ELTA-Windows-B1\`（源码 + 运行ELTA.bat + 操作说明；**注意 U 盘快照可能落后于仓库**）。
+- **A 机手测步骤**：见 U 盘 `ELTA-Windows-B1-操作说明.txt` 第 4 节；重点=扩展屏副屏 + 150% 各框选一次。
 
 ### WI-B2–B4：平台服务（Windows 真机）
 - 源：`Sources/ScreenshotEngine.swift`、`OverlayView.swift`、`TranslationPipeline.swift`（取词/剪贴板）、
