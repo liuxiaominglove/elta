@@ -22,7 +22,7 @@ namespace Elta.Windows
 
             var menu = new Forms.ContextMenuStrip();
 
-            var shotItem = new Forms.ToolStripMenuItem("截图选区（B1 测试）");
+            var shotItem = new Forms.ToolStripMenuItem("截图选区（B1 测试 · Ctrl+T）");
             shotItem.Click += (_, _) => RunScreenshot();
             menu.Items.Add(shotItem);
             menu.Items.Add(new Forms.ToolStripSeparator());
@@ -38,10 +38,20 @@ namespace Elta.Windows
                 Visible = true,
                 ContextMenuStrip = menu,
             };
-            tray.ShowBalloonTip(2500, "ELTA", "托盘程序已启动（C0/B1 骨架）", Forms.ToolTipIcon.Info);
+
+            // 全局热键 Ctrl+T：托盘只在主屏可点，副屏触发靠热键（B1 测试临时热键）
+            var hotkey = new HotkeyHost();
+            hotkey.Triggered += () => app.Dispatcher.BeginInvoke((Action)RunScreenshot);
+
+            tray.ShowBalloonTip(3000, "ELTA",
+                hotkey.Registered
+                    ? "已启动：按 Ctrl+T 截图选区（鼠标在哪块屏就截哪块）"
+                    : "已启动：热键 Ctrl+T 被占用，请用托盘菜单",
+                Forms.ToolTipIcon.Info);
 
             app.Exit += (_, _) =>
             {
+                hotkey.Dispose();
                 tray.Visible = false;
                 tray.Dispose();
                 menu.Dispose();
