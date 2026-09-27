@@ -20,7 +20,8 @@
 | A6 | SettingsManager / Store / 密钥抽象 | ✅ 84 测试 |
 | C0 | 托盘外壳入口点 + WPF 构建 CI | ✅ 真机编译通过 |
 | B1 | 截图选区（Core 几何 + GDI overlay） | ✅ 260 测试 + 编译 + **A 机手测全通过** |
-| B2–B4 | 取词 / OCR / 热键平台服务 | ⬜ 下一步 |
+| B2 | 取词（UIA → Ctrl+C 兜底 + 剪贴板恢复） | ✅ Core 283 测试 + 编译过；待 A 机手测 |
+| B3–B4 | OCR / 热键平台服务 | ⬜ 下一步 |
 
 ## 命令
 ```sh
@@ -89,12 +90,23 @@ windows/
   2. U 盘 `ELTA-Windows-B1\`（源码 + 运行ELTA.bat + 操作说明；**注意 U 盘快照可能落后于仓库**）。
 - **A 机手测步骤**：见 U 盘 `ELTA-Windows-B1-操作说明.txt` 第 4 节；重点=扩展屏副屏 + 150% 各框选一次。
 
-### WI-B2–B4：平台服务（Windows 真机）
-- 源：`Sources/ScreenshotEngine.swift`、`OverlayView.swift`、`TranslationPipeline.swift`（取词/剪贴板）、
-  `HotkeyHelpers.swift`、`OCREngine.swift`、`Helpers.swift`（PasteboardSnapshot 对应剪贴板快照）。
-- 做法：把可测的**纯逻辑**（坐标/DPI 换算、剪贴板快照序列化、热键解析、OCR 语言策略）放 `Elta.Core` 用假实现单测；
-  Win32/WinRT 调用放 `Elta.Windows`，在 Windows 上做集成测试。
-- **建议顺序 B1 截图 ✅ → B2 取词 → B3 OCR → B4 热键**。
+### B2：取词（UIA → Ctrl+C 兜底）✅（编译过，待 A 机手测）
+- **Core（Mac 可测，TDD）**：`SelectionText`（`SubstringInRange` UTF-16 区间取子串 + `IsUsable`，移植 mac
+  `substringInRange`）、`ClipboardAcceptPolicy`（`AcceptByChangeCount` / `AcceptByFallback`）。测试见
+  `SelectionTextTests.cs` / `ClipboardAcceptPolicyTests.cs`。
+- **外壳**：`SelectionReader.cs`（UIA `TextPattern`→父链上溯；失败回退 **Ctrl+C**：`keybd_event` + 剪贴板序号
+  `GetClipboardSequenceNumber` 轮询 → 兜底比对旧文本）、`ClipboardService.cs`（**对象式深拷贝快照**+恢复，流拷进
+  MemoryStream；空快照→清空）、`HotkeyHost` 改为支持多热键。
+- ⚠️ 取词主路径是 **Ctrl+C**（P0.5：Chrome/WPS 读不到 UIA）。触发前 `Thread.Sleep(300)` 等用户松开热键，
+  否则合成的 Ctrl+C 会带上 Shift。
+- **A 机手测步骤**：运行后，在**记事本**选中一段英文 → 按 **Ctrl+Shift+T** → 应弹框显示「取到 N 字符」；
+  再到 **Chrome / Edge / WPS / PDF** 各试一次（预期 Chrome/WPS 走 Ctrl+C 也能取到）；
+  且**取词后原剪贴板内容仍在**（先复制一段别的内容再测）。
+- 与 B1 不同：B2 目前只把取到的文本弹给用户看，**尚未接翻译**（B3/后续再接 AI）。
+
+### WI-B3–B4：OCR / 热键 平台服务
+- 源：`Sources/OCREngine.swift`、`HotkeyHelpers.swift`。
+- **建议顺序 B1 截图 ✅ → B2 取词 ✅ → B3 OCR → B4 热键**。
 - B4 需同时落地：**Windows 配置存储实现 + 密钥库实现 + Windows 版 `SettingsDefaults`**（A6 只定了接口）。
 - A6 未移植（归 B4/C）：`HotkeyRecorder`（UI）、`computeProviderCardLayout`（UI 布局）。
 - 可复用 P0.5 已验证代码：`windows/spike/SpikeWindow.cs` 的 P/Invoke（`RegisterHotKey`/`SetWindowsHookEx`/
