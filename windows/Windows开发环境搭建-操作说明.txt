@@ -1,0 +1,169 @@
+Windows（A 机）开发环境搭建 —— 在 Windows 上直接跑 opencode
+========================================================================
+
+目标：以后**在 Windows 上直接写代码 + 编译 + 运行**，不再从 Mac 来回拷贝。
+opencode 是「代理」，必须和「能编译/运行代码的机器」在一起——所以把 opencode
+装到 Windows 上，而不是继续在 Mac 上写完再搬。
+
+（同内容另有一份在 U 盘：Windows-开发环境搭建-操作说明.txt）
+
+
+========== 0. 总顺序 ==========
+------------------------------------------------------------------------
+1) 装 Git          2) 装 Node.js      3) 装 opencode
+4) 配 opencode（个人配置 + DeepSeek Key）
+5) 装 .NET 8 SDK   6) clone 仓库并运行
+7)（可选）cc-suite-cn 也搬到 Windows
+8) 从 Mac 搬「个人配置」的一次性清单
+9) 验证清单 / 10. 常见问题
+
+⚠️ 关键：**用原生 Windows 版 opencode，不要用 WSL**。
+   本项目是 WPF 桌面程序（net8.0-windows），WSL 是 Linux，**编不了**。
+   官方文档“推荐 WSL”是针对一般项目，不适用于本仓库。
+
+
+========== 1. 装 Git ==========
+------------------------------------------------------------------------
+    winget install --id Git.Git -e --source winget
+验证：
+    git --version
+
+
+========== 2. 装 Node.js（LTS） ==========
+------------------------------------------------------------------------
+opencode 的 npm 安装方式、以及 cc-suite-cn 都需要 Node。
+    winget install OpenJS.NodeJS.LTS
+验证（重开终端）：
+    node -v
+    npm -v
+
+
+========== 3. 装 opencode ==========
+------------------------------------------------------------------------
+三选一：
+    npm  install -g opencode-ai          # 最简单
+    scoop install opencode               # 若装了 scoop
+    choco install opencode               # 若装了 choco
+验证：
+    opencode --version
+
+终端建议：Windows Terminal 或 WezTerm。
+若 PowerShell 执行策略拦脚本，管理员执行：
+    Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+
+
+========== 4. 配置 opencode ==========
+------------------------------------------------------------------------
+
+【4.1 全局配置目录】
+opencode 用 `~/.config/opencode/`，在 Windows 即：
+    C:\Users\<你的用户名>\.config\opencode\
+子目录：agents\  commands\  skills\  plugins\  rules\  tools\  themes\
+配置文件：opencode.json / opencode.jsonc / tui.json
+
+【4.2 从 Mac 搬「行为配置」（推荐，做一次）】
+把 Mac 上 `~/.config/opencode/` 下的内容拷到上面那个 Windows 目录：
+    - agents\  commands\  skills\  plugins\  rules\  themes\
+    - opencode.json / opencode.jsonc / tui.json（如有）
+这样 Windows 上的 opencode 行为和 Mac 一致（不拷也能用，只是少了自定义规则/代理/技能）。
+
+【4.3 配 API Key（安全第一）】
+方式 A（推荐）：启动 opencode 后用命令
+    /connect
+   选你的 provider（DeepSeek），按提示填入 Key。
+方式 B：在 opencode.json 里用环境变量占位：
+    {
+      "provider": {
+        "deepseek": { "options": { "apiKey": "{env:DEEPSEEK_API_KEY}" } }
+      }
+    }
+   然后 PowerShell 里（设完重开终端）：
+       setx DEEPSEEK_API_KEY "你的key"
+
+⚠️ 安全纪律：
+   - 不要把 Key 贴进任何对话/聊天/截图；
+   - 不要把 Key 写进会被 git 提交的文件；
+   - 用 /connect 存的 Key 由 opencode 自己保管，不要明文到处放。
+
+
+========== 5. 装 .NET 8 SDK（编 ELTA Windows 用） ==========
+------------------------------------------------------------------------
+    winget install Microsoft.DotNet.SDK.8
+验证（重开终端）：
+    dotnet --version      # 应显示 8.x
+（U 盘里也有离线安装包：ELTA-Windows-P0.5\installers\dotnet-sdk-8.0-win-x64.exe）
+
+
+========== 6. clone 仓库并运行 ==========
+------------------------------------------------------------------------
+    cd C:\
+    git clone https://github.com/liuxiaominglove/elta.git elta
+    cd C:\elta
+    opencode
+
+进 opencode 后先读交接记录：
+    @windows/NOTES.md
+编译运行 Windows 外壳：
+    dotnet run --project windows\src\Elta.Windows\Elta.Windows.csproj -c Release
+  或双击 windows\运行ELTA.bat
+
+
+========== 7.（可选）把 cc-suite-cn 也搬到 Windows ==========
+------------------------------------------------------------------------
+结论：**可直接搬/克隆，不用重写**。它是 public 的 Node/JS 仓库，
+没有符号链接、没有 mac 专属二进制、源码里没有写死的 /Users 路径
+（那串 /Users 只在历史运行日志里，不影响运行）。
+
+    cd C:\
+    git clone https://github.com/liuxiaominglove/cc-suite-cn.git
+    cd C:\cc-suite-cn
+    npm install
+
+需要它在 Windows 上也能调用的三个模型 CLI（装好并加进 PATH）：
+    codebuddy 、 kimi 、 qwen
+（若本身是 npm 全局包，`npm i -g` 即可；装完 `where codebuddy` 应能找到。）
+
+【少数需“小改”处（不是重写）】
+  a) package.json 脚本用了 mac 专属写法：
+         zsh -c 'source ~/.zshrc && node scripts/xxx.mjs'
+     Windows 上二选一：
+       ① 装 Git Bash： bash -lc "node scripts/xxx.mjs"
+       ② 直接 PowerShell： node scripts/xxx.mjs
+          （原放在 ~/.zshrc 的环境变量改用 setx 设到 Windows）
+  b) install.sh 是 bash → 用 Git Bash 跑，或照它手动安装。
+  c) ~/.zshrc 里的 Key/环境变量 → 搬到 Windows 用户环境变量（setx）。
+  d) .cc-suite-cn\jobs\*.json、verdict-log 里带 /Users/... 是历史记录，可不管/可清理。
+  e) .githooks（bash）→ Git for Windows 自带 sh 一般可跑；报错就用 Git Bash 手动跑。
+
+
+========== 8. 从 Mac 搬家的「一次性清单」 ==========
+------------------------------------------------------------------------
+□ C:\Users\<你>\.config\opencode\   ← 拷 Mac 的 ~/.config/opencode/（见 4.2）
+□ 各 provider 的 Key                ← 在 Windows 上重新配（/connect），别拷明文
+□（如用到）~/.zshrc 里的环境变量     ← 改用 setx 设到 Windows
+□（如用到）cc-suite-cn 依赖的 3 个 CLI（codebuddy/kimi/qwen）
+
+
+========== 9. 验证清单 ==========
+------------------------------------------------------------------------
+    git --version            # 有输出
+    node -v                  # 有输出
+    opencode --version       # 有输出
+    dotnet --version         # 8.x
+    where codebuddy          #（装了 cc-suite-cn 才需要）
+进 opencode：能选到模型、能读 @windows/NOTES.md
+编译：dotnet build windows\src\Elta.Windows\Elta.Windows.csproj -c Release 通过
+
+
+========== 10. 常见问题 ==========
+------------------------------------------------------------------------
+opencode 命令找不到     重开终端；确认 npm 全局 bin 在 PATH（npm bin -g 或 npm prefix -g）
+“无法加载脚本/不能运行 .ps1”   管理员：Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+Key 无效                用 /connect 重配；或检查 {env:...} 名与 setx 是否一致
+仓库 clone 失败         仓库是 public，https 直连；公司网络可能拦截，换网络
+dotnet 编不过           确认装的是 .NET 8 SDK（不是仅 Runtime）
+cc-suite-cn 脚本报 zsh  见 7.a，改 Git Bash 或 PowerShell + 环境变量
+------------------------------------------------------------------------
+
+备注：Mac 与 Windows 两边 opencode 可并存，会话历史各自独立；
+      仓库 + windows\NOTES.md 是唯一交接来源。
