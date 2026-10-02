@@ -37,9 +37,13 @@ windows\src\Elta.Windows\bin\Release\net8.0-windows10.0.19041.0\Elta.Windows.exe
 :: 剪贴板安全机侧测试（WI-1）：策略集成 + 记事本端到端，全过退出码 0
 powershell -ExecutionPolicy Bypass -File windows\test-clipboard.ps1
 
+:: P1 机侧测试（WI-3 取词 STA/UIA 看门狗 + WI-4 热键自愈）
+powershell -ExecutionPolicy Bypass -File windows\test-p1.ps1
+
 :: 单项诊断（不启动托盘）
-...\Elta.Windows.exe --selftest                  :: 剪贴板策略集成自检 → %TEMP%\elta-selftest.txt
-...\Elta.Windows.exe --selection-cli <输出文件>  :: 绕过 UIA 直跑 Ctrl+C 兜底取词
+...\Elta.Windows.exe --selftest                   :: 剪贴板策略集成自检 → %TEMP%\elta-selftest.txt
+...\Elta.Windows.exe --selection-cli <输出文件>   :: 绕过 UIA 直跑 Ctrl+C 兜底取词
+...\Elta.Windows.exe --selection-selftest <输出>  :: 与 RunSelection 同路径（STA + UIA 看门狗）
 ```
 - .NET SDK 8.0.425 已**用户级**装在 `~/.dotnet`（无需 sudo）；若 PATH 无 `dotnet`，脚本会自动用 `~/.dotnet/dotnet`。
 - CI：`.github/workflows/windows-ci.yml`：ubuntu/windows 各跑 Core 测试 + **windows-latest 构建 Elta.Windows**。
@@ -92,9 +96,8 @@ windows/
 > **0) B2 已通过**（`回传-B2.txt`，Win10，零 Fail）：记事本（单行/多行/中英混合）、Chrome、Edge 取词；
 > 剪贴板恢复（UIA 路径与 Ctrl+C 兜底路径的文本/图片/空/大文本/emoji）全部通过；Ctrl+T 截图回归正常。
 > Word/WPS 文字/WPS PDF 因自动化限制未跑（非失败）→ 建议人工各抽检一次，即可升 🟢。
-> **B3 已完成 🟢**（Core 303 绿 + 外壳编译 + `--ocr` 真机自动化验证 + 启动冒烟 + **A 机手测全通过**）。
-> **P0 稳定性（WI-1 剪贴板安全 / WI-2 日志兜底）机测通过 🟢**（`windows/test-clipboard.ps1`）。
-> 下一步 **B4**（热键 + Windows 配置/密钥/默认值落地）。
+> **B3 已完成 🟢**；**P0（剪贴板安全 / 日志兜底）与 P1（取词线程化 / 热键自愈）机测通过 🟢**
+> （`windows/test-clipboard.ps1`、`windows/test-p1.ps1`）。下一步 **B4**（热键 + Windows 配置/密钥/默认值落地）。
 
 ### C0：托盘外壳入口点 ✅
 - `Elta.Windows/Program.cs`（`[STAThread]` + WPF `Application` + WinForms `NotifyIcon` 托盘图标/退出菜单）+ `app.manifest`（PerMonitorV2）。
@@ -187,6 +190,21 @@ windows/
   - 日志实测落盘（`start` / `ocr` / `selection` / `selftest`）。
 - ⚠️ **仍未自动化**：真实 `Ctrl+Shift+T` 热键入口、Chrome/Edge（UIA 失败→Ctrl+C）路径、图片原剪贴板走真实取词。
   如需覆盖可在 `test-clipboard.ps1` 扩展（Chrome 需额外自动化）。
+
+### 稳定性加固 P1：WI-3 取词线程化 + UIA 看门狗 / WI-4 热键自愈 ✅（机测通过）
+- **WI-3**：
+  - 取词移入**专用 STA 工作线程**（`StaRunner`；WinForms 剪贴板要求 STA）——UI 不再被 `Sleep(300)` + 轮询冻结。
+  - UIA 跨进程调用加**看门狗**：放 MTA 子线程 `Join(500ms)`，超时记 `uia timeout` 并回落 Ctrl+C（被放弃线程为后台线程）。
+  - **全局重入守卫**（`Interlocked`）：截图/取词/OCR 任一在跑时忽略新触发（日志 `ignored: busy`）。
+- **WI-4**：`HotkeyManager`——注册失败每 **10s 重试**，占用解除后自动恢复；日志与托盘提示同步
+  （`hotkey busy` → `hotkey registered` → `hotkey recovered` → `hotkeys all registered`）。
+- **机测 ✅**（`windows/test-p1.ps1`）：
+  - `--selection-selftest`（STA + UIA 路径）取到文本 ✓
+  - 热键自愈：后台占用 Ctrl+T → 启动检测到 `hotkey busy` / `pending:shot` → 释放占用 → ≤14s 自动
+    `hotkey registered name=shot` + `hotkey recovered` ✓
+  - P0 回归 `test-clipboard.ps1` 仍 **ALL PASS** ✓
+- ⚠️ 踩坑：`.ps1` 必须存为 **UTF-8 带 BOM**，否则 PowerShell 5.1 按 ANSI 解析中文会语法错误（两个脚本已加 BOM）。
+- 仍未自动化：真实 `Ctrl+Shift+T` 热键入口、Chrome/Edge（UIA 失败→Ctrl+C）路径。
 
 ### WI-B4：热键平台服务（下一步）
 - 源：`Sources/HotkeyHelpers.swift`。

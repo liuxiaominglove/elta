@@ -24,6 +24,12 @@ namespace Elta.Windows
         private const uint VK_T = 0x54;
         private const int ID_SCREENSHOT = 0x4A17;
         private const int ID_SELECTION = 0x4A18;
+        private const int HotkeyReleaseDelayMs = 300;   // 等用户松开热键（对应 mac RunLoop 0.3s）
+
+        // WI-3：全局重入守卫——截图/取词/OCR 任一在跑时忽略新触发，避免嵌套与剪贴板竞争
+        private static int _busy;
+        private static bool TryEnterBusy() => Interlocked.CompareExchange(ref _busy, 1, 0) == 0;
+        private static void ExitBusy() => Interlocked.Exchange(ref _busy, 0);
 
         [STAThread]
         public static void Main(string[] args)
@@ -39,6 +45,13 @@ namespace Elta.Windows
             if (args.Length >= 2 && args[0] == "--selection-cli")
             {
                 RunSelectionCli(args[1]);
+                return;
+            }
+
+            // 无头诊断：--selection-selftest <输出文件> 走与 RunSelection 同路径（STA + UIA 看门狗 → 兜底）
+            if (args.Length >= 2 && args[0] == "--selection-selftest")
+            {
+                RunSelectionSelfTestCli(args[1]);
                 return;
             }
 
@@ -111,23 +124,31 @@ namespace Elta.Windows
                 ContextMenuStrip = menu,
             };
 
-            var hotkey = new HotkeyHost();
-            bool shotKey = hotkey.Register(ID_SCREENSHOT, MOD_CONTROL, VK_T,
-                () => app.Dispatcher.BeginInvoke((Action)RunScreenshot));
-            bool selectKey = hotkey.Register(ID_SELECTION, MOD_CONTROL | MOD_SHIFT, VK_T,
-                () => app.Dispatcher.BeginInvoke((Action)RunSelection));
+            var hotkeys = new HotkeyManager();
+            hotkeys.Add(ID_SCREENSHOT, MOD_CONTROL, VK_T,
+                () => app.Dispatcher.BeginInvoke((Action)RunScreenshot), "shot");
+            hotkeys.Add(ID_SELECTION, MOD_CONTROL | MOD_SHIFT, VK_T,
+                () => app.Dispatcher.BeginInvoke((Action)RunSelection), "selection");
+            hotkeys.StatusChanged += () =>
+            {
+                bool all = hotkeys.AllRegistered;
+                tray.Text = all ? "ELTA — 截图即译，精读利器" : "ELTA（热键被占用，自动重试中）";
+                if (all) Log.Info("hotkeys all registered");
+            };
+            hotkeys.RegisterAll();
 
             Log.Info($"start version={typeof(Program).Assembly.GetName().Version} " +
-                     $"shotKey={shotKey} selectKey={selectKey} logDir={Log.DirectoryPath}");
+                     $"hotkeys={(hotkeys.AllRegistered ? "ok" : "pending:" + string.Join(",", hotkeys.PendingNames))} " +
+                     $"logDir={Log.DirectoryPath}");
 
             tray.ShowBalloonTip(3500, "ELTA",
-                $"Ctrl+T 截图；Ctrl+Shift+T 划词{(shotKey && selectKey ? "" : "（部分热键被占用，可用托盘菜单）")}",
+                $"Ctrl+T 截图；Ctrl+Shift+T 划词{(hotkeys.AllRegistered ? "" : "（部分热键被占用，将自动重试）")}",
                 Forms.ToolTipIcon.Info);
 
             app.Exit += (_, _) =>
             {
                 Log.Info("exit");
-                hotkey.Dispose();
+                hotkeys.Dispose();
                 tray.Visible = false;
                 tray.Dispose();
                 menu.Dispose();
@@ -302,6 +323,12 @@ namespace Elta.Windows
 
         private static async void RunScreenshot()
         {
+            if (!TryEnterBusy())
+            {
+                Log.Info("screenshot ignored: busy");
+                return;
+            }
+
             Bitmap? captured = null;
             try
             {
@@ -361,18 +388,27 @@ namespace Elta.Windows
             finally
             {
                 captured?.Dispose();
+                ExitBusy();
             }
         }
 
-        private static void RunSelection()
+        private static async void RunSelection()
         {
+            if (!TryEnterBusy())
+            {
+                Log.Info("selection ignored: busy");
+                return;
+            }
+
             try
             {
                 var sw = Stopwatch.StartNew();
-                // 等用户松开热键（对应 mac 的 RunLoop 0.3s），否则合成的 Ctrl+C 会带上 Shift
-                Thread.Sleep(300);
-
-                string? text = SelectionReader.ReadSelectedText();
+                // WI-3：在 STA 工作线程上执行（WinForms 剪贴板要求 STA），不阻塞 UI
+                string? text = await StaRunner.RunAsync(() =>
+                {
+                    Thread.Sleep(HotkeyReleaseDelayMs);
+                    return SelectionReader.ReadSelectedText();
+                });
                 sw.Stop();
                 Log.Info($"selection len={text?.Length ?? 0} elapsed={sw.ElapsedMilliseconds}ms");
 
@@ -399,6 +435,43 @@ namespace Elta.Windows
                     "ELTA — 划词取词（B2）",
                     Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Error);
             }
+            finally
+            {
+                ExitBusy();
+            }
+        }
+
+        /// <summary>
+        /// 无头诊断：`--selection-selftest &lt;输出文件&gt;` 走与 RunSelection 相同路径
+        /// （STA 工作线程 + UIA 看门狗 → Ctrl+C 兜底），供脚本驱动做端到端验证。
+        /// </summary>
+        private static void RunSelectionSelfTestCli(string outPath)
+        {
+            string report;
+            try
+            {
+                string? text = StaRunner.RunAsync(() =>
+                {
+                    Thread.Sleep(HotkeyReleaseDelayMs);
+                    return SelectionReader.ReadSelectedText();
+                }).GetAwaiter().GetResult();
+                report = text is null ? "selected=null" : $"selected=len={text.Length}{Environment.NewLine}{text}";
+                Log.Info($"selection-selftest len={text?.Length ?? 0}");
+            }
+            catch (Exception ex)
+            {
+                report = "EXCEPTION: " + ex;
+                Log.Error("selection-selftest failed", ex);
+            }
+
+            try { File.WriteAllText(outPath, report, new UTF8Encoding(false)); } catch { }
+            try
+            {
+                AttachConsole(-1);
+                Console.WriteLine(report);
+                Console.Out.Flush();
+            }
+            catch { }
         }
     }
 }

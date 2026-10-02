@@ -1,4 +1,4 @@
-# ELTA Windows — 剪贴板安全机侧测试（WI-1）
+﻿# ELTA Windows — 剪贴板安全机侧测试（WI-1）
 # 用法: powershell -ExecutionPolicy Bypass -File windows\test-clipboard.ps1
 # 覆盖: --selftest（策略集成 5 项）+ 记事本端到端（真实 Ctrl+C 兜底 + 原剪贴板保留）
 # 注意: 会短暂借用剪贴板；只操作本脚本启动的记事本进程。

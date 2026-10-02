@@ -20,6 +20,7 @@ namespace Elta.Windows
         private const int MaxRetries = 15;      // 最多约 1.5 秒
         private const int RetryDelayMs = 100;
         private const int MaxParentDepth = 10;
+        private const int UiaTimeoutMs = 500;   // UIA 跨进程调用看门狗上限
 
         [DllImport("user32.dll")]
         private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
@@ -30,9 +31,32 @@ namespace Elta.Windows
         /// <summary>读取当前选中文本；未取到返回 null。调用前应先等用户松开热键。</summary>
         public static string? ReadSelectedText()
         {
-            string? viaUia = TryUia();
+            string? viaUia = TryUiaWithTimeout();
             if (SelectionText.IsUsable(viaUia)) return viaUia;
             return TryCopyFallback();
+        }
+
+        /// <summary>
+        /// WI-3：UIA 跨进程调用可能卡住无响应的目标程序，放到 MTA 子线程并限时等待；
+        /// 超时则放弃（记日志）并回落 Ctrl+C。被放弃的探测线程是后台线程，不阻塞进程退出。
+        /// </summary>
+        private static string? TryUiaWithTimeout()
+        {
+            string? result = null;
+            var probe = new Thread(() => { result = TryUia(); })
+            {
+                IsBackground = true,
+                Name = "EltaUiaProbe",
+            };
+            try { probe.SetApartmentState(ApartmentState.MTA); } catch { }
+            probe.Start();
+
+            if (!probe.Join(UiaTimeoutMs))
+            {
+                Log.Warn("uia timeout");
+                return null;
+            }
+            return result;
         }
 
         /// <summary>UIA 读焦点元素的选中文本（含父链上溯，应对浏览器选区在文档层）。失败返回 null。</summary>
