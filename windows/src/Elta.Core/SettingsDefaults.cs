@@ -43,5 +43,31 @@ namespace Elta.Core
 
         /// <summary>与 macOS 版逐值对齐的默认值（供移植黄金测试）。</summary>
         public static SettingsDefaults MacParity { get; } = new();
+
+        /// <summary>
+        /// Windows 版默认值：VK 键码 + Win32 MOD_* 修饰键 + Windows 显示串（其余值沿用 mac 对齐值）。
+        /// </summary>
+        public static SettingsDefaults Windows { get; } = new SettingsDefaults
+        {
+            HotkeyKeyCode = 0x54,                                    // T
+            HotkeyModifiers = WindowsHotkeys.ModControl,
+            HotkeyDisplay = "Ctrl+T",
+
+            SelectionHotkeyKeyCode = 0x54,                           // T
+            SelectionHotkeyModifiers = WindowsHotkeys.ModControl | WindowsHotkeys.ModShift,
+            SelectionHotkeyDisplay = "Ctrl+Shift+T",
+
+            ClosePanelHotkeyKeyCode = 0x1B,                          // ESC
+            ClosePanelHotkeyModifiers = 0,
+            ClosePanelHotkeyDisplay = "Esc",
+
+            TogglePanelHotkeyKeyCode = 0xC0,                         // `~
+            TogglePanelHotkeyModifiers = 0,
+            TogglePanelHotkeyDisplay = "`",
+
+            SplitHotkeyKeyCode = 0x44,                               // D
+            SplitHotkeyModifiers = WindowsHotkeys.ModControl,
+            SplitHotkeyDisplay = "Ctrl+D",
+        };
     }
 }

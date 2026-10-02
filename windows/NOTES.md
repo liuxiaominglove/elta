@@ -40,10 +40,15 @@ powershell -ExecutionPolicy Bypass -File windows\test-clipboard.ps1
 :: P1 机侧测试（WI-3 取词 STA/UIA 看门狗 + WI-4 热键自愈）
 powershell -ExecutionPolicy Bypass -File windows\test-p1.ps1
 
+:: B4 机侧测试（配置存储 / DPAPI 密钥库 / 键盘钩子 / 设置接线）
+powershell -ExecutionPolicy Bypass -File windows\test-settings.ps1
+
 :: 单项诊断（不启动托盘）
 ...\Elta.Windows.exe --selftest                   :: 剪贴板策略集成自检 → %TEMP%\elta-selftest.txt
 ...\Elta.Windows.exe --selection-cli <输出文件>   :: 绕过 UIA 直跑 Ctrl+C 兜底取词
 ...\Elta.Windows.exe --selection-selftest <输出>  :: 与 RunSelection 同路径（STA + UIA 看门狗）
+...\Elta.Windows.exe --settings-selftest <输出>   :: 配置存储 / DPAPI 密钥库 / 默认值自检
+...\Elta.Windows.exe --hook-selftest <输出>       :: 低级键盘钩子安装 + 注入触发自检
 ```
 - .NET SDK 8.0.425 已**用户级**装在 `~/.dotnet`（无需 sudo）；若 PATH 无 `dotnet`，脚本会自动用 `~/.dotnet/dotnet`。
 - CI：`.github/workflows/windows-ci.yml`：ubuntu/windows 各跑 Core 测试 + **windows-latest 构建 Elta.Windows**。
@@ -96,8 +101,8 @@ windows/
 > **0) B2 已通过**（`回传-B2.txt`，Win10，零 Fail）：记事本（单行/多行/中英混合）、Chrome、Edge 取词；
 > 剪贴板恢复（UIA 路径与 Ctrl+C 兜底路径的文本/图片/空/大文本/emoji）全部通过；Ctrl+T 截图回归正常。
 > Word/WPS 文字/WPS PDF 因自动化限制未跑（非失败）→ 建议人工各抽检一次，即可升 🟢。
-> **B3 已完成 🟢**；**P0（剪贴板安全 / 日志兜底）与 P1（取词线程化 / 热键自愈）机测通过 🟢**
-> （`windows/test-clipboard.ps1`、`windows/test-p1.ps1`）。下一步 **B4**（热键 + Windows 配置/密钥/默认值落地）。
+> **B3 已完成 🟢**；**P0/P1 机测通过 🟢**；**B4（配置存储 / DPAPI 密钥库 / Windows 默认值 / 热键服务）机测通过 🟢**
+> （`windows/test-clipboard.ps1`、`windows/test-p1.ps1`、`windows/test-settings.ps1`）。下一步 **子计划 C**（设置/结果窗口/翻译接线）。
 
 ### C0：托盘外壳入口点 ✅
 - `Elta.Windows/Program.cs`（`[STAThread]` + WPF `Application` + WinForms `NotifyIcon` 托盘图标/退出菜单）+ `app.manifest`（PerMonitorV2）。
@@ -206,7 +211,26 @@ windows/
 - ⚠️ 踩坑：`.ps1` 必须存为 **UTF-8 带 BOM**，否则 PowerShell 5.1 按 ANSI 解析中文会语法错误（两个脚本已加 BOM）。
 - 仍未自动化：真实 `Ctrl+Shift+T` 热键入口、Chrome/Edge（UIA 失败→Ctrl+C）路径。
 
-### WI-B4：热键平台服务（下一步）
+### B4：Windows 配置存储 / 密钥库 / 热键平台服务 ✅（机测通过）
+- **Core**：`WindowsHotkeys`（VK↔可读名、键码夹取、修饰键判定；17 测试）+ `SettingsDefaults.Windows`
+  （Ctrl+T / Ctrl+Shift+T / Esc / `` ` `` / Ctrl+D，其余值沿用 mac 对齐）。
+- **外壳存储**：
+  - `JsonSettingsStore`：`%APPDATA%\ELTA\settings.json`，整文件原子写、损坏自动备份 `.corrupt-*`。
+    **踩坑修复**：① .NET 8 `JsonNode.ToJsonString(options)` 复用前需给 `TypeInfoResolver`；
+    ② 泛型 `T? GetValue<T>` 对 `int/bool` 缺失时返回 0/false（不是 null）→ 默认值永不生效；
+    改为按类型显式实现，并在 `--settings-selftest` 增加「缺失键必须为 null」回归断言。
+  - `DpapiSecretStore`：`%APPDATA%\ELTA\secrets\` 每账户一文件，文件名 = SHA256(account)，内容 DPAPI(CurrentUser)；
+    `Save` update-or-add、`Delete` 幂等；日志只含账户哈希前缀，**绝不出现密钥内容**。
+- **热键服务**：`HotkeyManager` 从 `SettingsManager` 读取键位（清洗键码/掩码，防 mac Carbon 残留）；
+  新增 `LowLevelKeyboardHook`（WH_KEYBOARD_LL）供**裸键**（ESC/`` ` ``）用——**仅应在面板打开期间启停，B4 不常驻**
+  （子计划 C 接线）。
+- **接线**：托盘菜单/气泡/启动日志均用设置里的热键显示；启动日志含 `settings provider=… model=… keySet=… hotkey=…`
+  （只记 key 是否存在，**不打印 Key**）。
+- **机测 ✅**（`windows/test-settings.ps1`）：`--settings-selftest`（存储 round-trip/持久化/缺失键/DPAPI/默认值）、
+  `--hook-selftest`（钩子安装 + 注入 F13 触发）、托盘启动 + 设置接线日志 + 默认热键注册；P0/P1 回归全过。
+- ⚠️ 未做（归后续）：设置 UI（C）、裸键钩子常驻策略（C）、更新检查 / 遥测上报（mac 有，Windows 后续）。
+
+### 子计划 C：设置 / 结果窗口 / 翻译接线（下一步）
 - 源：`Sources/HotkeyHelpers.swift`。
 - B4 需同时落地：**Windows 配置存储实现 + 密钥库实现 + Windows 版 `SettingsDefaults`**（A6 只定了接口）；
   OCR 兜底引擎（B）视 B3 手测结果再定。

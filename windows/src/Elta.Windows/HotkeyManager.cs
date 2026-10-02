@@ -71,14 +71,15 @@ namespace Elta.Windows
         private void TryRegister(Spec spec)
         {
             if (spec.Ok) return;
+            Log.Info($"hotkey attempt name={spec.Name} id={spec.Id} mods=0x{spec.Modifiers:X4} vk=0x{spec.Vk:X2}");
             if (_host.Register(spec.Id, spec.Modifiers, spec.Vk, spec.OnTriggered))
             {
                 spec.Ok = true;
-                Log.Info($"hotkey registered name={spec.Name} id={spec.Id}");
+                Log.Info($"hotkey registered name={spec.Name} id={spec.Id} mods=0x{spec.Modifiers:X4} vk=0x{spec.Vk:X2}");
             }
             else
             {
-                Log.Warn($"hotkey busy name={spec.Name} id={spec.Id}");
+                Log.Warn($"hotkey busy name={spec.Name} id={spec.Id} mods=0x{spec.Modifiers:X4} vk=0x{spec.Vk:X2}");
             }
         }
 

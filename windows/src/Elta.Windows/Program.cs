@@ -19,9 +19,6 @@ namespace Elta.Windows
     /// </summary>
     public static class Program
     {
-        private const uint MOD_CONTROL = 0x0002;
-        private const uint MOD_SHIFT = 0x0004;
-        private const uint VK_T = 0x54;
         private const int ID_SCREENSHOT = 0x4A17;
         private const int ID_SELECTION = 0x4A18;
         private const int HotkeyReleaseDelayMs = 300;   // 等用户松开热键（对应 mac RunLoop 0.3s）
@@ -59,6 +56,20 @@ namespace Elta.Windows
             if (args.Length >= 1 && args[0] == "--selftest")
             {
                 RunSelfTest();
+                return;
+            }
+
+            // 无头诊断：--settings-selftest <输出文件> 配置存储/密钥库/默认值自检
+            if (args.Length >= 2 && args[0] == "--settings-selftest")
+            {
+                RunSettingsSelfTest(args[1]);
+                return;
+            }
+
+            // 无头诊断：--hook-selftest <输出文件> 低级键盘钩子安装 + 注入按键自检
+            if (args.Length >= 2 && args[0] == "--hook-selftest")
+            {
+                RunHookSelfTest(args[1]);
                 return;
             }
 
@@ -101,13 +112,17 @@ namespace Elta.Windows
                 e.SetObserved();
             };
 
+            // B4：设置 = JSON 存储 + DPAPI 密钥库 + Windows 默认值（键位/显示）
+            var settings = new SettingsManager(
+                new JsonSettingsStore(), new DpapiSecretStore(), SettingsDefaults.Windows, msg => Log.Info(msg));
+
             var menu = new Forms.ContextMenuStrip();
 
-            var shotItem = new Forms.ToolStripMenuItem("截图选区（Ctrl+T）");
+            var shotItem = new Forms.ToolStripMenuItem($"截图选区（{settings.HotkeyDisplay}）");
             shotItem.Click += (_, _) => RunScreenshot();
             menu.Items.Add(shotItem);
 
-            var selectItem = new Forms.ToolStripMenuItem("划词翻译（Ctrl+Shift+T）");
+            var selectItem = new Forms.ToolStripMenuItem($"划词翻译（{settings.SelectionHotkeyDisplay}）");
             selectItem.Click += (_, _) => RunSelection();
             menu.Items.Add(selectItem);
 
@@ -124,10 +139,16 @@ namespace Elta.Windows
                 ContextMenuStrip = menu,
             };
 
+            // 热键由设置决定；清洗键码/掩码，防脏数据（含 mac Carbon 残留值）
+            int shotVk = WindowsHotkeys.SanitizeKeyCode(settings.HotkeyKeyCode);
+            int shotMods = settings.HotkeyModifiers & WindowsHotkeys.AllModifiers;
+            int selectVk = WindowsHotkeys.SanitizeKeyCode(settings.SelectionHotkeyKeyCode);
+            int selectMods = settings.SelectionHotkeyModifiers & WindowsHotkeys.AllModifiers;
+
             var hotkeys = new HotkeyManager();
-            hotkeys.Add(ID_SCREENSHOT, MOD_CONTROL, VK_T,
+            hotkeys.Add(ID_SCREENSHOT, (uint)shotMods, (uint)shotVk,
                 () => app.Dispatcher.BeginInvoke((Action)RunScreenshot), "shot");
-            hotkeys.Add(ID_SELECTION, MOD_CONTROL | MOD_SHIFT, VK_T,
+            hotkeys.Add(ID_SELECTION, (uint)selectMods, (uint)selectVk,
                 () => app.Dispatcher.BeginInvoke((Action)RunSelection), "selection");
             hotkeys.StatusChanged += () =>
             {
@@ -140,9 +161,14 @@ namespace Elta.Windows
             Log.Info($"start version={typeof(Program).Assembly.GetName().Version} " +
                      $"hotkeys={(hotkeys.AllRegistered ? "ok" : "pending:" + string.Join(",", hotkeys.PendingNames))} " +
                      $"logDir={Log.DirectoryPath}");
+            Log.Info($"settings provider={AIProviders.RawValue(settings.ApiProvider)} " +
+                     $"model={settings.EffectiveModel(settings.ApiProvider)} " +
+                     $"keySet={settings.ActiveApiKey != null} " +
+                     $"hotkey={settings.HotkeyDisplay} selHotkey={settings.SelectionHotkeyDisplay}");
 
             tray.ShowBalloonTip(3500, "ELTA",
-                $"Ctrl+T 截图；Ctrl+Shift+T 划词{(hotkeys.AllRegistered ? "" : "（部分热键被占用，将自动重试）")}",
+                $"{settings.HotkeyDisplay} 截图；{settings.SelectionHotkeyDisplay} 划词" +
+                $"{(hotkeys.AllRegistered ? "" : "（部分热键被占用，将自动重试）")}",
                 Forms.ToolTipIcon.Info);
 
             app.Exit += (_, _) =>
@@ -319,6 +345,158 @@ namespace Elta.Windows
                 Console.Out.Flush();
             }
             catch { }
+        }
+
+        [DllImport("user32.dll")]
+        private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
+        private static void WriteCliReport(string outPath, string header, string body)
+        {
+            string report = header + Environment.NewLine + body;
+            Log.Info(header);
+            try { File.WriteAllText(outPath, report, new UTF8Encoding(false)); } catch { }
+            try
+            {
+                AttachConsole(-1);
+                Console.WriteLine(report);
+                Console.Out.Flush();
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// 无头诊断：`--settings-selftest &lt;输出文件&gt;` B4 配置存储 / DPAPI 密钥库 / Windows 默认值自检。
+        /// 使用临时目录，不触碰真实设置与密钥；测试密钥用后即删。
+        /// </summary>
+        private static void RunSettingsSelfTest(string outPath)
+        {
+            var sb = new StringBuilder();
+            int pass = 0, fail = 0;
+            void Check(string name, bool ok)
+            {
+                sb.AppendLine($"[{(ok ? "PASS" : "FAIL")}] {name}");
+                if (ok) pass++; else fail++;
+            }
+
+            string tempDir = Path.Combine(Path.GetTempPath(), "elta-settings-selftest");
+            try { if (Directory.Exists(tempDir)) Directory.Delete(tempDir, recursive: true); } catch { }
+            Directory.CreateDirectory(tempDir);
+
+            try
+            {
+                // 1) JSON 配置存储：读写 / 持久化 / 删除
+                string settingsPath = Path.Combine(tempDir, "settings.json");
+                var store = new JsonSettingsStore(settingsPath);
+                store.SetString("k.s", "value");
+                store.SetBool("k.b", true);
+                store.SetInt("k.i", 42);
+                Check("store string", store.GetString("k.s") == "value");
+                Check("store bool", store.GetBool("k.b") == true);
+                Check("store int", store.GetInt("k.i") == 42);
+                Check("store contains", store.Contains("k.s"));
+                var reloaded = new JsonSettingsStore(settingsPath);
+                Check("store persisted", reloaded.GetString("k.s") == "value");
+                store.Remove("k.s");
+                Check("store remove", store.GetString("k.s") == null && !store.Contains("k.s"));
+
+                // 回归：缺失键必须返回 null（不能是 0/false），否则默认值不生效
+                Check("store missing string is null", store.GetString("missing.k") == null);
+                Check("store missing bool is null", store.GetBool("missing.k") == null);
+                Check("store missing int is null", store.GetInt("missing.k") == null);
+
+                // 2) DPAPI 密钥库：写 / 读 / 删（幂等）；测试值用后即删
+                var secrets = new DpapiSecretStore(Path.Combine(tempDir, "secrets"));
+                const string account = "snaptranslate.selftest";
+                const string dummy = "DUMMY-SECRET-FOR-SELFTEST";
+                Check("secret save", secrets.Save(account, dummy));
+                Check("secret read", secrets.Read(account) == dummy);
+                Check("secret delete", secrets.Delete(account));
+                Check("secret gone", secrets.Read(account) == null);
+                Check("secret delete idempotent", secrets.Delete(account));
+
+                // 3) Windows 默认值
+                SettingsDefaults d = SettingsDefaults.Windows;
+                Check("defaults hotkey", d.HotkeyKeyCode == 0x54 && d.HotkeyDisplay == "Ctrl+T");
+                Check("defaults selection display",
+                    WindowsHotkeys.Display(d.SelectionHotkeyKeyCode, d.SelectionHotkeyModifiers) == "Ctrl+Shift+T");
+
+                // 4) 键码清洗 / 修饰键判定
+                Check("sanitize clamp", WindowsHotkeys.SanitizeKeyCode(999) == 0xFF);
+                Check("required modifiers",
+                    WindowsHotkeys.HasRequiredModifiers(WindowsHotkeys.ModControl)
+                    && !WindowsHotkeys.HasRequiredModifiers(0));
+
+                // 5) SettingsManager 走 Windows 默认值
+                var sm = new SettingsManager(
+                    new JsonSettingsStore(Path.Combine(tempDir, "s2.json")),
+                    new DpapiSecretStore(Path.Combine(tempDir, "secrets2")),
+                    SettingsDefaults.Windows);
+                Check("settings defaults", sm.HotkeyDisplay == "Ctrl+T" && sm.SelectionHotkeyDisplay == "Ctrl+Shift+T");
+                Check("settings numeric defaults",
+                    sm.HotkeyKeyCode == 0x54
+                    && sm.HotkeyModifiers == WindowsHotkeys.ModControl
+                    && sm.SelectionHotkeyModifiers == (WindowsHotkeys.ModControl | WindowsHotkeys.ModShift));
+                Check("settings bool defaults", sm.DefaultSplitMode && sm.TelemetryEnabled);
+                Check("settings provider", sm.ApiProvider == AIProvider.Deepseek && sm.ActiveApiKey == null);
+            }
+            catch (Exception ex)
+            {
+                Check("exception: " + ex.Message, false);
+            }
+            finally
+            {
+                try { Directory.Delete(tempDir, recursive: true); } catch { }
+            }
+
+            WriteCliReport(outPath, $"settings-selftest pass={pass} fail={fail}", sb.ToString());
+        }
+
+        /// <summary>
+        /// 无头诊断：`--hook-selftest &lt;输出文件&gt;` 安装 WH_KEYBOARD_LL、注入一个按键并验证回调触发。
+        /// </summary>
+        private static void RunHookSelfTest(string outPath)
+        {
+            var sb = new StringBuilder();
+            int pass = 0, fail = 0;
+            void Check(string name, bool ok)
+            {
+                sb.AppendLine($"[{(ok ? "PASS" : "FAIL")}] {name}");
+                if (ok) pass++; else fail++;
+            }
+
+            const int VK_F13 = 0x7C;
+            const uint KEYEVENTF_KEYUP = 0x0002;
+            int fired = 0;
+            try
+            {
+                using var hook = new LowLevelKeyboardHook();
+                hook.OnKeyDown = vk =>
+                {
+                    if (vk == VK_F13) fired++;
+                    return false;
+                };
+                bool started = hook.Start();
+                Check("hook install", started);
+                if (started)
+                {
+                    keybd_event(VK_F13, 0, 0, UIntPtr.Zero);
+                    keybd_event(VK_F13, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+
+                    int deadline = Environment.TickCount + 1500;
+                    while (fired == 0 && Environment.TickCount < deadline)
+                    {
+                        Forms.Application.DoEvents();   // LL 钩子回调需要消息泵
+                        Thread.Sleep(10);
+                    }
+                    Check("hook fired on injected key", fired >= 1);
+                }
+            }
+            catch (Exception ex)
+            {
+                Check("exception: " + ex.Message, false);
+            }
+
+            WriteCliReport(outPath, $"hook-selftest pass={pass} fail={fail}", sb.ToString());
         }
 
         private static async void RunScreenshot()
