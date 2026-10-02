@@ -1,5 +1,8 @@
 using System;
 using System.Drawing;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -22,8 +25,15 @@ namespace Elta.Windows
         private const int ID_SELECTION = 0x4A18;
 
         [STAThread]
-        public static void Main()
+        public static void Main(string[] args)
         {
+            // 无头诊断：--ocr <图片路径> 直接跑 OCR（不启动托盘），供自动化验证
+            if (args.Length >= 2 && args[0] == "--ocr")
+            {
+                RunOcrCli(args[1]);
+                return;
+            }
+
             var app = new System.Windows.Application
             {
                 ShutdownMode = ShutdownMode.OnExplicitShutdown,
@@ -71,6 +81,53 @@ namespace Elta.Windows
             };
 
             app.Run();
+        }
+
+        [DllImport("kernel32.dll")]
+        private static extern bool AttachConsole(int dwProcessId);
+
+        /// <summary>
+        /// 无头诊断：`Elta.Windows.exe --ocr &lt;图片路径&gt;` 直接跑 <see cref="OcrService"/>（不启动托盘），
+        /// 把状态/文本/块坐标写到 `&lt;图片&gt;.ocr.txt`（并尝试附加到父控制台），供自动化验证 B3 代码路径。
+        /// </summary>
+        private static void RunOcrCli(string imagePath)
+        {
+            string report;
+            try
+            {
+                using var bitmap = new Bitmap(imagePath);
+                OcrOutcome outcome = OcrService.RecognizeAsync(bitmap).GetAwaiter().GetResult();
+
+                var sb = new StringBuilder();
+                sb.AppendLine($"image={imagePath}");
+                sb.AppendLine($"size={bitmap.Width}x{bitmap.Height}");
+                sb.AppendLine($"status={outcome.Status}");
+                sb.AppendLine($"blocks={outcome.Blocks.Count}");
+                if (outcome.Error is not null) sb.AppendLine($"error={outcome.Error}");
+                if (outcome.Status == OcrStatus.Ok && outcome.Blocks.Count > 0)
+                {
+                    string text = TextPreprocessor.CondenseCitation(TableExtractor.Process(outcome.Blocks));
+                    sb.AppendLine("---- text ----");
+                    sb.AppendLine(text);
+                    sb.AppendLine("---- blocks ----");
+                    foreach (OcrBlock b in outcome.Blocks)
+                        sb.AppendLine($"{b.Text} @({b.BoundingBox.X:0},{b.BoundingBox.Y:0},{b.BoundingBox.Width:0},{b.BoundingBox.Height:0})");
+                }
+                report = sb.ToString();
+            }
+            catch (Exception ex)
+            {
+                report = "EXCEPTION: " + ex;
+            }
+
+            try { File.WriteAllText(imagePath + ".ocr.txt", report, new UTF8Encoding(false)); } catch { }
+            try
+            {
+                AttachConsole(-1);
+                Console.WriteLine(report);
+                Console.Out.Flush();
+            }
+            catch { }
         }
 
         private static async void RunScreenshot()

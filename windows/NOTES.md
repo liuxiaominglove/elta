@@ -21,13 +21,18 @@ Core 已完成 **A1–A6**；外壳 **C0**、平台服务 **B1/B2/B3** 见下表
 | C0 | 托盘外壳入口点 + WPF 构建 CI | ✅ 真机编译通过 |
 | B1 | 截图选区（Core 几何 + GDI overlay） | ✅ 260 测试 + 编译 + **A 机手测全通过** |
 | B2 | 取词（UIA → Ctrl+C 兜底 + 剪贴板恢复） | ✅ Core 283 + 编译 + **A 机手测通过**（Word/WPS 待人工抽检） |
-| B3 | OCR（WinRT Windows.Media.Ocr → 行级 OcrBlock） | ✅ Core 303 + 外壳编译；🟡 **真机手测待做** |
+| B3 | OCR（WinRT Windows.Media.Ocr → 行级 OcrBlock） | ✅ Core 303 + 外壳编译 + **OCR 代码路径真机自动化验证**；🟡 仅交互式 Ctrl+T 流程待手测 |
 | B4 | 热键平台服务 + Windows 配置/密钥/默认值落地 | ⬜ 下一步 |
 
 ## 命令
 ```sh
 # Mac 上跑 Core 测试（需要 .NET 8 SDK，已装在 ~/.dotnet）
 sh windows/test-core.sh
+```
+
+```bat
+:: 无头 OCR 诊断（自动验证 B3 代码路径；不启动托盘），结果写 <图片>.ocr.txt
+windows\src\Elta.Windows\bin\Release\net8.0-windows10.0.19041.0\Elta.Windows.exe --ocr <图片路径>
 ```
 - .NET SDK 8.0.425 已**用户级**装在 `~/.dotnet`（无需 sudo）；若 PATH 无 `dotnet`，脚本会自动用 `~/.dotnet/dotnet`。
 - CI：`.github/workflows/windows-ci.yml`：ubuntu/windows 各跑 Core 测试 + **windows-latest 构建 Elta.Windows**。
@@ -131,9 +136,14 @@ windows/
     `TableExtractor.Process` → `TextPreprocessor.CondenseCitation` → 弹框展示（沿用 B1/B2 调试形态；正式 UI 留 C）。
 - **关键点**：`OcrLine` **无包围盒**（官方 API 只有 `Text`/`Words`），行盒必须取词框并集；
   行文本**直取 `OcrLine.Text`**，**不可** `join(" ")` 重建（否则中文字间被插空格）。
-- **本机平台级验证**（PowerShell 直调 WinRT OCR；**非**本客户端代码路径，🟡）：
-  - 可用语言 = `en-US, zh-Hans-CN`；可建 en-US 引擎 ✓。
-  - `sample_english.png`（3 行英文）→ 文本正确；`sample_table.png` 英文表头可读；纯中文图 en-US 读不出（见限制）。
+- **自动化验证（真机，走本客户端代码路径）✅**：
+  - 新增无头入口 `Elta.Windows.exe --ocr <图片路径>`（不启动托盘）：跑 `OcrService.RecognizeAsync`，把
+    `status / blocks / 文本 / 各块坐标` 写入 `<图片>.ocr.txt`（并尝试附加父控制台）。
+  - 结果（本机）：
+    - `sample_english.png` → `status=Ok, blocks=3`；3 行英文文本与行盒坐标正确。
+    - `sample_table.png` → `status=Ok, blocks=5`；`TableExtractor` 正确输出 Markdown 表格（中文单元格因 en-US 为空）。
+    - `sample_cjk.png` → `status=Ok, blocks=0`（印证 en-US 读不了中文）。
+  - 平台级佐证（P0.5 spike `回传.txt`）：可用语言 `en-US, zh-Hans-CN`，可建 en-US 引擎，1200×380 英文段落/表格图均识别成功。
 - **已知限制**：A 策略只用 **en-US** 引擎；纯中文截图识别为空（mac Vision 可多语言）。
   ELTA 面向英语精读，暂可接受；若需中文，后续加 zh-Hans 兜底（先 en，空则再 zh）。
 - **手测步骤（A 机）**：运行后 Ctrl+T 框选屏幕上一段英文 → 弹框应显示正确文本；
