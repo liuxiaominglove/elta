@@ -178,12 +178,19 @@ Windows A 机 — 环境搭建（opencode + cc-suite-cn）+ ELTA Windows 进度�
     cd C:\elta
     opencode                     # 进入 opencode，先让它读交接记录
 
-  进 opencode 后第一件事：
+  进 opencode 后第一件事（读交接记录 + 开发约定）：
       @windows/NOTES.md          # 进度与决策的唯一交接记录
+      @windows/AGENTS.md         # Windows 侧开发约定（命令/纪律）
 
-  编译运行 Windows 外壳：
-      dotnet run --project windows\src\Elta.Windows\Elta.Windows.csproj -c Release
-      或双击： windows\运行ELTA.bat
+  常用命令（Windows）：
+      跑 Core 测试： dotnet test windows\tests\Elta.Core.Tests\Elta.Core.Tests.csproj
+                    或双击 windows\test-core.bat
+      编/跑外壳：    dotnet run --project windows\src\Elta.Windows\Elta.Windows.csproj -c Release
+                    或双击 windows\运行ELTA.bat
+
+  ⚠️ Git 只读：本机（Windows）只 clone / pull、不 push（仓库 public，免认证）。
+     你在 Windows 上改的代码，用 U 盘 / Syncthing 回传，或让 Mac 侧代为提交；
+     本机不要配置 GitHub 凭证。
 
   程序用法（当前已实现）：
       Ctrl+T         截图选区（B1，已真机验证通过）
@@ -237,6 +244,7 @@ Windows A 机 — 环境搭建（opencode + cc-suite-cn）+ ELTA Windows 进度�
   □ dotnet --version  显示 8.x
   □ opencode 能启动、能选到 DeepSeek 模型、能读 @windows/NOTES.md
   □ dotnet build windows\src\Elta.Windows\Elta.Windows.csproj -c Release 通过
+  □（不需要）GitHub 凭证  ← Windows 只 clone/pull，不 push；改动经 U 盘/Syncthing 回传
 
 
 ------------------------------------------------------------
@@ -259,6 +267,9 @@ Q: 需要 WSL 吗？
 A: 不需要，也不要用（编不了 WPF）。用原生 Windows。
 Q: Mac 和 Windows 的 opencode 会话能同步吗？
 A: 不能（各自独立）。仓库 + windows\NOTES.md 是唯一交接来源。
+Q: 在 Windows 上改了代码，怎么回到 Mac / 主仓库？
+A: Windows 侧 git 只读、不 push。用 U 盘拷回改动文件，或经 Syncthing 同步；
+   也可以由 Mac 侧把 Windows 的改动提交/推送。**不要在 Windows 上配 GitHub 凭证。**
 Q: cc-suite-cn 会不会因为平台差异跑不起来？
 A: 主体是跨平台 Node；已知需微调处见第 3 步 3.4（脚本 shell、command -v / spawn）。
    不是重写，是打补丁。

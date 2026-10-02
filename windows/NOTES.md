@@ -7,8 +7,8 @@
 **C# / .NET 8 WPF + WebView2**。地址：`windows/`，架构：三段式
 （Core 纯逻辑 / 平台外壳 / 共享 HTML）。
 
-## 当前进度（子计划 A：Mac 可测的 Core）
-已完成 **A1–A6**，Mac 上 **240 个测试全绿**。**子计划 A 收尾**。
+## 当前进度
+Core 已完成 **A1–A6**；外壳 **C0**、平台服务 **B1/B2** 见下表。Mac 上 **Core 283 测试全绿**。
 
 | WI | 内容 | 状态 |
 |----|------|------|
@@ -31,7 +31,9 @@ sh windows/test-core.sh
 - .NET SDK 8.0.425 已**用户级**装在 `~/.dotnet`（无需 sudo）；若 PATH 无 `dotnet`，脚本会自动用 `~/.dotnet/dotnet`。
 - CI：`.github/workflows/windows-ci.yml`：ubuntu/windows 各跑 Core 测试 + **windows-latest 构建 Elta.Windows**。
   → 推送 `windows/**` 即自动真机编译验证外壳（C0 已由此验证通过）；运行期行为仍需真机手测。
-- 真机验证通道：Mac 写代码 → `git push origin main` → Windows A 机 `cd C:\elta-spike && git pull` → `dotnet build windows\src\Elta.Windows -c Release` → 运行。
+- 开发通道：**主 = git**（Mac 写 → `git push` → Windows `git clone/pull`；仓库 public，免认证）。
+  **Windows 侧 git 只读、不 push**；Windows 上的改动经 **U 盘 / Syncthing 回传**（或由 Mac 侧代为提交）。U 盘仅作**离线兜底**。
+- Windows 侧构建/测试/运行命令见 `windows/AGENTS.md`。
 
 ## 目录
 ```
@@ -40,10 +42,14 @@ windows/
   src/Elta.Core/            # net8.0 纯逻辑（Mac 可编译）
   src/Elta.Windows/         # net8.0-windows10.0.19041.0 WPF 外壳（仅 Windows 编译）
   tests/Elta.Core.Tests/    # xUnit
-  test-core.sh
+  test-core.sh              # Mac 跑 Core 测试
+  test-core.bat             # Windows 跑 Core 测试
+  运行ELTA.bat              # Windows 编译并运行外壳
+  AGENTS.md                 # Windows 侧开发约定
   spike/                    # P0.5 能力验证 Demo（已跑完，见下文）
 ```
-> `bin/`、`obj/` 已在根 `.gitignore` 中忽略。**尚未 git 提交**。
+> `bin/`、`obj/` 已在根 `.gitignore` 中忽略；`windows/**` 已提交到主仓库
+> （方案 B：移植完成后再 `git subtree split -P windows` 拆成独立仓库）。
 
 ## 关键决策
 - **测试框架**：xUnit + `dotnet test`（不是 node:test）。
@@ -66,6 +72,8 @@ windows/
     `installID` 用 `Guid`（小写）vs mac 大写 UUID，行为等价。键名沿用 `snaptranslate.*`。
 
 ## 下一步（按序）
+
+> **0) 先做 B2 手测**：按 `回传-B2.txt` 模板在 A 机验证取词（含剪贴板恢复）；通过后再进 B3。
 
 ### C0：托盘外壳入口点 ✅
 - `Elta.Windows/Program.cs`（`[STAThread]` + WPF `Application` + WinForms `NotifyIcon` 托盘图标/退出菜单）+ `app.manifest`（PerMonitorV2）。

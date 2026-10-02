@@ -1,0 +1,16 @@
+# 跨平台换行统一：仓库内按文本归一化，检出时用平台原生换行。
+# 目的：Mac/Windows 协作时避免 CRLF/LF 噪音（Windows 上开发的 .cs/.bat 等）。
+* text=auto
+
+# 二进制文件，禁止任何换行转换
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.icns binary
+*.dmg  binary
+*.exe  binary
+*.zip  binary
+
+# Shell 脚本在 Windows 上被 Git Bash 使用时保持 LF
+*.sh  text eol=lf
