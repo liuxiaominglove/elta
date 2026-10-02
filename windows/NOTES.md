@@ -250,6 +250,6 @@ windows/
 - Windows 仓库策略：**方案 B**——移植期先留 `windows/` 于主仓库，B/C 完成后用 `git subtree split -P windows`
   拆成独立仓库 `elta-windows`（保留历史）。
 - 运行期验证需 A 机手测（CI 只做编译级）。
-- **回传**（2026-10-02）：B3 + P0 共 6 个 commit 已打包到 U 盘
-  `F:\ELTA-Windows-B3\elta-main-incremental-2026-10-02.bundle`（`git bundle verify` 通过）；
-  Mac 侧 `git pull <bundle> main && git push origin main`。
+- **回传**（2026-10-02）：本地全部未推送 commit 已打包到 U 盘
+  `F:\ELTA-Windows-B3\elta-main-incremental-2026-10-02.bundle`（`git bundle verify` 通过；清单见同目录 `commits.txt`）；
+  Mac 侧 `git pull <bundle> main && git push origin main`。数量以 `commits.txt` / `git rev-list --count origin/main..main` 为准。
