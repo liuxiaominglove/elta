@@ -132,12 +132,15 @@ namespace Elta.Windows
 
         private static async void RunScreenshot()
         {
-            Bitmap? cropped = ScreenshotService.CaptureSelection();
-            if (cropped == null) return;   // 取消或选区无效
-
+            Bitmap? captured = null;
             try
             {
-                OcrOutcome outcome = await OcrService.RecognizeAsync(cropped);
+                captured = ScreenshotService.CaptureSelection();
+                if (captured == null) return;   // 取消或选区无效
+
+                // OCR 放后台线程，避免位图编码/识别阻塞 UI
+                Bitmap shot = captured;
+                OcrOutcome outcome = await Task.Run(() => OcrService.RecognizeAsync(shot));
                 switch (outcome.Status)
                 {
                     case OcrStatus.NoLanguagePack:
@@ -172,9 +175,17 @@ namespace Elta.Windows
                     "ELTA — OCR（B3）",
                     Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Information);
             }
+            catch (Exception ex)
+            {
+                // async void 内异常若逃逸会导致进程崩溃，这里兜底
+                Forms.MessageBox.Show(
+                    $"截图翻译失败：\n{ex.Message}",
+                    "ELTA — OCR（B3）",
+                    Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Error);
+            }
             finally
             {
-                cropped.Dispose();
+                captured?.Dispose();
             }
         }
 
