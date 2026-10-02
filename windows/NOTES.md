@@ -162,6 +162,20 @@ windows/
 - **样例图**：测试机本地目录 `C:\Users\admin\AppData\Local\Temp\opencode\elta-b3-samples\`
   （`sample_english.png` / `sample_table.png` / `sample_cjk.png`），仅生成未入库（如需入库请示）。
 
+### 稳定性加固 P0：WI-1 剪贴板安全 / WI-2 日志与兜底 ✅ 代码 / 🟡 手测待做
+- **WI-1（数据安全）**：Core 新增 `ClipboardRestorePolicy`（12 测试）——捕获失败 / 被第三方改写 / 序号未变 → **不动**；
+  确认原本为空 → 清空（去 Ctrl+C 残留）；原有内容 → 还原。
+  外壳 `ClipboardState` 显式记录 `CaptureSucceeded`，剪贴板读写加退避重试，单格式 50MB 上限（标 `Partial`）；
+  `SelectionReader` 按策略处置 + 第三方改写终检。
+  → **杜绝「剪贴板读取失败 → `Clear()` 清空用户剪贴板」的数据丢失路径**。
+- **WI-2（可诊断/不崩）**：新增 `Log`（`%LOCALAPPDATA%\ELTA\logs\elta-YYYYMMDD.log`；按天 + 保留 7 天 + 2MB 滚动；
+  **只记状态/长度，不记内容**；写盘失败静默）；全局兜底（Dispatcher / AppDomain / UnobservedTask）+ `RunSelection` 包 catch；
+  埋点：启动（版本/热键结果）、截图、OCR、取词、退出。
+- **已验证**：Core **315 绿**；外壳编译 0 错误；`--ocr` 回归 `status=Ok blocks=3`；托盘冒烟存活；
+  日志实测落盘（`start version=1.0.0.0 shotKey=True selectKey=True` / `ocr status=Ok blocks=3`）。
+- 🟡 **待手测（剪贴板矩阵）**：原剪贴板为 文本/图片/空 三种；取词后原内容保留；Edge/Chrome 候补路径；
+  有异常时查 `%LOCALAPPDATA%\ELTA\logs\`。
+
 ### WI-B4：热键平台服务（下一步）
 - 源：`Sources/HotkeyHelpers.swift`。
 - B4 需同时落地：**Windows 配置存储实现 + 密钥库实现 + Windows 版 `SettingsDefaults`**（A6 只定了接口）；
@@ -182,3 +196,5 @@ windows/
 - Windows 仓库策略：**方案 B**——移植期先留 `windows/` 于主仓库，B/C 完成后用 `git subtree split -P windows`
   拆成独立仓库 `elta-windows`（保留历史）。
 - 运行期验证需 A 机手测（CI 只做编译级）。
+- **回传**（2026-10-02）：B3 五个 commit 已打包到 U 盘 `F:\ELTA-Windows-B3\elta-main-incremental-2026-10-02.bundle`
+  （`git bundle verify` 通过）；Mac 侧 `git pull <bundle> main && git push origin main`。P0 批次 commit 待续包。

@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -52,6 +53,27 @@ namespace Elta.Windows
                 ShutdownMode = ShutdownMode.OnExplicitShutdown,
             };
 
+            // WI-2：全局异常兜底——记录日志并保住进程，避免「无痕崩溃」
+            app.DispatcherUnhandledException += (_, e) =>
+            {
+                Log.Error("DispatcherUnhandledException", e.Exception);
+                try
+                {
+                    Forms.MessageBox.Show(
+                        $"发生未处理错误（已记入日志）：\n{e.Exception.Message}\n\n日志目录：{Log.DirectoryPath}",
+                        "ELTA", Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Error);
+                }
+                catch { }
+                e.Handled = true;
+            };
+            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+                Log.Error("AppDomain.UnhandledException", e.ExceptionObject as Exception);
+            TaskScheduler.UnobservedTaskException += (_, e) =>
+            {
+                Log.Error("UnobservedTaskException", e.Exception);
+                e.SetObserved();
+            };
+
             var menu = new Forms.ContextMenuStrip();
 
             var shotItem = new Forms.ToolStripMenuItem("截图选区（Ctrl+T）");
@@ -81,12 +103,16 @@ namespace Elta.Windows
             bool selectKey = hotkey.Register(ID_SELECTION, MOD_CONTROL | MOD_SHIFT, VK_T,
                 () => app.Dispatcher.BeginInvoke((Action)RunSelection));
 
+            Log.Info($"start version={typeof(Program).Assembly.GetName().Version} " +
+                     $"shotKey={shotKey} selectKey={selectKey} logDir={Log.DirectoryPath}");
+
             tray.ShowBalloonTip(3500, "ELTA",
                 $"Ctrl+T 截图；Ctrl+Shift+T 划词{(shotKey && selectKey ? "" : "（部分热键被占用，可用托盘菜单）")}",
                 Forms.ToolTipIcon.Info);
 
             app.Exit += (_, _) =>
             {
+                Log.Info("exit");
                 hotkey.Dispose();
                 tray.Visible = false;
                 tray.Dispose();
@@ -110,6 +136,7 @@ namespace Elta.Windows
             {
                 using var bitmap = new Bitmap(imagePath);
                 OcrOutcome outcome = OcrService.RecognizeAsync(bitmap).GetAwaiter().GetResult();
+                Log.Info($"ocr-cli status={outcome.Status} blocks={outcome.Blocks.Count} size={bitmap.Width}x{bitmap.Height}");
 
                 var sb = new StringBuilder();
                 sb.AppendLine($"image={imagePath}");
@@ -150,10 +177,14 @@ namespace Elta.Windows
             {
                 captured = ScreenshotService.CaptureSelection();
                 if (captured == null) return;   // 取消或选区无效
+                Log.Info($"screenshot captured {captured.Width}x{captured.Height}");
 
                 // OCR 放后台线程，避免位图编码/识别阻塞 UI
                 Bitmap shot = captured;
+                var sw = Stopwatch.StartNew();
                 OcrOutcome outcome = await Task.Run(() => OcrService.RecognizeAsync(shot));
+                sw.Stop();
+                Log.Info($"ocr status={outcome.Status} blocks={outcome.Blocks.Count} elapsed={sw.ElapsedMilliseconds}ms");
                 switch (outcome.Status)
                 {
                     case OcrStatus.NoLanguagePack:
@@ -191,6 +222,7 @@ namespace Elta.Windows
             catch (Exception ex)
             {
                 // async void 内异常若逃逸会导致进程崩溃，这里兜底
+                Log.Error("RunScreenshot failed", ex);
                 Forms.MessageBox.Show(
                     $"截图翻译失败：\n{ex.Message}",
                     "ELTA — OCR（B3）",
@@ -204,24 +236,39 @@ namespace Elta.Windows
 
         private static void RunSelection()
         {
-            // 等用户松开热键（对应 mac 的 RunLoop 0.3s），否则合成的 Ctrl+C 会带上 Shift
-            Thread.Sleep(300);
-
-            string? text = SelectionReader.ReadSelectedText();
-            if (string.IsNullOrEmpty(text))
+            try
             {
-                Forms.MessageBox.Show(
-                    "未取到选中文本。\n请先选中一段文字，再按 Ctrl+Shift+T。",
-                    "ELTA — 划词取词（B2）",
-                    Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Warning);
-                return;
-            }
+                var sw = Stopwatch.StartNew();
+                // 等用户松开热键（对应 mac 的 RunLoop 0.3s），否则合成的 Ctrl+C 会带上 Shift
+                Thread.Sleep(300);
 
-            string preview = text!.Length > 300 ? text.Substring(0, 300) + "…" : text;
-            Forms.MessageBox.Show(
-                $"取到 {text.Length} 字符：\n\n{preview}",
-                "ELTA — 划词取词（B2）",
-                Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Information);
+                string? text = SelectionReader.ReadSelectedText();
+                sw.Stop();
+                Log.Info($"selection len={text?.Length ?? 0} elapsed={sw.ElapsedMilliseconds}ms");
+
+                if (string.IsNullOrEmpty(text))
+                {
+                    Forms.MessageBox.Show(
+                        "未取到选中文本。\n请先选中一段文字，再按 Ctrl+Shift+T。",
+                        "ELTA — 划词取词（B2）",
+                        Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Warning);
+                    return;
+                }
+
+                string preview = text!.Length > 300 ? text.Substring(0, 300) + "…" : text;
+                Forms.MessageBox.Show(
+                    $"取到 {text.Length} 字符：\n\n{preview}",
+                    "ELTA — 划词取词（B2）",
+                    Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("RunSelection failed", ex);
+                Forms.MessageBox.Show(
+                    $"取词失败：\n{ex.Message}",
+                    "ELTA — 划词取词（B2）",
+                    Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Error);
+            }
         }
     }
 }

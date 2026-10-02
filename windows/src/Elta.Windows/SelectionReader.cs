@@ -60,7 +60,7 @@ namespace Elta.Windows
             return null;
         }
 
-        /// <summary>Ctrl+C + 剪贴板兜底（主路径）。取词后恢复原剪贴板。</summary>
+        /// <summary>Ctrl+C + 剪贴板兜底（主路径）。取词后按 Core 策略恢复/清空/不动剪贴板。</summary>
         public static string? TryCopyFallback()
         {
             uint oldSequence = GetClipboardSequenceNumber();
@@ -72,13 +72,16 @@ namespace Elta.Windows
             SendCtrlC();
 
             string? selected = null;
+            uint seqAtDecision = oldSequence;   // 决策时刻的剪贴板序号（用于识别第三方改写）
             for (int i = 0; i < MaxRetries; i++)
             {
                 Thread.Sleep(RetryDelayMs);
+                uint seq = GetClipboardSequenceNumber();
                 string? newText = ClipboardService.GetText();
-                if (ClipboardAcceptPolicy.AcceptByChangeCount(GetClipboardSequenceNumber() != oldSequence, newText))
+                if (ClipboardAcceptPolicy.AcceptByChangeCount(seq != oldSequence, newText))
                 {
                     selected = newText;
+                    seqAtDecision = seq;
                     break;
                 }
             }
@@ -86,9 +89,22 @@ namespace Elta.Windows
             {
                 string? newText = ClipboardService.GetText();
                 if (ClipboardAcceptPolicy.AcceptByFallback(newText, previousTexts)) selected = newText;
+                seqAtDecision = GetClipboardSequenceNumber();
             }
 
-            snapshot.Restore();
+            // WI-1：决策「恢复/清空/不动」。捕获失败 → 不动；期间被第三方改写 → 不动（绝不丢用户数据）。
+            bool changedByThirdParty = GetClipboardSequenceNumber() != seqAtDecision;
+            ClipboardRestoreAction action = ClipboardRestorePolicy.Decide(
+                captureSucceeded: snapshot.CaptureSucceeded,
+                originalCount: snapshot.Count,
+                clipboardChanged: seqAtDecision != oldSequence,
+                changedByThirdParty: changedByThirdParty);
+
+            if (!snapshot.Apply(action))
+                Log.Warn($"clipboard apply failed action={action}");
+            if (snapshot.Partial)
+                Log.Warn("clipboard snapshot partial");
+
             return selected;
         }
 
