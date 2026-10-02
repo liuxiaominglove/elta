@@ -75,16 +75,18 @@ Windows A 机 — 环境搭建（opencode + cc-suite-cn）+ ELTA Windows 进度�
       配置文件：opencode.json / opencode.jsonc / tui.json
 
   2.3 从 Mac 搬「行为配置」（强烈推荐，做一次）
-      **U 盘上已经备好**：`opencode-config-from-mac\`（从 Mac 导出、**已脱敏、无密钥**）。
-      把它的**内容**（不是文件夹本身）拷到上面那个 Windows 目录：
+      **U 盘已备好**：`opencode-config-from-mac\`（从 Mac 导出、已脱敏、已做 Windows 适配）。
+      把它的**内容**（不是文件夹本身）拷到：
           C:\Users\<你的用户名>\.config\opencode\
       然后在该目录执行： npm install   （补插件依赖）
-      里面含：agents\ commands\ skills\ rules\ plugins\ nlpm\ scripts\ + opencode.jsonc 等。
-      ⚠️ 两点：
-        a) 已剔除明文 key（原 opencode.json 里的 VMark token 已移除）；
-        b) opencode.jsonc 里有两条 Mac 绝对路径的 skills，需你改/删——
-           详见该文件夹内 `README-Windows-搬移说明.txt` 第 4 步。
-      注意：**别把明文 key 一起拷**；key 在 Windows 上用 2.4 重新配。
+      含 agents\ commands\ skills\ rules\ nlpm\ scripts\ + opencode.jsonc 等，
+      **含写代码用的 /tdd、/tdd-plan**（已“去硬编码”，Windows(.NET) 上按 `dotnet test` 走）。
+      已替你处理（无需你再动手）：
+        ① 明文 key 已剔除（原 opencode.json 的 VMark token 已移除）；
+        ② opencode.jsonc 里两条 Mac 绝对路径的 skills 已删除；
+        ③ Mac 专属命令/代理 与 plugins\ 已剔除（避免在 Windows 报错）。
+      分类（必装=编码核心 / 可选=NLPM·peter / 已剔除=mac IT）与安装细节，
+      见该文件夹内 `README-Windows-搬移说明.txt`。
 
   2.4 配 DeepSeek 的 API Key（二选一）
       方式 A（推荐）：启动 opencode → 输入命令
