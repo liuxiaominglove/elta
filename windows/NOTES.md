@@ -67,6 +67,7 @@ windows/
     `providerShortName` 是显式参数（默认 `"DeepSeek"`），待 SettingsManager 落地后由调用方注入。
 - **密钥**：DPAPI（Windows）替代 macOS Keychain。
 - **OCR**：A+B 方案（优先系统 en-US 引擎 → 缺包时引导安装 → 自带兜底引擎）。
+  - **语言：仅 `en-US`**——产品确认截图源域为**纯英文**，不做中文兜底（见 `docs/adr/0003-ocr-english-only.md`）。
 - **取词**：先 UIA（父链遍历）→ 失败回退 Ctrl+C + 剪贴板**深拷贝**恢复。
 - **热键**：组合键 `RegisterHotKey`；裸键（ESC/`）用 `WH_KEYBOARD_LL`。
 - **配置/密钥/默认值分层**（A6 定）：核心原则——**平台「方言」一律下沉到 Windows 外壳，Core 只管机制**。
@@ -144,8 +145,8 @@ windows/
     - `sample_table.png` → `status=Ok, blocks=5`；`TableExtractor` 正确输出 Markdown 表格（中文单元格因 en-US 为空）。
     - `sample_cjk.png` → `status=Ok, blocks=0`（印证 en-US 读不了中文）。
   - 平台级佐证（P0.5 spike `回传.txt`）：可用语言 `en-US, zh-Hans-CN`，可建 en-US 引擎，1200×380 英文段落/表格图均识别成功。
-- **已知限制**：A 策略只用 **en-US** 引擎；纯中文截图识别为空（mac Vision 可多语言）。
-  ELTA 面向英语精读，暂可接受；若需中文，后续加 zh-Hans 兜底（先 en，空则再 zh）。
+- **已知限制（已定为决策）**：仅 **en-US** 引擎；截图含中文时中文部分为空。产品已确认源文本域为**纯英文**，
+  故**不做** zh 兜底（`docs/adr/0003-ocr-english-only.md`）。若未来扩大到中英混排，改用「en+zh 双引擎按 CJK 过滤合并」。
 - **手测步骤（A 机）**：运行后 Ctrl+T 框选屏幕上一段英文 → 弹框应显示正确文本；
   框选一张英文表格 → 应输出 Markdown 表格；框选中文 → 预期为空或乱码（记录以便评估是否加 zh 兜底）；
   取消（ESC/右键）不报错。
