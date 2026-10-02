@@ -21,7 +21,7 @@ Core 已完成 **A1–A6**；外壳 **C0**、平台服务 **B1/B2/B3** 见下表
 | C0 | 托盘外壳入口点 + WPF 构建 CI | ✅ 真机编译通过 |
 | B1 | 截图选区（Core 几何 + GDI overlay） | ✅ 260 测试 + 编译 + **A 机手测全通过** |
 | B2 | 取词（UIA → Ctrl+C 兜底 + 剪贴板恢复） | ✅ Core 283 + 编译 + **A 机手测通过**（Word/WPS 待人工抽检） |
-| B3 | OCR（WinRT Windows.Media.Ocr → 行级 OcrBlock） | ✅ Core 303 + 外壳编译 + **OCR 代码路径真机自动化验证**；🟡 仅交互式 Ctrl+T 流程待手测 |
+| B3 | OCR（WinRT Windows.Media.Ocr → 行级 OcrBlock） | ✅ Core 303 + 编译 + 自动验证 + **A 机手测全通过** |
 | B4 | 热键平台服务 + Windows 配置/密钥/默认值落地 | ⬜ 下一步 |
 
 ## 命令
@@ -70,6 +70,8 @@ windows/
   - **语言：仅 `en-US`**——产品确认截图源域为**纯英文**，不做中文兜底（见 `docs/adr/0003-ocr-english-only.md`）。
 - **取词**：先 UIA（父链遍历）→ 失败回退 Ctrl+C + 剪贴板**深拷贝**恢复。
 - **热键**：组合键 `RegisterHotKey`；裸键（ESC/`）用 `WH_KEYBOARD_LL`。
+- **单实例**：托盘用互斥锁 `Local\Elta.Windows.SingleInstance` 守卫——第二实例提示后退出，
+  防止「进程在跑但注册不到热键」的僵尸实例（`--ocr` 无头模式不受守卫影响）。
 - **配置/密钥/默认值分层**（A6 定）：核心原则——**平台「方言」一律下沉到 Windows 外壳，Core 只管机制**。
   - 配置：Core 只定 `ISettingsStore`；Windows 具体实现（注册表 或 %APPDATA% JSON）留到 B/C。
   - 密钥：Core 只定 `ISecretStore`；Windows 实现（凭据管理器 CredMan〔更像 mac Keychain〕或 DPAPI 加密文件）留到 B/C。
@@ -83,7 +85,7 @@ windows/
 > **0) B2 已通过**（`回传-B2.txt`，Win10，零 Fail）：记事本（单行/多行/中英混合）、Chrome、Edge 取词；
 > 剪贴板恢复（UIA 路径与 Ctrl+C 兜底路径的文本/图片/空/大文本/emoji）全部通过；Ctrl+T 截图回归正常。
 > Word/WPS 文字/WPS PDF 因自动化限制未跑（非失败）→ 建议人工各抽检一次，即可升 🟢。
-> **B3 已收尾**（Core 303 绿 + 外壳编译 + `--ocr` 真机自动化验证 + 启动冒烟通过；仅剩交互式 Ctrl+T 目视）。
+> **B3 已完成 🟢**（Core 303 绿 + 外壳编译 + `--ocr` 真机自动化验证 + 启动冒烟 + **A 机手测全通过**）。
 > 下一步 **B4**（热键 + Windows 配置/密钥/默认值落地）。
 
 ### C0：托盘外壳入口点 ✅
@@ -148,7 +150,10 @@ windows/
   - 平台级佐证（P0.5 spike `回传.txt`）：可用语言 `en-US, zh-Hans-CN`，可建 en-US 引擎，1200×380 英文段落/表格图均识别成功。
 - **稳定性收尾**：`RunScreenshot`（`async void`）加 try/catch 兜底——异常不再导致进程崩溃；OCR 移入后台线程
   （`Task.Run`），避免位图编码/识别阻塞 UI；外壳启动冒烟通过（进程存活 5s 无崩溃）。
-  唯一未测：交互式 Ctrl+T → 弹框（UI 目视，低风险；OCR 逻辑已由 `--ocr` 自动覆盖）。
+- **A 机手测（本机）✅**：`运行ELTA.bat` 启动 → Ctrl+T 框选英文 → 弹框文本正确 ✓；ESC 取消无异常 ✓；
+  空白区 → 「未识别到文字」 ✓；托盘退出 ✓（表格项未单独测，逻辑已由 `--ocr` 覆盖）。
+  踩坑记录：曾因**旧实例占用全局热键**导致新实例 Ctrl+T 失效（RegisterHotKey 失败且不重试）——
+  已加**单实例守卫**（`Local\Elta.Windows.SingleInstance` 互斥锁，第二实例提示「已在运行」并退出）。
 - **已知限制（已定为决策）**：仅 **en-US** 引擎；截图含中文时中文部分为空。产品已确认源文本域为**纯英文**，
   故**不做** zh 兜底（`docs/adr/0003-ocr-english-only.md`）。若未来扩大到中英混排，改用「en+zh 双引擎按 CJK 过滤合并」。
 - **手测步骤（A 机）**：运行后 Ctrl+T 框选屏幕上一段英文 → 弹框应显示正确文本；

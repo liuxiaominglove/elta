@@ -34,6 +34,19 @@ namespace Elta.Windows
                 return;
             }
 
+            // 单实例守卫：第二个实例会静默抢不到全局热键（RegisterHotKey 失败），
+            // 提示后退出，避免出现「进程在跑但热键失效」的僵尸实例。
+            using var singleInstance = new Mutex(
+                initiallyOwned: true, name: @"Local\Elta.Windows.SingleInstance", out bool isFirstInstance);
+            if (!isFirstInstance)
+            {
+                Forms.MessageBox.Show(
+                    "ELTA 已在运行（见系统托盘图标）。",
+                    "ELTA",
+                    Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Information);
+                return;
+            }
+
             var app = new System.Windows.Application
             {
                 ShutdownMode = ShutdownMode.OnExplicitShutdown,
