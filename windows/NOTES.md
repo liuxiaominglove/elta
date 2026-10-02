@@ -20,7 +20,7 @@ Core 已完成 **A1–A6**；外壳 **C0**、平台服务 **B1/B2** 见下表。
 | A6 | SettingsManager / Store / 密钥抽象 | ✅ 84 测试 |
 | C0 | 托盘外壳入口点 + WPF 构建 CI | ✅ 真机编译通过 |
 | B1 | 截图选区（Core 几何 + GDI overlay） | ✅ 260 测试 + 编译 + **A 机手测全通过** |
-| B2 | 取词（UIA → Ctrl+C 兜底 + 剪贴板恢复） | ✅ Core 283 测试 + 编译过；待 A 机手测 |
+| B2 | 取词（UIA → Ctrl+C 兜底 + 剪贴板恢复） | ✅ Core 283 + 编译 + **A 机手测通过**（Word/WPS 待人工抽检） |
 | B3–B4 | OCR / 热键平台服务 | ⬜ 下一步 |
 
 ## 命令
@@ -73,7 +73,9 @@ windows/
 
 ## 下一步（按序）
 
-> **0) 先做 B2 手测**：按 `回传-B2.txt` 模板在 A 机验证取词（含剪贴板恢复）；通过后再进 B3。
+> **0) B2 已通过**（`回传-B2.txt`，Win10，零 Fail）：记事本（单行/多行/中英混合）、Chrome、Edge 取词；
+> 剪贴板恢复（UIA 路径与 Ctrl+C 兜底路径的文本/图片/空/大文本/emoji）全部通过；Ctrl+T 截图回归正常。
+> Word/WPS 文字/WPS PDF 因自动化限制未跑（非失败）→ 建议人工各抽检一次，即可升 🟢。→ 下一步做 **B3 OCR**。
 
 ### C0：托盘外壳入口点 ✅
 - `Elta.Windows/Program.cs`（`[STAThread]` + WPF `Application` + WinForms `NotifyIcon` 托盘图标/退出菜单）+ `app.manifest`（PerMonitorV2）。
@@ -98,7 +100,11 @@ windows/
   2. U 盘 `ELTA-Windows-B1\`（源码 + 运行ELTA.bat + 操作说明；**注意 U 盘快照可能落后于仓库**）。
 - **A 机手测步骤**：见 U 盘 `ELTA-Windows-B1-操作说明.txt` 第 4 节；重点=扩展屏副屏 + 150% 各框选一次。
 
-### B2：取词（UIA → Ctrl+C 兜底）✅（编译过，待 A 机手测）
+### B2：取词（UIA → Ctrl+C 兜底）✅（含 A 机手测）
+- **A 机手测结果（`回传-B2.txt`，Win10，`Fail=0`）**：记事本 单行/多行/中英混合 ✓、空选提示 ✓；
+  记事本/Chrome/Edge 取到 ✓；**剪贴板恢复**（UIA 路径 + Ctrl+C 兜底路径）的 文本/图片/空/大文本/emoji ✓；
+  Ctrl+T 截图回归 ✓。**未自动跑**（非失败）：Word、WPS 文字、WPS PDF、托盘目视 → 建议人工抽检。
+  自动化方法：PowerShell + Win32 P/Invoke 注入热键并读 MessageBox 文本、校验剪贴板（合成输入 🟡）。
 - **Core（Mac 可测，TDD）**：`SelectionText`（`SubstringInRange` UTF-16 区间取子串 + `IsUsable`，移植 mac
   `substringInRange`）、`ClipboardAcceptPolicy`（`AcceptByChangeCount` / `AcceptByFallback`）。测试见
   `SelectionTextTests.cs` / `ClipboardAcceptPolicyTests.cs`。
