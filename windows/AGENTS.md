@@ -43,8 +43,9 @@ dotnet build windows\src\Elta.Windows\Elta.Windows.csproj -c Release
 
 ## 已完成 / 待办（摘要，详情见 NOTES）
 
-- ✅ Core：A1–A6（文本/分句/表格/HTML/设置），283 测试。
+- ✅ Core：A1–A6（文本/分句/表格/HTML/设置），303 测试（B3 新增 `OcrGeometry` 20 条）。
 - ✅ C0：托盘外壳入口点 + CI 构建作业。
 - ✅ B1：截图选区（A 机手测全通过）。
-- ✅ B2：取词（代码完成 + CI 编译；**运行期待手测**）。
-- ⬜ B3 OCR → ⬜ B4 热键/设置存储落地 → ⬜ 子计划 C（设置/结果窗口）。
+- ✅ B2：取词（代码完成 + A 机手测通过；Word/WPS 待人工抽检）。
+- ✅ B3：OCR（WinRT，Core + 外壳 + 编译完成；**真机手测待做**）。
+- ⬜ B4 热键/设置存储落地 → ⬜ 子计划 C（设置/结果窗口）。

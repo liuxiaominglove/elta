@@ -8,7 +8,7 @@
 （Core 纯逻辑 / 平台外壳 / 共享 HTML）。
 
 ## 当前进度
-Core 已完成 **A1–A6**；外壳 **C0**、平台服务 **B1/B2** 见下表。Mac 上 **Core 283 测试全绿**。
+Core 已完成 **A1–A6**；外壳 **C0**、平台服务 **B1/B2/B3** 见下表。**Core 303 测试全绿**（B3 新增 `OcrGeometry` 20 条）。
 
 | WI | 内容 | 状态 |
 |----|------|------|
@@ -21,7 +21,8 @@ Core 已完成 **A1–A6**；外壳 **C0**、平台服务 **B1/B2** 见下表。
 | C0 | 托盘外壳入口点 + WPF 构建 CI | ✅ 真机编译通过 |
 | B1 | 截图选区（Core 几何 + GDI overlay） | ✅ 260 测试 + 编译 + **A 机手测全通过** |
 | B2 | 取词（UIA → Ctrl+C 兜底 + 剪贴板恢复） | ✅ Core 283 + 编译 + **A 机手测通过**（Word/WPS 待人工抽检） |
-| B3–B4 | OCR / 热键平台服务 | ⬜ 下一步 |
+| B3 | OCR（WinRT Windows.Media.Ocr → 行级 OcrBlock） | ✅ Core 303 + 外壳编译；🟡 **真机手测待做** |
+| B4 | 热键平台服务 + Windows 配置/密钥/默认值落地 | ⬜ 下一步 |
 
 ## 命令
 ```sh
@@ -75,7 +76,8 @@ windows/
 
 > **0) B2 已通过**（`回传-B2.txt`，Win10，零 Fail）：记事本（单行/多行/中英混合）、Chrome、Edge 取词；
 > 剪贴板恢复（UIA 路径与 Ctrl+C 兜底路径的文本/图片/空/大文本/emoji）全部通过；Ctrl+T 截图回归正常。
-> Word/WPS 文字/WPS PDF 因自动化限制未跑（非失败）→ 建议人工各抽检一次，即可升 🟢。→ 下一步做 **B3 OCR**。
+> Word/WPS 文字/WPS PDF 因自动化限制未跑（非失败）→ 建议人工各抽检一次，即可升 🟢。
+> **B3 代码已完成（Core 303 绿 + 外壳编译通过），真机手测待做；下一步 B4。**
 
 ### C0：托盘外壳入口点 ✅
 - `Elta.Windows/Program.cs`（`[STAThread]` + WPF `Application` + WinForms `NotifyIcon` 托盘图标/退出菜单）+ `app.manifest`（PerMonitorV2）。
@@ -118,13 +120,35 @@ windows/
   且**取词后原剪贴板内容仍在**（先复制一段别的内容再测）。
 - 与 B1 不同：B2 目前只把取到的文本弹给用户看，**尚未接翻译**（B3/后续再接 AI）。
 
-### WI-B3–B4：OCR / 热键 平台服务
-- 源：`Sources/OCREngine.swift`、`HotkeyHelpers.swift`。
-- **建议顺序 B1 截图 ✅ → B2 取词 ✅ → B3 OCR → B4 热键**。
-- B4 需同时落地：**Windows 配置存储实现 + 密钥库实现 + Windows 版 `SettingsDefaults`**（A6 只定了接口）。
+### B3：OCR（WinRT `Windows.Media.Ocr`）✅ 代码 / 🟡 真机手测待做
+- **实现**：
+  - Core：`OcrGeometry.cs`（`FitScale` 下采样因子 / `ScaleRect` 坐标回映射 / `UnionAll` 词框并集 /
+    `ToLineBlock` 行级块），测试 `OcrGeometryTests.cs` 20 条。Core 303 全绿。
+  - 外壳：`OcrService.cs`（`Bitmap → PNG → InMemoryRandomAccessStream → BitmapDecoder → SoftwareBitmap`；
+    `TryCreateFromLanguage("en-US") ?? TryCreateFromUserProfileLanguages()`；每行 `OcrLine.Text` + 词框并集 → `OcrBlock`；
+    图像长边超 `MaxImageDimension` 先等比缩小、识别后按 `1/scale` 回映射）。
+  - `Program.cs`：`RunScreenshot` 改 `async void`——截图 → `await OcrService.RecognizeAsync` →
+    `TableExtractor.Process` → `TextPreprocessor.CondenseCitation` → 弹框展示（沿用 B1/B2 调试形态；正式 UI 留 C）。
+- **关键点**：`OcrLine` **无包围盒**（官方 API 只有 `Text`/`Words`），行盒必须取词框并集；
+  行文本**直取 `OcrLine.Text`**，**不可** `join(" ")` 重建（否则中文字间被插空格）。
+- **本机平台级验证**（PowerShell 直调 WinRT OCR；**非**本客户端代码路径，🟡）：
+  - 可用语言 = `en-US, zh-Hans-CN`；可建 en-US 引擎 ✓。
+  - `sample_english.png`（3 行英文）→ 文本正确；`sample_table.png` 英文表头可读；纯中文图 en-US 读不出（见限制）。
+- **已知限制**：A 策略只用 **en-US** 引擎；纯中文截图识别为空（mac Vision 可多语言）。
+  ELTA 面向英语精读，暂可接受；若需中文，后续加 zh-Hans 兜底（先 en，空则再 zh）。
+- **手测步骤（A 机）**：运行后 Ctrl+T 框选屏幕上一段英文 → 弹框应显示正确文本；
+  框选一张英文表格 → 应输出 Markdown 表格；框选中文 → 预期为空或乱码（记录以便评估是否加 zh 兜底）；
+  取消（ESC/右键）不报错。
+- **样例图**：测试机本地目录 `C:\Users\admin\AppData\Local\Temp\opencode\elta-b3-samples\`
+  （`sample_english.png` / `sample_table.png` / `sample_cjk.png`），仅生成未入库（如需入库请示）。
+
+### WI-B4：热键平台服务（下一步）
+- 源：`Sources/HotkeyHelpers.swift`。
+- B4 需同时落地：**Windows 配置存储实现 + 密钥库实现 + Windows 版 `SettingsDefaults`**（A6 只定了接口）；
+  OCR 兜底引擎（B）视 B3 手测结果再定。
 - A6 未移植（归 B4/C）：`HotkeyRecorder`（UI）、`computeProviderCardLayout`（UI 布局）。
 - 可复用 P0.5 已验证代码：`windows/spike/SpikeWindow.cs` 的 P/Invoke（`RegisterHotKey`/`SetWindowsHookEx`/
-  `keybd_event`/`MonitorFromPoint`/`GetDpiForMonitor`）、截图、UIA、剪贴板快照。
+  `keybd_event`/`MonitorFromPoint`/`GetDpiForMonitor`）。
 
 ## P0.5 已验证结论（真机）
 - 🟢 截图：GDI `CopyFromScreen` + 物理像素换算，100%/150% 均正确；**多屏热切换会错位** → 正式实现要截「鼠标所在屏」。

@@ -1,7 +1,9 @@
 using System;
 using System.Drawing;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
+using Elta.Core;
 using Forms = System.Windows.Forms;
 
 namespace Elta.Windows
@@ -71,13 +73,52 @@ namespace Elta.Windows
             app.Run();
         }
 
-        private static void RunScreenshot()
+        private static async void RunScreenshot()
         {
             Bitmap? cropped = ScreenshotService.CaptureSelection();
             if (cropped == null) return;   // 取消或选区无效
 
-            using var preview = new PreviewForm(cropped);
-            preview.ShowDialog();
+            try
+            {
+                OcrOutcome outcome = await OcrService.RecognizeAsync(cropped);
+                switch (outcome.Status)
+                {
+                    case OcrStatus.NoLanguagePack:
+                        Forms.DialogResult ask = Forms.MessageBox.Show(
+                            "缺少英文 OCR 语言包，无法识别文字。\n是否打开系统语言设置进行安装？",
+                            "ELTA — OCR（B3）",
+                            Forms.MessageBoxButtons.YesNo, Forms.MessageBoxIcon.Warning);
+                        if (ask == Forms.DialogResult.Yes) OcrService.OpenLanguageSettings();
+                        return;
+                    case OcrStatus.Failed:
+                        Forms.MessageBox.Show(
+                            $"OCR 失败：\n{outcome.Error}",
+                            "ELTA — OCR（B3）",
+                            Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Error);
+                        return;
+                }
+
+                if (outcome.Blocks.Count == 0)
+                {
+                    Forms.MessageBox.Show(
+                        "OCR 未识别到文字。\n请确认框选区域包含清晰文字，且文字不过小/模糊。",
+                        "ELTA — OCR（B3）",
+                        Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Warning);
+                    return;
+                }
+
+                // 与 mac 一致：OCR 坐标 → 表格/纯文本 → 引用压缩
+                string text = TextPreprocessor.CondenseCitation(TableExtractor.Process(outcome.Blocks));
+                string preview = text.Length > 500 ? text.Substring(0, 500) + "…" : text;
+                Forms.MessageBox.Show(
+                    $"识别到 {outcome.Blocks.Count} 行，{text.Length} 字符：\n\n{preview}",
+                    "ELTA — OCR（B3）",
+                    Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Information);
+            }
+            finally
+            {
+                cropped.Dispose();
+            }
         }
 
         private static void RunSelection()
