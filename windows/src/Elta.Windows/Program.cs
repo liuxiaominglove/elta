@@ -35,6 +35,20 @@ namespace Elta.Windows
                 return;
             }
 
+            // 无头诊断：--selection-cli <输出文件> 直接跑 Ctrl+C 兜底取词（不启动托盘）
+            if (args.Length >= 2 && args[0] == "--selection-cli")
+            {
+                RunSelectionCli(args[1]);
+                return;
+            }
+
+            // 无头诊断：--selftest 跑剪贴板策略集成自检（不启动托盘、不依赖外部程序）
+            if (args.Length >= 1 && args[0] == "--selftest")
+            {
+                RunSelfTest();
+                return;
+            }
+
             // 单实例守卫：第二个实例会静默抢不到全局热键（RegisterHotKey 失败），
             // 提示后退出，避免出现「进程在跑但热键失效」的僵尸实例。
             using var singleInstance = new Mutex(
@@ -161,6 +175,122 @@ namespace Elta.Windows
             }
 
             try { File.WriteAllText(imagePath + ".ocr.txt", report, new UTF8Encoding(false)); } catch { }
+            try
+            {
+                AttachConsole(-1);
+                Console.WriteLine(report);
+                Console.Out.Flush();
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// 无头诊断：`--selection-cli &lt;输出文件&gt;` 直接调用 Ctrl+C 兜底取词（绕过 UIA），
+        /// 把结果写文件并尝试附加父控制台。供脚本驱动（如记事本全选后运行）做端到端验证。
+        /// </summary>
+        private static void RunSelectionCli(string outPath)
+        {
+            string report;
+            try
+            {
+                Thread.Sleep(500);   // 给前台/选区稳定时间
+                string? text = SelectionReader.TryCopyFallback();
+                report = text is null ? "selected=null" : $"selected=len={text.Length}{Environment.NewLine}{text}";
+                Log.Info($"selection-cli len={text?.Length ?? 0}");
+            }
+            catch (Exception ex)
+            {
+                report = "EXCEPTION: " + ex;
+                Log.Error("selection-cli failed", ex);
+            }
+
+            try { File.WriteAllText(outPath, report, new UTF8Encoding(false)); } catch { }
+            try
+            {
+                AttachConsole(-1);
+                Console.WriteLine(report);
+                Console.Out.Flush();
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// 无头诊断：`--selftest` 剪贴板策略集成自检。覆盖 WI-1 的关键回归：
+        /// 文本还原 / 图片还原 / 捕获失败不清空 / 原本为空去残留 / 第三方改写不动。
+        /// 会短暂借用剪贴板，结束后尽力还原原内容。结果写 `%TEMP%\elta-selftest.txt`。
+        /// </summary>
+        private static void RunSelfTest()
+        {
+            var sb = new StringBuilder();
+            int pass = 0, fail = 0;
+            void Check(string name, bool ok)
+            {
+                sb.AppendLine($"[{(ok ? "PASS" : "FAIL")}] {name}");
+                if (ok) pass++; else fail++;
+            }
+
+            ClipboardState backup = ClipboardState.Capture();
+            try
+            {
+                // 1) 文本还原
+                Forms.Clipboard.SetDataObject("ORIGINAL-TEXT", copy: true);
+                ClipboardState s1 = ClipboardState.Capture();
+                Forms.Clipboard.SetDataObject("CTRL-C-RESULT", copy: true);
+                ClipboardRestoreAction a1 = ClipboardRestorePolicy.Decide(s1.CaptureSucceeded, s1.Count, true, false);
+                s1.Apply(a1);
+                Check("text restore", a1 == ClipboardRestoreAction.Restore && ClipboardService.GetText() == "ORIGINAL-TEXT");
+
+                // 2) 图片还原
+                using (var bmp = new Bitmap(20, 10))
+                {
+                    using (Graphics g = Graphics.FromImage(bmp)) g.Clear(Color.Red);
+                    Forms.Clipboard.SetImage(bmp);
+                }
+                ClipboardState s2 = ClipboardState.Capture();
+                Forms.Clipboard.SetDataObject("TEXT-AFTER-IMAGE", copy: true);
+                ClipboardRestoreAction a2 = ClipboardRestorePolicy.Decide(s2.CaptureSucceeded, s2.Count, true, false);
+                s2.Apply(a2);
+                Check("image restore", a2 == ClipboardRestoreAction.Restore && Clipboard.ContainsImage());
+
+                // 3) 捕获失败 → 不动（绝不清空）
+                Forms.Clipboard.SetDataObject("USER-DATA", copy: true);
+                ClipboardState failed = ClipboardState.SimulateCaptureFailure();
+                ClipboardRestoreAction a3 = ClipboardRestorePolicy.Decide(failed.CaptureSucceeded, failed.Count, true, false);
+                failed.Apply(a3);
+                Check("capture-failure leaves clipboard", a3 == ClipboardRestoreAction.LeaveAsIs && ClipboardService.GetText() == "USER-DATA");
+
+                // 4) 原本为空 + 我们改过 → 清空残留
+                Forms.Clipboard.Clear();
+                ClipboardState s4 = ClipboardState.Capture();
+                Forms.Clipboard.SetDataObject("RESIDUE", copy: true);
+                ClipboardRestoreAction a4 = ClipboardRestorePolicy.Decide(s4.CaptureSucceeded, s4.Count, true, false);
+                s4.Apply(a4);
+                Check("empty -> clear residue", a4 == ClipboardRestoreAction.Clear && string.IsNullOrEmpty(ClipboardService.GetText()));
+
+                // 5) 第三方改写 → 不动
+                Forms.Clipboard.SetDataObject("USER-DATA-2", copy: true);
+                ClipboardState s5 = ClipboardState.Capture();
+                Forms.Clipboard.SetDataObject("THIRD-PARTY", copy: true);
+                ClipboardRestoreAction a5 = ClipboardRestorePolicy.Decide(s5.CaptureSucceeded, s5.Count, true, changedByThirdParty: true);
+                s5.Apply(a5);
+                Check("third-party untouched", a5 == ClipboardRestoreAction.LeaveAsIs && ClipboardService.GetText() == "THIRD-PARTY");
+            }
+            catch (Exception ex)
+            {
+                Check("exception: " + ex.Message, false);
+            }
+            finally
+            {
+                // 尽力还原用户剪贴板
+                ClipboardRestoreAction restore = ClipboardRestorePolicy.Decide(
+                    backup.CaptureSucceeded, backup.Count, true, false);
+                backup.Apply(restore);
+            }
+
+            string report = $"selftest pass={pass} fail={fail}{Environment.NewLine}{sb}";
+            Log.Info($"selftest pass={pass} fail={fail}");
+            string outPath = Path.Combine(Path.GetTempPath(), "elta-selftest.txt");
+            try { File.WriteAllText(outPath, report, new UTF8Encoding(false)); } catch { }
             try
             {
                 AttachConsole(-1);

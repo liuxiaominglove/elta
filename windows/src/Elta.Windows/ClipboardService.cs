@@ -34,6 +34,9 @@ namespace Elta.Windows
 
         public int Count => _items.Count;
 
+        /// <summary>诊断用：构造一个「捕获失败」状态（无项、CaptureSucceeded=false），供 --selftest 验证不清空行为。</summary>
+        public static ClipboardState SimulateCaptureFailure() => new();
+
         public static ClipboardState Capture()
         {
             var state = new ClipboardState();

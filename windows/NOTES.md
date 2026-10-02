@@ -33,6 +33,13 @@ sh windows/test-core.sh
 ```bat
 :: 无头 OCR 诊断（自动验证 B3 代码路径；不启动托盘），结果写 <图片>.ocr.txt
 windows\src\Elta.Windows\bin\Release\net8.0-windows10.0.19041.0\Elta.Windows.exe --ocr <图片路径>
+
+:: 剪贴板安全机侧测试（WI-1）：策略集成 + 记事本端到端，全过退出码 0
+powershell -ExecutionPolicy Bypass -File windows\test-clipboard.ps1
+
+:: 单项诊断（不启动托盘）
+...\Elta.Windows.exe --selftest                  :: 剪贴板策略集成自检 → %TEMP%\elta-selftest.txt
+...\Elta.Windows.exe --selection-cli <输出文件>  :: 绕过 UIA 直跑 Ctrl+C 兜底取词
 ```
 - .NET SDK 8.0.425 已**用户级**装在 `~/.dotnet`（无需 sudo）；若 PATH 无 `dotnet`，脚本会自动用 `~/.dotnet/dotnet`。
 - CI：`.github/workflows/windows-ci.yml`：ubuntu/windows 各跑 Core 测试 + **windows-latest 构建 Elta.Windows**。
@@ -86,6 +93,7 @@ windows/
 > 剪贴板恢复（UIA 路径与 Ctrl+C 兜底路径的文本/图片/空/大文本/emoji）全部通过；Ctrl+T 截图回归正常。
 > Word/WPS 文字/WPS PDF 因自动化限制未跑（非失败）→ 建议人工各抽检一次，即可升 🟢。
 > **B3 已完成 🟢**（Core 303 绿 + 外壳编译 + `--ocr` 真机自动化验证 + 启动冒烟 + **A 机手测全通过**）。
+> **P0 稳定性（WI-1 剪贴板安全 / WI-2 日志兜底）机测通过 🟢**（`windows/test-clipboard.ps1`）。
 > 下一步 **B4**（热键 + Windows 配置/密钥/默认值落地）。
 
 ### C0：托盘外壳入口点 ✅
@@ -162,7 +170,7 @@ windows/
 - **样例图**：测试机本地目录 `C:\Users\admin\AppData\Local\Temp\opencode\elta-b3-samples\`
   （`sample_english.png` / `sample_table.png` / `sample_cjk.png`），仅生成未入库（如需入库请示）。
 
-### 稳定性加固 P0：WI-1 剪贴板安全 / WI-2 日志与兜底 ✅ 代码 / 🟡 手测待做
+### 稳定性加固 P0：WI-1 剪贴板安全 / WI-2 日志与兜底 ✅（机测通过）
 - **WI-1（数据安全）**：Core 新增 `ClipboardRestorePolicy`（12 测试）——捕获失败 / 被第三方改写 / 序号未变 → **不动**；
   确认原本为空 → 清空（去 Ctrl+C 残留）；原有内容 → 还原。
   外壳 `ClipboardState` 显式记录 `CaptureSucceeded`，剪贴板读写加退避重试，单格式 50MB 上限（标 `Partial`）；
@@ -171,10 +179,14 @@ windows/
 - **WI-2（可诊断/不崩）**：新增 `Log`（`%LOCALAPPDATA%\ELTA\logs\elta-YYYYMMDD.log`；按天 + 保留 7 天 + 2MB 滚动；
   **只记状态/长度，不记内容**；写盘失败静默）；全局兜底（Dispatcher / AppDomain / UnobservedTask）+ `RunSelection` 包 catch；
   埋点：启动（版本/热键结果）、截图、OCR、取词、退出。
-- **已验证**：Core **315 绿**；外壳编译 0 错误；`--ocr` 回归 `status=Ok blocks=3`；托盘冒烟存活；
-  日志实测落盘（`start version=1.0.0.0 shotKey=True selectKey=True` / `ocr status=Ok blocks=3`）。
-- 🟡 **待手测（剪贴板矩阵）**：原剪贴板为 文本/图片/空 三种；取词后原内容保留；Edge/Chrome 候补路径；
-  有异常时查 `%LOCALAPPDATA%\ELTA\logs\`。
+- **机侧自动验证 ✅**：
+  - Core **315 绿**；外壳编译 0 错误；`--ocr` 回归 `status=Ok blocks=3`；托盘冒烟存活。
+  - 新增 `--selftest`：剪贴板策略集成 **5/5**（文本还原 / 图片还原 / 捕获失败不清空 / 空→去残留 / 第三方不动）。
+  - 新增 `--selection-cli <out>`：绕过 UIA 直跑 Ctrl+C 兜底（供脚本驱动）。
+  - `windows/test-clipboard.ps1`：`--selftest` + 记事本端到端（真实 Ctrl+C 取词 46 字符 + **原剪贴板保留**）→ **ALL PASS**。
+  - 日志实测落盘（`start` / `ocr` / `selection` / `selftest`）。
+- ⚠️ **仍未自动化**：真实 `Ctrl+Shift+T` 热键入口、Chrome/Edge（UIA 失败→Ctrl+C）路径、图片原剪贴板走真实取词。
+  如需覆盖可在 `test-clipboard.ps1` 扩展（Chrome 需额外自动化）。
 
 ### WI-B4：热键平台服务（下一步）
 - 源：`Sources/HotkeyHelpers.swift`。
