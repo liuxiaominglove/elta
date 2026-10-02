@@ -78,7 +78,8 @@ Windows A 机 — 环境搭建（opencode + cc-suite-cn）+ ELTA Windows 进度�
       **U 盘已备好**：`opencode-config-from-mac\`（从 Mac 导出、已脱敏、已做 Windows 适配）。
       把它的**内容**（不是文件夹本身）拷到：
           C:\Users\<你的用户名>\.config\opencode\
-      然后在该目录执行： npm install   （补插件依赖）
+      （**只写代码的话，拷完即用**：命令/技能都是纯 Markdown，不需要 npm install。
+        仅当你要用 NLPM 插件或自加 TS 插件时，才在该目录执行 `npm install`（需 Node）。）
       含 agents\ commands\ skills\ rules\ nlpm\ scripts\ + opencode.jsonc 等，
       **含写代码用的 /tdd、/tdd-plan**（已“去硬编码”，Windows(.NET) 上按 `dotnet test` 走）。
       已替你处理（无需你再动手）：
