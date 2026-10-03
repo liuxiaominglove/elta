@@ -589,5 +589,32 @@ namespace Elta.Core.Tests
             string html = HtmlRenderer.Render("## 中文翻译\n\n你好", "Hi", isDark: false, providerShortName: "千问");
             Assert.Contains("Powered by 千问 AI · ELTA", html);
         }
+
+        // MARK: - 审计修复
+
+        [Fact]
+        public void RenderSplit_KeepsEmptyBodyHeading()
+        {
+            const string markdown = "## 中文翻译\n\n你好。世界。\n\n## 核查\n";
+            string html = HtmlRenderer.RenderSplit(markdown, "Hello. World.", isDark: false);
+            Assert.Contains("核查", html);
+        }
+
+        [Fact]
+        public void RenderSplit_KeepsSecondChineseTranslationSection()
+        {
+            const string markdown = "## 中文翻译\n\n你好。世界。\n\n## 中文翻译（意译）\n\n第三句。";
+            string html = HtmlRenderer.RenderSplit(markdown, "Hello. World.", isDark: false);
+            Assert.Contains("第三句", html);
+        }
+
+        [Fact]
+        public void Render_EscapesProviderShortNameInFooter()
+        {
+            string html = HtmlRenderer.Render("## 中文翻译\n\n你好", "Hi", isDark: false,
+                providerShortName: "A<script>alert(1)</script>");
+            Assert.DoesNotContain("<script>", html);
+            Assert.Contains("A&lt;script&gt;", html);
+        }
     }
 }

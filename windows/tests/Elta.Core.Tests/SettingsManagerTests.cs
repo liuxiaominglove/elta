@@ -573,5 +573,29 @@ namespace Elta.Core.Tests
             store.SetString("snaptranslate.windowFrame", "not-a-frame");
             Assert.Null(mgr.WindowFrame);
         }
+
+        // ---------- 审计修复：模板双态一致性 ----------
+
+        [Fact]
+        public void ClearingCustomPrompt_ResetsUsesDefaultPrompt()
+        {
+            var (mgr, _, _) = New();
+            mgr.CustomPrompt = "自定义模板";
+            mgr.UsesDefaultPrompt = false;
+            mgr.CustomPrompt = "";                 // 清空自定义模板
+            Assert.Null(mgr.CustomPrompt);
+            Assert.True(mgr.UsesDefaultPrompt);    // 无自定义模板时必须回到默认态
+        }
+
+        [Fact]
+        public void MigrateLegacyPrompt_DoesNotOverwriteExistingCustomPrompt()
+        {
+            var (mgr, store, _) = New();
+            store.SetString("snaptranslate.prompt.custom", "新自定义模板");
+            store.SetString("snaptranslate.prompt", "旧版单一模板");
+            mgr.MigrateLegacyPrompt();
+            Assert.Equal("新自定义模板", mgr.CustomPrompt);
+            Assert.False(store.Contains("snaptranslate.prompt"));   // 旧 key 仍应被清理
+        }
     }
 }
