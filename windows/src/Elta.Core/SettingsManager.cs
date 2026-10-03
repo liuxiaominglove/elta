@@ -208,8 +208,15 @@ namespace Elta.Core
             {
                 lock (_lock)
                 {
-                    if (value != null && value.Trim().Length > 0) _store.SetString(Keys.CustomPrompt, value);
-                    else _store.Remove(Keys.CustomPrompt);
+                    if (value != null && value.Trim().Length > 0)
+                    {
+                        _store.SetString(Keys.CustomPrompt, value);
+                    }
+                    else
+                    {
+                        _store.Remove(Keys.CustomPrompt);
+                        _store.SetBool(Keys.UsesDefaultPrompt, true);   // 无自定义模板 → 回到默认态
+                    }
                 }
             }
         }
@@ -255,8 +262,11 @@ namespace Elta.Core
         {
             string? old = _store.GetString(Keys.Prompt);
             if (old == null || old.Trim().Length == 0) return;
-            _store.SetString(Keys.CustomPrompt, old);
-            _store.SetBool(Keys.UsesDefaultPrompt, false);
+            if (CustomPromptUnlocked() == null)   // 已有更新的自定义模板则不覆盖
+            {
+                _store.SetString(Keys.CustomPrompt, old);
+                _store.SetBool(Keys.UsesDefaultPrompt, false);
+            }
             _store.Remove(Keys.Prompt);
         }
 

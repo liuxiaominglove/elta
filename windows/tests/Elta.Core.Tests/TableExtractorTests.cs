@@ -120,5 +120,44 @@ namespace Elta.Core.Tests
             Assert.Throws<ArgumentNullException>(() => TableExtractor.Process(null!));
             Assert.Throws<ArgumentNullException>(() => TableExtractor.EscapeMarkdownTableCell(null!));
         }
+
+        // ---------- 审计修复：制表符表格列数归一 ----------
+
+        [Fact]
+        public void DetectAndConvertTabSeparated_PadsShortRowsToHeaderWidth()
+        {
+            string md = TableExtractor.DetectAndConvertTabSeparated("Name\tAge\nAlice");
+            string[] lines = md.Split('\n');
+            Assert.Equal(3, lines.Length);
+            Assert.Equal("| Name | Age |", lines[0]);
+            Assert.Equal("| Alice |  |", lines[2]);
+        }
+
+        [Fact]
+        public void DetectAndConvertTabSeparated_TruncatesExtraCellsToHeaderWidth()
+        {
+            string md = TableExtractor.DetectAndConvertTabSeparated("Name\tAge\nAlice\t30\tExtra");
+            string[] lines = md.Split('\n');
+            Assert.Equal("| Alice | 30 |", lines[2]);
+        }
+
+        // ---------- 审计修复：FlatText 排序须为全序 ----------
+
+        [Fact]
+        public void Process_FlatText_OrdersBlocksByYThenX_TotalOrder()
+        {
+            var blocks = new List<OcrBlock>
+            {
+                B("A", 30, 1.0, 5, 0.1),
+                B("B", 20, 1.2, 5, 0.1),
+                B("C", 10, 1.4, 5, 0.1),
+            };
+            string text = TableExtractor.Process(blocks);
+            int ia = text.IndexOf('A');
+            int ib = text.IndexOf('B');
+            int ic = text.IndexOf('C');
+            Assert.True(ia >= 0 && ib >= 0 && ic >= 0 && ia < ib && ib < ic,
+                $"expected reading order A,B,C but got: {text}");
+        }
     }
 }
