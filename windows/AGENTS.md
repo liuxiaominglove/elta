@@ -53,3 +53,5 @@ dotnet build windows\src\Elta.Windows\Elta.Windows.csproj -c Release
 - ✅ B4：配置存储（JSON）/ 密钥库（DPAPI）/ Windows 默认值 / 热键服务（机测通过；裸键钩子待 C 接线）。
 - ✅ 子计划 C 全部完成：C1 翻译链路 + C2 结果窗交互（加载/裸键/窗口记忆，含任务代数守卫与跨屏 DPI 加固）+ C3 设置三页，真机 E2E / 机测通过。
   回归门禁：`windows/test-c2.ps1`（22 用例，需 Key）/ `test-c3.ps1`（14 用例，离线）。
+- ✅ C4：完成通知 / 更新检查 / 遥测（真机验证；Core 375 测试）。版本纪律：Info.plist 与 Elta.Windows.csproj 同步 bump。
+- ⏭ 跨端待办：Mac 合并 PR #4 后本机 `git pull origin main` + 跑测试（两端归一）。

@@ -31,6 +31,7 @@ namespace Elta.Windows
         // C1：翻译服务 + 结果窗口（设置实例在 Main 装配后赋给静态字段）
         private static SettingsManager? _settings;
         private static readonly TranslationService Translation = new();
+        private static readonly UpdateService Update = new();
         private static ResultWindow? _resultWindow;
 
         // C3：设置窗口 + 托盘/热键引用（供设置保存后重注册与文案刷新）
@@ -191,6 +192,12 @@ namespace Elta.Windows
                 ContextMenuStrip = menu,
             };
             _tray = tray;
+            tray.BalloonTipClicked += (_, _) =>
+            {
+                // C4a：点击「翻译完成」气泡 → 把结果窗拉到前台
+                if (_resultWindow is not null) _resultWindow.Activate();
+                Log.Info("notification clicked");
+            };
 
             // 热键由设置决定（清洗键码/掩码，防脏数据）；设置窗口保存后可重注册
             _hotkeys = new HotkeyManager();
@@ -203,12 +210,16 @@ namespace Elta.Windows
             Log.Info($"settings provider={AIProviders.RawValue(settings.ApiProvider)} " +
                      $"model={settings.EffectiveModel(settings.ApiProvider)} " +
                      $"keySet={settings.ActiveApiKey != null} " +
-                     $"hotkey={settings.HotkeyDisplay} selHotkey={settings.SelectionHotkeyDisplay}");
+                     $"hotkey={settings.HotkeyDisplay} selHotkey={settings.SelectionHotkeyDisplay} " +
+                     $"telemetry={(settings.TelemetryEnabled ? "on" : "off")}");
 
             tray.ShowBalloonTip(3500, "ELTA",
                 $"{settings.HotkeyDisplay} 截图；{settings.SelectionHotkeyDisplay} 划词" +
                 $"{(_hotkeys.AllRegistered ? "" : "（部分热键被占用，将自动重试）")}",
                 Forms.ToolTipIcon.Info);
+
+            // C4b/C4c：启动 3 秒后查一次更新（遥测 = 同一请求带 id，对齐 mac 时机）
+            ScheduleUpdateCheck(settings, CurrentVersion());
 
             app.Exit += (_, _) =>
             {
@@ -796,6 +807,9 @@ namespace Elta.Windows
                     _resultWindow = window;
                     window.Show();
                     UpdatePanelHook();
+                    // C4a：完成通知（点击气泡 → 聚焦结果窗）
+                    _tray?.ShowBalloonTip(3000, "ELTA", "翻译完成，点击查看结果", Forms.ToolTipIcon.Info);
+                    Log.Info("notification shown");
                     break;
                 case TranslationOutcomeKind.Cancelled:
                     // 用户 ESC 的路径已被代数守卫拦在前面；此处仅剩防御性场景
@@ -888,6 +902,59 @@ namespace Elta.Windows
         {
             System.Drawing.Point p = Forms.Cursor.Position;
             return new Rectangle(p.X - 5, p.Y - 5, 10, 10);
+        }
+
+        // MARK: - C4：更新检查
+
+        private static string CurrentVersion()
+            => typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+        /// <summary>启动 3 秒后查一次（对齐 mac：不阻塞主流程，只查一次）。</summary>
+        private static void ScheduleUpdateCheck(SettingsManager settings, string currentVersion)
+        {
+            var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            timer.Tick += async (_, _) =>
+            {
+                timer.Stop();
+                UpdateInfo? info = await Update.CheckAsync(settings, currentVersion);
+                if (info is null) return;
+                if (!UpdateLogic.ShouldShowUpdate(info.Version, currentVersion, settings.SkipUpdateVersion))
+                {
+                    Log.Info($"update ignored remote={info.Version} (same or skipped)");
+                    return;
+                }
+                ShowUpdateDialog(settings, currentVersion, info);
+            };
+            timer.Start();
+        }
+
+        private static void ShowUpdateDialog(SettingsManager settings, string currentVersion, UpdateInfo info)
+        {
+            Log.Info($"update found remote={info.Version}");
+            var dialog = new UpdateDialog(currentVersion, info.Version);
+            dialog.ShowDialog();
+            switch (dialog.Result)
+            {
+                case UpdateDialog.Choice.Download:
+                    // 打开前二次校验协议（Core IsHttpUrl），不合法回退官网
+                    string target = UpdateLogic.IsHttpUrl(info.Url) ? info.Url : UpdateLogic.DownloadPageUrl;
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error("open download url failed", ex);
+                    }
+                    break;
+                case UpdateDialog.Choice.Skip:
+                    settings.SkipUpdateVersion = info.Version;
+                    Log.Info($"update skipped v{info.Version}");
+                    break;
+                default:
+                    Log.Info("update deferred (later)");
+                    break;
+            }
         }
 
         /// <summary>
