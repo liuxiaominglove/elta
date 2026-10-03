@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -16,9 +17,10 @@ using WinForms = System.Windows.Forms;
 namespace Elta.Windows
 {
     /// <summary>
-    /// C2：翻译结果窗口。对齐 mac ResultWindowController：
+    /// C2/C4：翻译结果窗口（单实例复用）。对齐 mac ResultWindowController：
     /// 工具栏（整段/拆分 + A−/A＋）+ WebView2；对侧半屏定位；移动/缩放记忆；非激活悬浮。
-    /// ESC / ` / Ctrl+D 由 <see cref="PanelKeyRouter"/> 路由到 ClosePanel / TogglePosition / ToggleSplit。
+    /// 复用策略：全进程一个 WebView2 环境 + 一个结果窗；新翻译只更新内容，不重建窗口
+    /// （避免 WebView2 反复初始化导致的闪烁/挂起）。
     /// </summary>
     public sealed class ResultWindow : Window
     {
@@ -40,30 +42,50 @@ namespace Elta.Windows
         private static readonly IntPtr HWND_TOPMOST = new(-1);
         private const uint SWP_NOACTIVATE = 0x0010;
 
-        private readonly SettingsManager _settings;
-        private readonly string _markdown;
-        private readonly string _originalText;
-        private readonly Rectangle _avoidRect;   // 物理像素
-        private readonly bool _canSplit;
+        // 全进程共享的 WebView2 环境（只建一次；避免同 user-data-folder 反复 CreateAsync 的竞态/卡死）
+        private static readonly SemaphoreSlim EnvLock = new(1, 1);
+        private static CoreWebView2Environment? _sharedEnv;
 
+        private static async Task<CoreWebView2Environment> GetSharedEnvironmentAsync()
+        {
+            if (_sharedEnv is not null) return _sharedEnv;
+            await EnvLock.WaitAsync();
+            try
+            {
+                if (_sharedEnv is null)
+                {
+                    string userDataFolder = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "ELTA", "WebView2");
+                    _sharedEnv = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+                }
+                return _sharedEnv;
+            }
+            finally
+            {
+                EnvLock.Release();
+            }
+        }
+
+        private readonly SettingsManager _settings;
         private readonly WebView2 _view = new();
         private readonly ToggleButton _segWhole = new();
         private readonly ToggleButton _segSplit = new();
         private readonly Button _fontMinus = new();
         private readonly Button _fontPlus = new();
 
+        private string _markdown = "";
+        private string _originalText = "";
+        private RectF _avoidRect;
+        private bool _hasContent;
+        private bool _canSplit;
         private bool _isSplit;
         private bool _positioned;
         private bool _webViewReady;
 
-        public ResultWindow(SettingsManager settings, string markdown, string originalText, Rectangle avoidRect)
+        public ResultWindow(SettingsManager settings)
         {
             _settings = settings;
-            _markdown = markdown;
-            _originalText = originalText;
-            _avoidRect = avoidRect;
-            _canSplit = HtmlRenderer.CanSplit(markdown, originalText);
-            _isSplit = HtmlRenderer.ShouldStartSplit(settings.DefaultSplitMode, _canSplit);
 
             Title = "翻译结果 — ELTA";
             // 定位时按目标屏 DPI 换算实际 Min（见 ApplyPhysicalFrame）；这里只给保守下限
@@ -81,8 +103,6 @@ namespace Elta.Windows
                 PositionPanel();
                 _positioned = true;
             };
-            // 窗口被拖到不同 DPI 的显示器时，WPF 会按 DIP 重算尺寸并覆盖 SetWindowPos 的物理矩形；
-            // 这里在 DpiChanged 后重新套用几何（目标屏物理像素），保证跨屏定位/尺寸正确。
             DpiChanged += (_, _) =>
             {
                 if (_positioned) PositionPanel();
@@ -90,10 +110,34 @@ namespace Elta.Windows
             Loaded += async (_, _) =>
             {
                 await InitWebViewAsync();
-                if (_positioned) PositionPanel();   // 收尾再套一次，覆盖首帧 DPI 协商
+                if (_hasContent && _webViewReady) _view.NavigateToString(CurrentHtml());
+                if (_positioned) PositionPanel();
             };
             // 在 Closing（销毁前）保存：Closed 时 HWND 已销毁，GetWindowRect 会失败
             Closing += (_, _) => SaveFrame();
+        }
+
+        // MARK: - 对外入口（单实例复用）
+
+        /// <summary>更新内容并展示（窗口已 Show 时只换内容/重定位，不再重建 WebView2）。</summary>
+        public void ShowResult(string markdown, string originalText, Rectangle avoidRect)
+        {
+            _markdown = markdown;
+            _originalText = originalText;
+            _avoidRect = new RectF(avoidRect.X, avoidRect.Y, avoidRect.Width, avoidRect.Height);
+            _hasContent = true;
+            if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+            _canSplit = HtmlRenderer.CanSplit(markdown, originalText);
+            _isSplit = HtmlRenderer.ShouldStartSplit(_settings.DefaultSplitMode, _canSplit);
+            UpdateSplitButtons();
+            UpdateFontButtons();
+
+            if (_webViewReady)
+            {
+                _view.NavigateToString(CurrentHtml());
+                Log.Info($"result window updated split={_isSplit} canSplit={_canSplit} (reuse)");
+            }
+            if (_positioned) PositionPanel();
         }
 
         // MARK: - 布局
@@ -177,7 +221,7 @@ namespace Elta.Windows
 
         private void Rerender()
         {
-            if (!_webViewReady) return;
+            if (!_webViewReady || !_hasContent) return;
             _view.NavigateToString(CurrentHtml());
         }
 
@@ -185,15 +229,18 @@ namespace Elta.Windows
         {
             try
             {
-                string userDataFolder = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "ELTA", "WebView2");
-                CoreWebView2Environment env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
+                CoreWebView2Environment env = await GetSharedEnvironmentAsync();
                 await _view.EnsureCoreWebView2Async(env);
                 _view.CoreWebView2.Settings.IsScriptEnabled = false;   // 对齐 mac allowsContentJavaScript = false
+                _view.CoreWebView2.ProcessFailed += (_, e) =>
+                {
+                    // C4 加固：渲染进程故障时优雅关闭窗口，避免窗口挂着假死
+                    Log.Error($"webview2 process failed: {e.ProcessFailedKind}");
+                    Dispatcher.BeginInvoke(new Action(() => Close()));
+                };
 
                 _webViewReady = true;
-                _view.NavigateToString(CurrentHtml());
+                if (_hasContent) _view.NavigateToString(CurrentHtml());
                 Log.Info($"result window shown split={_isSplit} canSplit={_canSplit} " +
                          $"fontSize={_settings.PopupFontSize} dark={ThemeHelper.IsDark()}");
             }
@@ -247,7 +294,7 @@ namespace Elta.Windows
             if (hwnd == IntPtr.Zero) return;
             if (!GetWindowRect(hwnd, out RECT r)) return;
 
-            WinForms.Screen screen = WinForms.Screen.FromRectangle(_avoidRect) ?? WinForms.Screen.PrimaryScreen!;
+            WinForms.Screen screen = WinForms.Screen.FromRectangle(ToRectangle(_avoidRect)) ?? WinForms.Screen.PrimaryScreen!;
             RectF screenRect = ToRectF(screen.WorkingArea);
             bool currentlyRight = (r.Left + r.Right) / 2.0 >= screenRect.MidX;
 
@@ -264,9 +311,9 @@ namespace Elta.Windows
             IntPtr hwnd = new WindowInteropHelper(this).Handle;
             if (hwnd == IntPtr.Zero) return;
 
-            WinForms.Screen screen = WinForms.Screen.FromRectangle(_avoidRect) ?? WinForms.Screen.PrimaryScreen!;
+            Rectangle avoid = ToRectangle(_avoidRect);
+            WinForms.Screen screen = WinForms.Screen.FromRectangle(avoid) ?? WinForms.Screen.PrimaryScreen!;
             RectF screenRect = ToRectF(screen.WorkingArea);
-            RectF avoidRect = ToRectF(_avoidRect);
 
             double? savedHeight = null;
             double? savedY = null;
@@ -276,7 +323,7 @@ namespace Elta.Windows
                 savedY = saved.Y;
             }
 
-            RectF target = ResultPanelGeometry.Compute(screenRect, avoidRect, savedHeight, savedY);
+            RectF target = ResultPanelGeometry.Compute(screenRect, ToRectF(avoid), savedHeight, savedY);
             ApplyPhysicalFrame(target);
         }
 
@@ -306,6 +353,9 @@ namespace Elta.Windows
         }
 
         private static RectF ToRectF(Rectangle r) => new(r.X, r.Y, r.Width, r.Height);
+
+        private static Rectangle ToRectangle(RectF r)
+            => new((int)Math.Round(r.X), (int)Math.Round(r.Y), (int)Math.Round(r.Width), (int)Math.Round(r.Height));
     }
 
     /// <summary>系统深浅色（读注册表，平台方言留在外壳）。</summary>

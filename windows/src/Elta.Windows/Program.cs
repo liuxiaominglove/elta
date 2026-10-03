@@ -796,17 +796,20 @@ namespace Elta.Windows
             switch (outcome.Kind)
             {
                 case TranslationOutcomeKind.Success:
-                    // C2：结果窗口自行负责渲染（拆分/字号切换会重渲染）
-                    _resultWindow?.Close();
-                    var window = new ResultWindow(settings, outcome.Text!, originalText, avoidRect);
-                    window.Closed += (_, _) =>
+                    // C4 加固：结果窗单实例复用——避免每次翻译都重建 WebView2（反复初始化会闪烁/挂起）
+                    if (_resultWindow is null)
                     {
-                        _resultWindow = null;
+                        var window = new ResultWindow(settings);
+                        window.Closed += (_, _) =>
+                        {
+                            _resultWindow = null;
+                            UpdatePanelHook();
+                        };
+                        _resultWindow = window;
+                        window.Show();
                         UpdatePanelHook();
-                    };
-                    _resultWindow = window;
-                    window.Show();
-                    UpdatePanelHook();
+                    }
+                    _resultWindow.ShowResult(outcome.Text!, originalText, avoidRect);
                     // C4a：完成通知（点击气泡 → 聚焦结果窗）
                     _tray?.ShowBalloonTip(3000, "ELTA", "翻译完成，点击查看结果", Forms.ToolTipIcon.Info);
                     Log.Info("notification shown");

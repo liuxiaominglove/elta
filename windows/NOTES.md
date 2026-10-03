@@ -321,6 +321,15 @@ windows/
 - **C4c 遥测**：= 带 `?id=installID` 的同一更新请求（`server/server.py` 去重计日活）；启动日志 `telemetry=on/off`（只记布尔，不打印 id）。
 - 待办（跨端）：**Mac 合并 PR #4 后，本机 `git pull origin main` 并跑 Core/外壳测试**（audit-shell 与本机 23+ 提交归一）。
 
+### 结果窗闪烁/挂起修复（2026-10-03 晚，事故驱动）✅
+- 现象：连续翻译时结果窗反复重建（每建一次 WebView2 重新初始化 → 白屏闪 + 气泡），随后 **23:17:30 AppHangTransient**
+  （Elta.Windows 5.5.5.0 无响应、任务栏图标持续闪）。
+- 根因（高置信）：每次翻译 `new ResultWindow` + 每窗口独立 `CoreWebView2Environment.CreateAsync(同一 user-data 目录)`——
+  短时间反复建/销同一环境是已知易卡死/闪烁模式。
+- 修复：① WebView2 环境**全进程共享**（`SemaphoreSlim` 单次创建）；② 结果窗**单实例复用**（`ShowResult()` 只换内容/重定位，
+  不再重建窗口）；③ `CoreWebView2.ProcessFailed` 兜底优雅关窗。
+- 验证：连发 4 次翻译 → 日志 `shown=1 reused=3`、窗口数恒为 1、进程存活、WER 零新增挂起；`test-c2.ps1` 回归 **22/22**。
+
 ### audit-shell 快照真机验证（2026-10-03，Mac 侧分支产物）
 - U 盘 `ELTA-windows-真机测试\`（fix/audit-shell 快照，含 `Elta.Windows.Tests`）：自动测试 **Core 341 / 外壳 3 全绿**；
   真机 3 项**全部通过**（①中键拖拽中不提前提交 ②单击不取消覆盖层 ③最左边缘窄选区尺寸标签「36 × 220」可见）
