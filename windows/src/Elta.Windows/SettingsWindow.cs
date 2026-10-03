@@ -35,6 +35,11 @@ namespace Elta.Windows
         private RadioButton _splitWhole = null!;
         private RadioButton _splitParts = null!;
 
+        private RadioButton _templateModeDefault = null!;
+        private RadioButton _templateModeCustom = null!;
+        private TextBlock _templateStatus = null!;
+        private TextBox _templateBox = null!;
+
         private bool _loading;
         private bool _keyRevealed;
 
@@ -85,7 +90,7 @@ namespace Elta.Windows
             var tabs = new TabControl();
             tabs.Items.Add(new TabItem { Header = "通用", Content = BuildGeneralTab() });
             tabs.Items.Add(new TabItem { Header = "快捷键", Content = BuildHotkeysTab() });
-            tabs.Items.Add(new TabItem { Header = "模板", Content = Placeholder("翻译模板编辑将在下一步开发中提供（当前使用内置默认模板）。") });
+            tabs.Items.Add(new TabItem { Header = "模板", Content = BuildTemplateTab() });
             Grid.SetRow(tabs, 0);
             root.Children.Add(tabs);
 
@@ -248,16 +253,77 @@ namespace Elta.Windows
             };
         }
 
-        private static UIElement Placeholder(string text)
+        private UIElement BuildTemplateTab()
         {
-            return new TextBlock
+            var root = new Grid { Margin = new Thickness(16) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            var title = new TextBlock
             {
-                Text = text,
-                FontSize = 12,
+                Text = "翻译提示词模板",
+                FontSize = 15,
+                FontWeight = FontWeights.SemiBold,
+            };
+            Grid.SetRow(title, 0);
+            root.Children.Add(title);
+
+            var desc = new TextBlock
+            {
+                Text = "在「默认模板」与「自定义模板」之间切换。修改后点击窗口底部「保存并应用」使更改生效。",
+                FontSize = 11,
                 Foreground = Brushes.Gray,
                 TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(16),
+                Margin = new Thickness(0, 2, 0, 8),
             };
+            Grid.SetRow(desc, 1);
+            root.Children.Add(desc);
+
+            var modeRow = new StackPanel { Orientation = Orientation.Horizontal };
+            _templateModeDefault = new RadioButton { Content = "默认模板", Margin = new Thickness(0, 0, 16, 0) };
+            _templateModeCustom = new RadioButton { Content = "自定义模板" };
+            _templateModeDefault.Checked += (_, _) => ApplyTemplateMode(usesDefault: true);
+            _templateModeCustom.Checked += (_, _) => ApplyTemplateMode(usesDefault: false);
+            modeRow.Children.Add(_templateModeDefault);
+            modeRow.Children.Add(_templateModeCustom);
+
+            _templateStatus = new TextBlock
+            {
+                FontSize = 11,
+                Foreground = Brushes.Gray,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(16, 0, 0, 0),
+            };
+            modeRow.Children.Add(_templateStatus);
+            Grid.SetRow(modeRow, 2);
+            root.Children.Add(modeRow);
+
+            _templateBox = new TextBox
+            {
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 12,
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.Wrap,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                IsReadOnly = true,
+                Padding = new Thickness(8),
+                Margin = new Thickness(0, 10, 0, 0),
+            };
+            Grid.SetRow(_templateBox, 3);
+            root.Children.Add(_templateBox);
+
+            return root;
+        }
+
+        /// <summary>对齐 mac applyTemplateMode：默认态只读展示内置模板，自定义态可编辑。</summary>
+        private void ApplyTemplateMode(bool usesDefault)
+        {
+            _templateBox.Text = TemplateLogic.Content(
+                usesDefault, _settings.CustomPrompt, SettingsManager.DefaultPrompt);
+            _templateBox.IsReadOnly = usesDefault;
+            _templateStatus.Text = usesDefault ? "内置默认模板（只读）" : "自定义模板（可编辑）";
         }
 
         private UIElement BuildGeneralTab()
@@ -350,6 +416,9 @@ namespace Elta.Windows
             _telemetry.IsChecked = _settings.TelemetryEnabled;
             _splitWhole.IsChecked = !_settings.DefaultSplitMode;
             _splitParts.IsChecked = _settings.DefaultSplitMode;
+            _templateModeDefault.IsChecked = _settings.UsesDefaultPrompt;
+            _templateModeCustom.IsChecked = !_settings.UsesDefaultPrompt;
+            ApplyTemplateMode(_settings.UsesDefaultPrompt);
             _loading = false;
         }
 
@@ -499,11 +568,32 @@ namespace Elta.Windows
             }
 
             _settings.DefaultSplitMode = _splitParts.IsChecked == true;
+
+            // 模板双态保存（Core TemplateLogic，与 mac resolveTemplateSave 同语义）
+            bool usesDefaultTemplate = _templateModeDefault.IsChecked == true;
+            TemplateSaveAction templateAction = TemplateLogic.ResolveSave(usesDefaultTemplate, _templateBox.Text);
+            switch (templateAction.Kind)
+            {
+                case TemplateSaveActionKind.KeepDefault:
+                    _settings.UsesDefaultPrompt = true;
+                    break;
+                case TemplateSaveActionKind.SaveCustom:
+                    _settings.CustomPrompt = templateAction.Content;
+                    _settings.UsesDefaultPrompt = false;
+                    break;
+                case TemplateSaveActionKind.ClearCustom:
+                    _settings.CustomPrompt = null;
+                    _settings.UsesDefaultPrompt = true;
+                    _templateBox.Text = SettingsManager.DefaultPrompt;
+                    break;
+            }
+
             _onHotkeysChanged();
 
             Log.Info($"settings saved provider={AIProviders.RawValue(provider)} " +
                      $"keyLen={KeyValue.Trim().Length} model={_modelBox.SelectedItem} " +
-                     $"hotkeyChanges={recorded.Count} defaultSplit={_settings.DefaultSplitMode}");
+                     $"hotkeyChanges={recorded.Count} defaultSplit={_settings.DefaultSplitMode} " +
+                     $"template={templateAction.Kind}");
             _saveStatus.Text = "已保存";
         }
 
@@ -545,6 +635,9 @@ namespace Elta.Windows
             }
             _splitWhole.IsChecked = !_settings.DefaultSplitMode;
             _splitParts.IsChecked = _settings.DefaultSplitMode;
+
+            _templateModeDefault.IsChecked = true;
+            ApplyTemplateMode(usesDefault: true);
 
             _onHotkeysChanged();
             Log.Info("settings reset to defaults (api key kept)");

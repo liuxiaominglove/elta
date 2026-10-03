@@ -270,7 +270,13 @@ windows/
   已加纯修饰键过滤（`IsModifierKey` 忽略并继续等待主键）。
 - 机测（本机 2026-10-03，`--settings-ui` + UIA/SendKeys 自动化）：录制 Ctrl+Shift+Y → 按钮/状态正确；
   恢复默认 → 确认框 → 全部复位为默认（日志 `settings reset to defaults (api key kept)`）。
-- 待办（C3c）：模板页（默认/自定义模板编辑）。
+
+#### C3c：设置窗口「模板」页 ✅（保存/恢复默认机测通过 🟢）
+- UI 对齐 mac：默认模板（只读展示内置提示词）/ 自定义模板（可编辑，等宽字体）双态切换 + 状态文案。
+- 保存走 Core `TemplateLogic.ResolveSave` 三分支（保持默认 / 存自定义 / 清空回退默认）；恢复默认同步复位 UI。
+- 机测（`--settings-ui` 自动化 2026-10-03）：只读/可编辑切换正确；保存 → `settings.json` 写入
+  `prompt.custom` + `usesDefault=false`；恢复默认 → `usesDefault=true` 且 `custom` 清除（净零）。
+- **设置窗口三页（通用 / 快捷键 / 模板）全部落地**。待办：C2 结果窗口交互。
 
 ## P0.5 已验证结论（真机）
 
