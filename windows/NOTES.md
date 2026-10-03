@@ -346,7 +346,8 @@ windows/
   `F:\ELTA-Windows-B3\elta-main-incremental-2026-10-02.bundle`（`git bundle verify` 通过；清单见同目录 `commits.txt`）；
   Mac 侧 `git pull <bundle> main && git push origin main`。数量以 `commits.txt` / `git rev-list --count origin/main..main` 为准。
 - **回传**（2026-10-03）：本地全部未推送 commit（P0.5 复测归档 + C1 翻译链路 + C3 设置三页 + C2 结果窗）已打包到 U 盘
-  `F:\elta-main-incremental-2026-10-03.bundle`（`git bundle verify` 通过；清单见 `F:\elta-commits-2026-10-03.txt`）；
+  U 盘根目录 `elta-main-incremental-2026-10-03.bundle`（`git bundle verify` 通过；清单见同目录 `elta-commits-2026-10-03.txt`）；
   Mac 侧 `git pull <bundle> main && git push origin main`。数量以清单 / `git rev-list --count origin/main..main` 为准。
   （注：本机 E: 为内置盘分区，U 盘 = F:（Kingston）；此前记到 E: 的路径已全部更正。）
-- 同日另附**全量 bundle**（`--all`，自包含、可独立 clone，灾备用）：`F:\elta-full-2026-10-03.bundle`。
+- 同日另附**全量 bundle**（`--all`，自包含、可独立 clone，灾备用）：U 盘根目录 `elta-full-2026-10-03.bundle`。
+- 交接方式升级（2026-10-03）：统一走 `windows/make-handoff.ps1`（自动识别可移动盘 + SHA 校验，禁止手选盘符）。

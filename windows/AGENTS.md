@@ -40,6 +40,7 @@ dotnet build windows\src\Elta.Windows\Elta.Windows.csproj -c Release
 - **热键**：组合键用 `RegisterHotKey`，裸键（ESC/`` ` ``）用 `WH_KEYBOARD_LL`。
 - **取词**：主路径是 **Ctrl+C**（UIA 常读不到：Chrome/WPS）。
 - **Git**：本机（Windows）**只做 `clone`/`pull`（public 免认证），不 push**；本机改动经 **U 盘 / Syncthing 回传**，或由 Mac 侧代为提交。**不要**在本机配置 GitHub 凭证。
+  交接统一走 `windows/make-handoff.ps1`（自动识别可移动盘，禁止手选盘符）；设备/路径核验闸机见全局规则 `verification-discipline.md`「设备/路径指代核验」。
 
 ## 已完成 / 待办（摘要，详情见 NOTES）
 
