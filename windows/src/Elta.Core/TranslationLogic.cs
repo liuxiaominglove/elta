@@ -52,6 +52,24 @@ namespace Elta.Core
             return body.ToJsonString();
         }
 
+        /// <summary>「测试连接」用的最小请求体（mac testAPIKeyConnection 同款：单条 hi、max_tokens=1）。</summary>
+        public static string BuildProbeBody(string model)
+        {
+            var messages = new JsonArray
+            {
+                new JsonObject { ["role"] = "user", ["content"] = "hi" },
+            };
+
+            var body = new JsonObject
+            {
+                ["model"] = model,
+                ["messages"] = messages,
+                ["max_tokens"] = 1,
+            };
+
+            return body.ToJsonString();
+        }
+
         /// <summary>对齐 mac：仅 HTTP 200 且解析出内容才算成功；其余一律 Failure。</summary>
         public static TranslationOutcome Classify(int statusCode, string? parsedText)
             => statusCode == 200 && parsedText is not null

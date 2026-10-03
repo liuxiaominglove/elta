@@ -248,6 +248,16 @@ windows/
   **成功路径（真实 API + 结果窗口渲染）待配置 Key 后手测**（设置 UI 在 C3，暂无入口）。
 - 待办（C2）：结果窗口整段/拆分 / A± 字号 / 面板定位 / ESC·`` ` ``·Ctrl+D（裸键钩子接线）+ 字号持久化。
 
+#### C3a：设置窗口「通用」页 ✅（渲染 + 测试连接负路径冒烟 🟢；真实 Key 的保存/翻译 E2E 待手测）
+- 新增 `SettingsWindow.cs`（WPF 代码布局）：通用页 = provider / 模型 / API Key（密文+明文切换）/ 测试连接 /
+  匿名统计；快捷键与模板页为占位（C3b/C3c）。底栏 = 保存并应用 / 恢复默认（API Key 除外，对齐 mac）/ 版本号。
+- 新增 `ConnectionProbe.cs`（10s 超时；HTTP 分类复用 Core `ConnectionResult`）+
+  Core `TranslationLogic.BuildProbeBody`（mac 同款最小请求，+1 测试，Core **342 绿**）。
+- 接线：托盘新增「设置…」；缺 Key 弹窗可跳设置；保存/恢复默认后 `HotkeyManager.Reset()` + 重注册
+  （新增 `HotkeyHost.Unregister` / `HotkeyManager.Reset`）；调试入口 `--settings-ui`（无托盘直开设置）。
+- 冒烟（本机 2026-10-03）：假 Key → 日志 `probe http=401` + UI「API Key 无效 (HTTP 401)」✓；
+  provider 切换即落盘旧 provider 的 key/模型（mac 语义）。**真实 Key 保存 + 翻译出结果窗口的 E2E 待手测**。
+
 ## P0.5 已验证结论（真机）
 
 ### A 机（初次，2026-09）

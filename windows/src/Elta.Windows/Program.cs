@@ -33,6 +33,13 @@ namespace Elta.Windows
         private static readonly TranslationService Translation = new();
         private static ResultWindow? _resultWindow;
 
+        // C3：设置窗口 + 托盘/热键引用（供设置保存后重注册与文案刷新）
+        private static SettingsWindow? _settingsWindow;
+        private static HotkeyManager? _hotkeys;
+        private static Forms.NotifyIcon? _tray;
+        private static Forms.ToolStripMenuItem? _shotItem;
+        private static Forms.ToolStripMenuItem? _selectItem;
+
         [STAThread]
         public static void Main(string[] args)
         {
@@ -75,6 +82,13 @@ namespace Elta.Windows
             if (args.Length >= 2 && args[0] == "--hook-selftest")
             {
                 RunHookSelfTest(args[1]);
+                return;
+            }
+
+            // 调试入口：--settings-ui 直接打开设置窗口（不启动托盘），供自动化冒烟
+            if (args.Length >= 1 && args[0] == "--settings-ui")
+            {
+                RunSettingsUiCli();
                 return;
             }
 
@@ -127,10 +141,16 @@ namespace Elta.Windows
             var shotItem = new Forms.ToolStripMenuItem($"截图选区（{settings.HotkeyDisplay}）");
             shotItem.Click += (_, _) => RunScreenshot();
             menu.Items.Add(shotItem);
+            _shotItem = shotItem;
 
             var selectItem = new Forms.ToolStripMenuItem($"划词翻译（{settings.SelectionHotkeyDisplay}）");
             selectItem.Click += (_, _) => RunSelection();
             menu.Items.Add(selectItem);
+            _selectItem = selectItem;
+
+            var settingsItem = new Forms.ToolStripMenuItem("设置…");
+            settingsItem.Click += (_, _) => OpenSettings();
+            menu.Items.Add(settingsItem);
 
             menu.Items.Add(new Forms.ToolStripSeparator());
             var exitItem = new Forms.ToolStripMenuItem("退出 ELTA");
@@ -144,28 +164,15 @@ namespace Elta.Windows
                 Visible = true,
                 ContextMenuStrip = menu,
             };
+            _tray = tray;
 
-            // 热键由设置决定；清洗键码/掩码，防脏数据（含 mac Carbon 残留值）
-            int shotVk = WindowsHotkeys.SanitizeKeyCode(settings.HotkeyKeyCode);
-            int shotMods = settings.HotkeyModifiers & WindowsHotkeys.AllModifiers;
-            int selectVk = WindowsHotkeys.SanitizeKeyCode(settings.SelectionHotkeyKeyCode);
-            int selectMods = settings.SelectionHotkeyModifiers & WindowsHotkeys.AllModifiers;
-
-            var hotkeys = new HotkeyManager();
-            hotkeys.Add(ID_SCREENSHOT, (uint)shotMods, (uint)shotVk,
-                () => app.Dispatcher.BeginInvoke((Action)RunScreenshot), "shot");
-            hotkeys.Add(ID_SELECTION, (uint)selectMods, (uint)selectVk,
-                () => app.Dispatcher.BeginInvoke((Action)RunSelection), "selection");
-            hotkeys.StatusChanged += () =>
-            {
-                bool all = hotkeys.AllRegistered;
-                tray.Text = all ? "ELTA — 截图即译，精读利器" : "ELTA（热键被占用，自动重试中）";
-                if (all) Log.Info("hotkeys all registered");
-            };
-            hotkeys.RegisterAll();
+            // 热键由设置决定（清洗键码/掩码，防脏数据）；设置窗口保存后可重注册
+            _hotkeys = new HotkeyManager();
+            _hotkeys.StatusChanged += UpdateTrayStatus;
+            RegisterHotkeysFromSettings(settings);
 
             Log.Info($"start version={typeof(Program).Assembly.GetName().Version} " +
-                     $"hotkeys={(hotkeys.AllRegistered ? "ok" : "pending:" + string.Join(",", hotkeys.PendingNames))} " +
+                     $"hotkeys={(_hotkeys.AllRegistered ? "ok" : "pending:" + string.Join(",", _hotkeys.PendingNames))} " +
                      $"logDir={Log.DirectoryPath}");
             Log.Info($"settings provider={AIProviders.RawValue(settings.ApiProvider)} " +
                      $"model={settings.EffectiveModel(settings.ApiProvider)} " +
@@ -174,19 +181,79 @@ namespace Elta.Windows
 
             tray.ShowBalloonTip(3500, "ELTA",
                 $"{settings.HotkeyDisplay} 截图；{settings.SelectionHotkeyDisplay} 划词" +
-                $"{(hotkeys.AllRegistered ? "" : "（部分热键被占用，将自动重试）")}",
+                $"{(_hotkeys.AllRegistered ? "" : "（部分热键被占用，将自动重试）")}",
                 Forms.ToolTipIcon.Info);
 
             app.Exit += (_, _) =>
             {
                 Log.Info("exit");
-                hotkeys.Dispose();
+                _hotkeys.Dispose();
                 tray.Visible = false;
                 tray.Dispose();
                 menu.Dispose();
             };
 
             app.Run();
+        }
+
+        // MARK: - C3：设置窗口 / 热键重注册
+
+        private static void OpenSettings()
+        {
+            if (_settings is null) return;
+            if (_settingsWindow is not null)
+            {
+                _settingsWindow.Activate();
+                return;
+            }
+            _settingsWindow = new SettingsWindow(_settings, ReregisterHotkeys);
+            _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+            _settingsWindow.Show();
+        }
+
+        private static void ReregisterHotkeys()
+        {
+            if (_settings is null || _hotkeys is null) return;
+            RegisterHotkeysFromSettings(_settings);
+            Log.Info("hotkeys reregistered after settings change");
+        }
+
+        private static void RegisterHotkeysFromSettings(SettingsManager settings)
+        {
+            HotkeyManager hotkeys = _hotkeys!;
+            hotkeys.Reset();
+
+            int shotVk = WindowsHotkeys.SanitizeKeyCode(settings.HotkeyKeyCode);
+            int shotMods = settings.HotkeyModifiers & WindowsHotkeys.AllModifiers;
+            int selectVk = WindowsHotkeys.SanitizeKeyCode(settings.SelectionHotkeyKeyCode);
+            int selectMods = settings.SelectionHotkeyModifiers & WindowsHotkeys.AllModifiers;
+
+            hotkeys.Add(ID_SCREENSHOT, (uint)shotMods, (uint)shotVk,
+                () => System.Windows.Application.Current.Dispatcher.BeginInvoke((Action)RunScreenshot), "shot");
+            hotkeys.Add(ID_SELECTION, (uint)selectMods, (uint)selectVk,
+                () => System.Windows.Application.Current.Dispatcher.BeginInvoke((Action)RunSelection), "selection");
+            hotkeys.RegisterAll();
+
+            if (_shotItem is not null) _shotItem.Text = $"截图选区（{settings.HotkeyDisplay}）";
+            if (_selectItem is not null) _selectItem.Text = $"划词翻译（{settings.SelectionHotkeyDisplay}）";
+        }
+
+        private static void UpdateTrayStatus()
+        {
+            if (_tray is null || _hotkeys is null) return;
+            bool all = _hotkeys.AllRegistered;
+            _tray.Text = all ? "ELTA — 截图即译，精读利器" : "ELTA（热键被占用，自动重试中）";
+            if (all) Log.Info("hotkeys all registered");
+        }
+
+        /// <summary>调试入口：`--settings-ui` 只打开设置窗口（无托盘），供自动化冒烟。</summary>
+        private static void RunSettingsUiCli()
+        {
+            var app = new System.Windows.Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
+            var settings = new SettingsManager(
+                new JsonSettingsStore(), new DpapiSecretStore(), SettingsDefaults.Windows, msg => Log.Info(msg));
+            var win = new SettingsWindow(settings, () => { });
+            app.Run(win);
         }
 
         [DllImport("kernel32.dll")]
@@ -633,11 +700,13 @@ namespace Elta.Windows
             if (string.IsNullOrEmpty(settings.ActiveApiKey))
             {
                 Log.Info("translate missing key");
-                Forms.MessageBox.Show(
+                Forms.DialogResult open = Forms.MessageBox.Show(
                     $"未配置 {AIProviders.DisplayName(provider)} API Key。\n" +
-                    $"请先在设置中配置后重试。\n注册地址：{AIProviders.RegisterUrl(provider)}",
+                    $"注册地址：{AIProviders.RegisterUrl(provider)}\n\n" +
+                    "是否打开设置进行配置？（按“是”打开设置）",
                     "ELTA",
-                    Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Warning);
+                    Forms.MessageBoxButtons.YesNo, Forms.MessageBoxIcon.Warning);
+                if (open == Forms.DialogResult.Yes) OpenSettings();
                 return;
             }
 

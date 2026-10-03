@@ -67,6 +67,23 @@ namespace Elta.Core.Tests
             Assert.False(doc.RootElement.TryGetProperty("thinking", out _));
         }
 
+        // MARK: - 「测试连接」最小请求体（对齐 mac testAPIKeyConnection）
+
+        [Fact]
+        public void ProbeBody_IsMinimalSingleUserMessage()
+        {
+            string json = TranslationLogic.BuildProbeBody("qwen-plus");
+            using JsonDocument doc = JsonDocument.Parse(json);
+            JsonElement root = doc.RootElement;
+
+            Assert.Equal("qwen-plus", root.GetProperty("model").GetString());
+            Assert.Equal(1, root.GetProperty("max_tokens").GetInt32());
+            JsonElement messages = root.GetProperty("messages");
+            Assert.Equal(1, messages.GetArrayLength());
+            Assert.Equal("user", messages[0].GetProperty("role").GetString());
+            Assert.Equal("hi", messages[0].GetProperty("content").GetString());
+        }
+
         // MARK: - 结果分类（对齐 mac：仅 HTTP 200 且解析出文本算成功）
 
         [Fact]
