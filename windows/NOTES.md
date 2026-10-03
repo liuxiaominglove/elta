@@ -276,7 +276,23 @@ windows/
 - 保存走 Core `TemplateLogic.ResolveSave` 三分支（保持默认 / 存自定义 / 清空回退默认）；恢复默认同步复位 UI。
 - 机测（`--settings-ui` 自动化 2026-10-03）：只读/可编辑切换正确；保存 → `settings.json` 写入
   `prompt.custom` + `usesDefault=false`；恢复默认 → `usesDefault=true` 且 `custom` 清除（净零）。
-- **设置窗口三页（通用 / 快捷键 / 模板）全部落地**。待办：C2 结果窗口交互。
+- **设置窗口三页（通用 / 快捷键 / 模板）全部落地**。
+
+#### C2：结果窗口交互（完整对齐 mac）✅（自动 E2E 全过 🟢；深色主题路径 🟡 未实测）
+- Core：`ResultPanelGeometry`（对侧半屏 + saved frame 夹紧/回退；+9 测试，Core **358 绿**）。
+- 结果窗重写 `ResultWindow`：工具栏（整段/拆分用 `Checked` 事件，兼容鼠标与 UIA/无障碍；不可拆则禁用）+
+  A−/A＋（12–22 即改即存）+ WebView2（禁 JS）；初始模式 = `ShouldStartSplit(DefaultSplitMode, CanSplit)`；
+  非激活悬浮（ShowActivated=false + Topmost）；定位 = 选区对侧半屏（划词用鼠标锚点）；
+  `Closing` 时写回 `WindowFrame`，下次展示复用高度/纵向位置。
+- `LoadingWindow`（300×140 靠鼠标）+ `PanelKeyRouter`（复用 `LowLevelKeyboardHook`，仅面板/加载期间启停；
+  `GetAsyncKeyState` 判定修饰键）+ `TranslationService.CancelCurrent`；`ScreenshotService` 暴露选区屏幕矩形。
+- 键位取自设置：Esc=关闭/取消、`` ` ``=翻面、Ctrl+D=拆分（与 mac 语义一致；加载期只响应 Esc 取消）。
+- 自动 E2E（本机 2026-10-03，真实 Key）：
+  - 划词链：面板对侧定位✓、默认拆分✓、整段切换✓、A＋ 持久化（14→15）✓、A−（15→14→13；下界 12 由 Core 夹紧）✓、
+    `` ` ``翻面✓、Ctrl+D 拆分✓、Esc 关闭✓；加载期 Esc 取消（`panel key: cancel translation` → `translate cancelled`）✓；
+    窗口记忆（移/缩到 y=120/h=450 → 关闭 → 重开复用）✓。
+  - 截图链（合成拖拽 460×150 框选）：captured → OCR Ok → translate Success → 面板对侧 ✓ → Esc ✓。
+- 深色主题：代码路径就绪（读 `AppsUseLightTheme`），本机浅色实测；深色未切换系统主题验证 🟡。
 
 ## P0.5 已验证结论（真机）
 
@@ -307,6 +323,6 @@ windows/
 - **回传**（2026-10-02）：本地全部未推送 commit 已打包到 U 盘
   `F:\ELTA-Windows-B3\elta-main-incremental-2026-10-02.bundle`（`git bundle verify` 通过；清单见同目录 `commits.txt`）；
   Mac 侧 `git pull <bundle> main && git push origin main`。数量以 `commits.txt` / `git rev-list --count origin/main..main` 为准。
-- **回传**（2026-10-03）：P0.5 真机复测修复 + 结论归档（本 commit）已打包到 U 盘
+- **回传**（2026-10-03）：本地全部未推送 commit（P0.5 复测归档 + C1 翻译链路 + C3 设置三页 + C2 结果窗）已打包到 U 盘
   `E:\elta-main-incremental-2026-10-03.bundle`（`git bundle verify` 通过；清单见 `E:\elta-commits-2026-10-03.txt`）；
   Mac 侧 `git pull <bundle> main && git push origin main`。数量以清单 / `git rev-list --count origin/main..main` 为准。

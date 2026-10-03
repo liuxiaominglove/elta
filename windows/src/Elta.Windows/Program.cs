@@ -40,6 +40,10 @@ namespace Elta.Windows
         private static Forms.ToolStripMenuItem? _shotItem;
         private static Forms.ToolStripMenuItem? _selectItem;
 
+        // C2：加载窗 + 面板期间键盘路由（Esc / ` / Ctrl+D）
+        private static LoadingWindow? _loadingWindow;
+        private static readonly PanelKeyRouter PanelKeys = new();
+
         [STAThread]
         public static void Main(string[] args)
         {
@@ -135,6 +139,7 @@ namespace Elta.Windows
             var settings = new SettingsManager(
                 new JsonSettingsStore(), new DpapiSecretStore(), SettingsDefaults.Windows, msg => Log.Info(msg));
             _settings = settings;
+            PanelKeys.Match = HandlePanelKey;
 
             var menu = new Forms.ContextMenuStrip();
 
@@ -582,11 +587,15 @@ namespace Elta.Windows
 
             Bitmap? captured = null;
             string? text = null;
+            Rectangle selectionRect = Rectangle.Empty;
             try
             {
-                captured = ScreenshotService.CaptureSelection();
+                (captured, selectionRect) = ScreenshotService.CaptureSelection();
                 if (captured == null) return;   // 取消或选区无效
                 Log.Info($"screenshot captured {captured.Width}x{captured.Height}");
+
+                // C2：与 mac 一致，OCR 阶段即显示加载窗（ESC 可取消）
+                ShowLoading("正在识别与翻译...", "OCR 识别 → AI 翻译分析");
 
                 // OCR 放后台线程，避免位图编码/识别阻塞 UI
                 Bitmap shot = captured;
@@ -597,25 +606,28 @@ namespace Elta.Windows
                 switch (outcome.Status)
                 {
                     case OcrStatus.NoLanguagePack:
+                        HideLoading();
                         Forms.DialogResult ask = Forms.MessageBox.Show(
                             "缺少英文 OCR 语言包，无法识别文字。\n是否打开系统语言设置进行安装？",
-                            "ELTA — OCR（B3）",
+                            "ELTA",
                             Forms.MessageBoxButtons.YesNo, Forms.MessageBoxIcon.Warning);
                         if (ask == Forms.DialogResult.Yes) OcrService.OpenLanguageSettings();
                         return;
                     case OcrStatus.Failed:
+                        HideLoading();
                         Forms.MessageBox.Show(
                             $"OCR 失败：\n{outcome.Error}",
-                            "ELTA — OCR（B3）",
+                            "ELTA",
                             Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Error);
                         return;
                 }
 
                 if (outcome.Blocks.Count == 0)
                 {
+                    HideLoading();
                     Forms.MessageBox.Show(
                         "OCR 未识别到文字。\n请确认框选区域包含清晰文字，且文字不过小/模糊。",
-                        "ELTA — OCR（B3）",
+                        "ELTA",
                         Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Warning);
                     return;
                 }
@@ -627,6 +639,7 @@ namespace Elta.Windows
             {
                 // async void 内异常若逃逸会导致进程崩溃，这里兜底
                 Log.Error("RunScreenshot failed", ex);
+                HideLoading();
                 Forms.MessageBox.Show(
                     $"截图翻译失败：\n{ex.Message}",
                     "ELTA",
@@ -639,8 +652,8 @@ namespace Elta.Windows
                 ExitBusy();
             }
 
-            // C1：识别成功 → 翻译 → 结果窗口（翻译自带「取消旧请求」，不进 busy 守卫）
-            if (text != null) await TranslateAndShowAsync(text);
+            // C1/C2：识别成功 → 翻译 → 结果窗口（翻译自带「取消旧请求」，不进 busy 守卫）
+            if (text != null) await TranslateAndShowAsync(text, selectionRect);
         }
 
         private static async void RunSelection()
@@ -687,18 +700,23 @@ namespace Elta.Windows
                 ExitBusy();
             }
 
-            // C1：取词成功 → 翻译 → 结果窗口
-            if (!string.IsNullOrEmpty(text)) await TranslateAndShowAsync(text!);
+            // C1/C2：取词成功 → 翻译 → 结果窗口
+            if (!string.IsNullOrEmpty(text))
+            {
+                ShowLoading("正在翻译...", "划词翻译 → AI 翻译分析");
+                await TranslateAndShowAsync(text!, MouseAnchor());
+            }
         }
 
-        /// <summary>C1：翻译并展示结果窗口；MissingKey/Failure 走提示弹窗，Cancelled 静默。</summary>
-        private static async Task TranslateAndShowAsync(string originalText)
+        /// <summary>C1/C2：翻译并展示结果窗口；调用方已显示加载窗，本方法负责在所有终止路径隐藏它。</summary>
+        private static async Task TranslateAndShowAsync(string originalText, Rectangle avoidRect)
         {
             SettingsManager settings = _settings!;
             AIProvider provider = settings.ApiProvider;
 
             if (string.IsNullOrEmpty(settings.ActiveApiKey))
             {
+                HideLoading();
                 Log.Info("translate missing key");
                 Forms.DialogResult open = Forms.MessageBox.Show(
                     $"未配置 {AIProviders.DisplayName(provider)} API Key。\n" +
@@ -713,20 +731,26 @@ namespace Elta.Windows
             var sw = Stopwatch.StartNew();
             TranslationOutcome outcome = await Translation.TranslateAsync(originalText, settings);
             sw.Stop();
+            HideLoading();
             Log.Info($"translate kind={outcome.Kind} elapsed={sw.ElapsedMilliseconds}ms");
 
             switch (outcome.Kind)
             {
                 case TranslationOutcomeKind.Success:
-                    string html = HtmlRenderer.Render(
-                        outcome.Text!, originalText, isDark: false,
-                        fontSize: settings.PopupFontSize,
-                        providerShortName: AIProviders.ShortName(provider));
+                    // C2：结果窗口自行负责渲染（拆分/字号切换会重渲染）
                     _resultWindow?.Close();
-                    _resultWindow = new ResultWindow(html);
-                    _resultWindow.Show();
+                    var window = new ResultWindow(settings, outcome.Text!, originalText, avoidRect);
+                    window.Closed += (_, _) =>
+                    {
+                        _resultWindow = null;
+                        UpdatePanelHook();
+                    };
+                    _resultWindow = window;
+                    window.Show();
+                    UpdatePanelHook();
                     break;
                 case TranslationOutcomeKind.Cancelled:
+                    Log.Info("translate cancelled by user (ESC)");
                     break;
                 case TranslationOutcomeKind.MissingKey:
                     break;
@@ -737,6 +761,83 @@ namespace Elta.Windows
                         Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Error);
                     break;
             }
+        }
+
+        // MARK: - C2：加载窗 / 面板键盘路由
+
+        private static void ShowLoading(string title, string subtitle)
+        {
+            HideLoading();
+            var window = new LoadingWindow(title, subtitle);
+            _loadingWindow = window;
+            window.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_loadingWindow, window)) _loadingWindow = null;
+                UpdatePanelHook();
+            };
+            window.Show();
+            UpdatePanelHook();
+        }
+
+        private static void HideLoading()
+        {
+            LoadingWindow? window = _loadingWindow;
+            if (window is null) return;
+            _loadingWindow = null;
+            window.Close();
+            UpdatePanelHook();
+        }
+
+        private static void UpdatePanelHook()
+        {
+            bool need = _loadingWindow is not null || _resultWindow is not null;
+            if (need) PanelKeys.Start();
+            else PanelKeys.Stop();
+        }
+
+        /// <summary>面板键路由：加载期间 Esc=取消；结果窗期间 Esc=关闭、`=翻面、Ctrl+D=拆分（键位取自设置）。</summary>
+        private static bool HandlePanelKey(int vk, int modifiers)
+        {
+            SettingsManager s = _settings!;
+
+            if (_loadingWindow is not null)
+            {
+                if (vk == s.ClosePanelHotkeyKeyCode && modifiers == s.ClosePanelHotkeyModifiers)
+                {
+                    Log.Info("panel key: cancel translation");
+                    Translation.CancelCurrent();
+                    return true;
+                }
+                return false;
+            }
+
+            if (_resultWindow is not null)
+            {
+                if (vk == s.ClosePanelHotkeyKeyCode && modifiers == s.ClosePanelHotkeyModifiers)
+                {
+                    _resultWindow.ClosePanel();
+                    return true;
+                }
+                if (vk == s.TogglePanelHotkeyKeyCode && modifiers == s.TogglePanelHotkeyModifiers)
+                {
+                    _resultWindow.TogglePosition();
+                    return true;
+                }
+                if (vk == s.SplitHotkeyKeyCode && modifiers == s.SplitHotkeyModifiers)
+                {
+                    _resultWindow.ToggleSplit();
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>划词路径的定位锚点：触发时的鼠标位置（10×10，物理像素）。</summary>
+        private static Rectangle MouseAnchor()
+        {
+            System.Drawing.Point p = Forms.Cursor.Position;
+            return new Rectangle(p.X - 5, p.Y - 5, 10, 10);
         }
 
         /// <summary>

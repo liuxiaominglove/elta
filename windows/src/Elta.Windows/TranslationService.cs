@@ -18,6 +18,9 @@ namespace Elta.Windows
 
         private CancellationTokenSource? _cts;
 
+        /// <summary>C2：加载期间裸 ESC 取消当前翻译（对齐 mac cancelCurrentTask）。</summary>
+        public void CancelCurrent() => _cts?.Cancel();
+
         public async Task<TranslationOutcome> TranslateAsync(string text, SettingsManager settings)
         {
             AIProvider provider = settings.ApiProvider;
