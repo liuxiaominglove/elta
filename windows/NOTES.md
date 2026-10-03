@@ -230,13 +230,23 @@ windows/
   `--hook-selftest`（钩子安装 + 注入 F13 触发）、托盘启动 + 设置接线日志 + 默认热键注册；P0/P1 回归全过。
 - ⚠️ 未做（归后续）：设置 UI（C）、裸键钩子常驻策略（C）、更新检查 / 遥测上报（mac 有，Windows 后续）。
 
-### 子计划 C：设置 / 结果窗口 / 翻译接线（下一步）
+### 子计划 C：设置 / 结果窗口 / 翻译接线
 - 源：`Sources/HotkeyHelpers.swift`。
-- B4 需同时落地：**Windows 配置存储实现 + 密钥库实现 + Windows 版 `SettingsDefaults`**（A6 只定了接口）；
-  OCR 兜底引擎（B）视 B3 手测结果再定。
-- A6 未移植（归 B4/C）：`HotkeyRecorder`（UI）、`computeProviderCardLayout`（UI 布局）。
+- A6 未移植（归 C3）：`HotkeyRecorder`（UI）、`computeProviderCardLayout`（UI 布局）。
 - 可复用 P0.5 已验证代码：`windows/spike/SpikeWindow.cs` 的 P/Invoke（`RegisterHotKey`/`SetWindowsHookEx`/
   `keybd_event`/`MonitorFromPoint`/`GetDpiForMonitor`）。
+
+#### C1：翻译链路 MVP ✅（编译 + 单测绿；真实 API 成功路径待配 Key 手测 🟡）
+- Core：`TranslationLogic.cs`（user 前缀 / `BuildChatBody` / `Classify`，对齐 mac `TranslationEngine`；
+  +9 测试，Core **341 绿**）。
+- 外壳：`TranslationService.cs`（HttpClient / Bearer / 120s / 取消旧请求）、`ResultWindow.cs`（WPF + WebView2，
+  装载 `HtmlRenderer` 输出）；`Elta.Windows.csproj` 新增 `Microsoft.Web.WebView2 1.0.4258.31`
+  （本机运行时 154.0.4258.53 已装）。
+- 接线：`RunScreenshot` / `RunSelection` 识别/取词成功 → `TranslateAndShowAsync` → 结果窗口；
+  MissingKey / Failure 弹窗；翻译不进 busy 守卫（服务自带取消旧请求）。
+- 冒烟（本机 2026-10-03）：划词 62 字符 → 日志 `translate missing key`（keySet=False）→ 缺 Key 分支正确；
+  **成功路径（真实 API + 结果窗口渲染）待配置 Key 后手测**（设置 UI 在 C3，暂无入口）。
+- 待办（C2）：结果窗口整段/拆分 / A± 字号 / 面板定位 / ESC·`` ` ``·Ctrl+D（裸键钩子接线）+ 字号持久化。
 
 ## P0.5 已验证结论（真机）
 

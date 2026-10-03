@@ -28,6 +28,11 @@ namespace Elta.Windows
         private static bool TryEnterBusy() => Interlocked.CompareExchange(ref _busy, 1, 0) == 0;
         private static void ExitBusy() => Interlocked.Exchange(ref _busy, 0);
 
+        // C1：翻译服务 + 结果窗口（设置实例在 Main 装配后赋给静态字段）
+        private static SettingsManager? _settings;
+        private static readonly TranslationService Translation = new();
+        private static ResultWindow? _resultWindow;
+
         [STAThread]
         public static void Main(string[] args)
         {
@@ -115,6 +120,7 @@ namespace Elta.Windows
             // B4：设置 = JSON 存储 + DPAPI 密钥库 + Windows 默认值（键位/显示）
             var settings = new SettingsManager(
                 new JsonSettingsStore(), new DpapiSecretStore(), SettingsDefaults.Windows, msg => Log.Info(msg));
+            _settings = settings;
 
             var menu = new Forms.ContextMenuStrip();
 
@@ -508,6 +514,7 @@ namespace Elta.Windows
             }
 
             Bitmap? captured = null;
+            string? text = null;
             try
             {
                 captured = ScreenshotService.CaptureSelection();
@@ -547,12 +554,7 @@ namespace Elta.Windows
                 }
 
                 // 与 mac 一致：OCR 坐标 → 表格/纯文本 → 引用压缩
-                string text = TextPreprocessor.CondenseCitation(TableExtractor.Process(outcome.Blocks));
-                string preview = text.Length > 500 ? text.Substring(0, 500) + "…" : text;
-                Forms.MessageBox.Show(
-                    $"识别到 {outcome.Blocks.Count} 行，{text.Length} 字符：\n\n{preview}",
-                    "ELTA — OCR（B3）",
-                    Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Information);
+                text = TextPreprocessor.CondenseCitation(TableExtractor.Process(outcome.Blocks));
             }
             catch (Exception ex)
             {
@@ -560,14 +562,18 @@ namespace Elta.Windows
                 Log.Error("RunScreenshot failed", ex);
                 Forms.MessageBox.Show(
                     $"截图翻译失败：\n{ex.Message}",
-                    "ELTA — OCR（B3）",
+                    "ELTA",
                     Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Error);
+                return;
             }
             finally
             {
                 captured?.Dispose();
                 ExitBusy();
             }
+
+            // C1：识别成功 → 翻译 → 结果窗口（翻译自带「取消旧请求」，不进 busy 守卫）
+            if (text != null) await TranslateAndShowAsync(text);
         }
 
         private static async void RunSelection()
@@ -578,11 +584,12 @@ namespace Elta.Windows
                 return;
             }
 
+            string? text = null;
             try
             {
                 var sw = Stopwatch.StartNew();
                 // WI-3：在 STA 工作线程上执行（WinForms 剪贴板要求 STA），不阻塞 UI
-                string? text = await StaRunner.RunAsync(() =>
+                text = await StaRunner.RunAsync(() =>
                 {
                     Thread.Sleep(HotkeyReleaseDelayMs);
                     return SelectionReader.ReadSelectedText();
@@ -594,28 +601,72 @@ namespace Elta.Windows
                 {
                     Forms.MessageBox.Show(
                         "未取到选中文本。\n请先选中一段文字，再按 Ctrl+Shift+T。",
-                        "ELTA — 划词取词（B2）",
+                        "ELTA",
                         Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Warning);
                     return;
                 }
-
-                string preview = text!.Length > 300 ? text.Substring(0, 300) + "…" : text;
-                Forms.MessageBox.Show(
-                    $"取到 {text.Length} 字符：\n\n{preview}",
-                    "ELTA — 划词取词（B2）",
-                    Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
                 Log.Error("RunSelection failed", ex);
                 Forms.MessageBox.Show(
                     $"取词失败：\n{ex.Message}",
-                    "ELTA — 划词取词（B2）",
+                    "ELTA",
                     Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Error);
+                return;
             }
             finally
             {
                 ExitBusy();
+            }
+
+            // C1：取词成功 → 翻译 → 结果窗口
+            if (!string.IsNullOrEmpty(text)) await TranslateAndShowAsync(text!);
+        }
+
+        /// <summary>C1：翻译并展示结果窗口；MissingKey/Failure 走提示弹窗，Cancelled 静默。</summary>
+        private static async Task TranslateAndShowAsync(string originalText)
+        {
+            SettingsManager settings = _settings!;
+            AIProvider provider = settings.ApiProvider;
+
+            if (string.IsNullOrEmpty(settings.ActiveApiKey))
+            {
+                Log.Info("translate missing key");
+                Forms.MessageBox.Show(
+                    $"未配置 {AIProviders.DisplayName(provider)} API Key。\n" +
+                    $"请先在设置中配置后重试。\n注册地址：{AIProviders.RegisterUrl(provider)}",
+                    "ELTA",
+                    Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Warning);
+                return;
+            }
+
+            var sw = Stopwatch.StartNew();
+            TranslationOutcome outcome = await Translation.TranslateAsync(originalText, settings);
+            sw.Stop();
+            Log.Info($"translate kind={outcome.Kind} elapsed={sw.ElapsedMilliseconds}ms");
+
+            switch (outcome.Kind)
+            {
+                case TranslationOutcomeKind.Success:
+                    string html = HtmlRenderer.Render(
+                        outcome.Text!, originalText, isDark: false,
+                        fontSize: settings.PopupFontSize,
+                        providerShortName: AIProviders.ShortName(provider));
+                    _resultWindow?.Close();
+                    _resultWindow = new ResultWindow(html);
+                    _resultWindow.Show();
+                    break;
+                case TranslationOutcomeKind.Cancelled:
+                    break;
+                case TranslationOutcomeKind.MissingKey:
+                    break;
+                default:
+                    Forms.MessageBox.Show(
+                        "翻译失败，请检查网络与 API Key 后重试。",
+                        "ELTA",
+                        Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Error);
+                    break;
             }
         }
 
