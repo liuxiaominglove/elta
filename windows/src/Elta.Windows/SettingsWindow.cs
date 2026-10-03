@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -28,6 +30,11 @@ namespace Elta.Windows
         private readonly CheckBox _telemetry = new();
         private readonly TextBlock _saveStatus = new();
 
+        private readonly List<HotkeyRecorder> _recorders = new();
+        private HotkeyRecorder? _activeRecorder;
+        private RadioButton _splitWhole = null!;
+        private RadioButton _splitParts = null!;
+
         private bool _loading;
         private bool _keyRevealed;
 
@@ -45,6 +52,14 @@ namespace Elta.Windows
 
             BuildUi();
             LoadFromSettings();
+
+            // 录键：窗口级拦截（录制中吃掉所有按键，避免触发焦点/默认按钮）
+            PreviewKeyDown += (_, e) =>
+            {
+                if (_activeRecorder is not { IsRecording: true }) return;
+                _activeRecorder.HandleKey(e);
+                if (!_activeRecorder.IsRecording) _activeRecorder = null;
+            };
         }
 
         // MARK: - UI 组装
@@ -69,7 +84,7 @@ namespace Elta.Windows
 
             var tabs = new TabControl();
             tabs.Items.Add(new TabItem { Header = "通用", Content = BuildGeneralTab() });
-            tabs.Items.Add(new TabItem { Header = "快捷键", Content = Placeholder("快捷键录制与默认弹窗模式将在下一步开发中提供（当前使用默认按键）。") });
+            tabs.Items.Add(new TabItem { Header = "快捷键", Content = BuildHotkeysTab() });
             tabs.Items.Add(new TabItem { Header = "模板", Content = Placeholder("翻译模板编辑将在下一步开发中提供（当前使用内置默认模板）。") });
             Grid.SetRow(tabs, 0);
             root.Children.Add(tabs);
@@ -122,6 +137,115 @@ namespace Elta.Windows
             root.Children.Add(bottom);
 
             Content = root;
+        }
+
+        private HotkeyRecorder AddRecorderRow(
+            Panel parent,
+            string label,
+            Func<int> getVk,
+            Func<int> getMods,
+            int[] allowedSolo,
+            Action<int, int, string> apply)
+        {
+            parent.Children.Add(Label(label, bold: false, secondary: false));
+
+            var button = new Button
+            {
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Padding = new Thickness(16, 5, 16, 5),
+                MinWidth = 150,
+            };
+            var status = new TextBlock
+            {
+                FontSize = 11,
+                Foreground = Brushes.Gray,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 2, 0, 10),
+            };
+
+            var recorder = new HotkeyRecorder(
+                button, status,
+                () => WindowsHotkeys.Display(getVk(), getMods()),
+                allowedSolo, apply);
+
+            button.Click += (_, _) =>
+            {
+                if (_activeRecorder is { IsRecording: true }) return;
+                if (recorder.IsRecording) return;
+                _activeRecorder = recorder;
+                recorder.Start();
+            };
+
+            parent.Children.Add(button);
+            parent.Children.Add(status);
+            _recorders.Add(recorder);
+            return recorder;
+        }
+
+        private UIElement BuildHotkeysTab()
+        {
+            var panel = new StackPanel { Margin = new Thickness(16) };
+            panel.Children.Add(Label("点击按钮后按下新组合键（10 秒内）；「关闭面板」「切换弹窗位置」允许单键。",
+                bold: false, secondary: true));
+
+            AddRecorderRow(panel, "截图翻译", () => _settings.HotkeyKeyCode, () => _settings.HotkeyModifiers,
+                Array.Empty<int>(),
+                (vk, mods, display) =>
+                {
+                    _settings.HotkeyKeyCode = vk;
+                    _settings.HotkeyModifiers = mods;
+                    _settings.HotkeyDisplay = display;
+                });
+
+            AddRecorderRow(panel, "划词翻译", () => _settings.SelectionHotkeyKeyCode, () => _settings.SelectionHotkeyModifiers,
+                Array.Empty<int>(),
+                (vk, mods, display) =>
+                {
+                    _settings.SelectionHotkeyKeyCode = vk;
+                    _settings.SelectionHotkeyModifiers = mods;
+                    _settings.SelectionHotkeyDisplay = display;
+                });
+
+            AddRecorderRow(panel, "关闭面板（可单键）", () => _settings.ClosePanelHotkeyKeyCode, () => _settings.ClosePanelHotkeyModifiers,
+                new[] { 0x1B },
+                (vk, mods, display) =>
+                {
+                    _settings.ClosePanelHotkeyKeyCode = vk;
+                    _settings.ClosePanelHotkeyModifiers = mods;
+                    _settings.ClosePanelHotkeyDisplay = display;
+                });
+
+            AddRecorderRow(panel, "切换弹窗位置（可单键）", () => _settings.TogglePanelHotkeyKeyCode, () => _settings.TogglePanelHotkeyModifiers,
+                new[] { 0xC0 },
+                (vk, mods, display) =>
+                {
+                    _settings.TogglePanelHotkeyKeyCode = vk;
+                    _settings.TogglePanelHotkeyModifiers = mods;
+                    _settings.TogglePanelHotkeyDisplay = display;
+                });
+
+            AddRecorderRow(panel, "拆分翻译", () => _settings.SplitHotkeyKeyCode, () => _settings.SplitHotkeyModifiers,
+                Array.Empty<int>(),
+                (vk, mods, display) =>
+                {
+                    _settings.SplitHotkeyKeyCode = vk;
+                    _settings.SplitHotkeyModifiers = mods;
+                    _settings.SplitHotkeyDisplay = display;
+                });
+
+            panel.Children.Add(new Separator { Margin = new Thickness(0, 6, 0, 8) });
+            panel.Children.Add(Label("默认优先弹窗模式：", bold: true, secondary: false));
+
+            _splitWhole = new RadioButton { Content = "整段", Margin = new Thickness(0, 4, 0, 0) };
+            _splitParts = new RadioButton { Content = "拆分（逐句对照）", Margin = new Thickness(0, 4, 0, 0) };
+            panel.Children.Add(_splitWhole);
+            panel.Children.Add(_splitParts);
+
+            return new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = panel,
+            };
         }
 
         private static UIElement Placeholder(string text)
@@ -224,6 +348,8 @@ namespace Elta.Windows
             _providerBox.SelectedIndex = _settings.ApiProvider == AIProvider.Deepseek ? 0 : 1;
             LoadProviderCard(_settings.ApiProvider);
             _telemetry.IsChecked = _settings.TelemetryEnabled;
+            _splitWhole.IsChecked = !_settings.DefaultSplitMode;
+            _splitParts.IsChecked = _settings.DefaultSplitMode;
             _loading = false;
         }
 
@@ -343,11 +469,41 @@ namespace Elta.Windows
 
         private void SaveAll()
         {
+            // 保存前：新录制的热键若命中常见系统/应用快捷键，先二次确认（对齐 mac）
+            var recorded = new List<(int?, int)>();
+            foreach (HotkeyRecorder rec in _recorders)
+                if (rec.HasRecorded) recorded.Add((rec.RecordedVk, rec.RecordedModifiers));
+
+            IReadOnlyList<(string Display, string Reason)> conflicts = HotkeyConflicts.Collect(recorded);
+            if (conflicts.Count > 0)
+            {
+                string details = string.Join("\n", conflicts.Select(c => $"「{c.Display}」：{c.Reason}"));
+                MessageBoxResult use = MessageBox.Show(
+                    this,
+                    $"以下快捷键在大多数应用中是常用功能：\n\n{details}\n\n" +
+                    "全局注册后，这些应用内按此键将触发翻译而非原功能。确定要使用吗？",
+                    "快捷键可能与系统冲突",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+                if (use != MessageBoxResult.Yes) return;
+            }
+
             AIProvider provider = _settings.ApiProvider;
             PersistKeyAndModel(provider);
+
+            foreach (HotkeyRecorder rec in _recorders)
+            {
+                if (!rec.HasRecorded) continue;
+                int vk = rec.RecordedVk!.Value;
+                rec.Apply(vk, rec.RecordedModifiers, WindowsHotkeys.Display(vk, rec.RecordedModifiers));
+            }
+
+            _settings.DefaultSplitMode = _splitParts.IsChecked == true;
             _onHotkeysChanged();
+
             Log.Info($"settings saved provider={AIProviders.RawValue(provider)} " +
-                     $"keyLen={KeyValue.Trim().Length} model={_modelBox.SelectedItem}");
+                     $"keyLen={KeyValue.Trim().Length} model={_modelBox.SelectedItem} " +
+                     $"hotkeyChanges={recorded.Count} defaultSplit={_settings.DefaultSplitMode}");
             _saveStatus.Text = "已保存";
         }
 
@@ -381,6 +537,14 @@ namespace Elta.Windows
             _settings.SplitHotkeyModifiers = d.SplitHotkeyModifiers;
             _settings.SplitHotkeyDisplay = d.SplitHotkeyDisplay;
             _settings.DefaultSplitMode = d.DefaultSplitMode;
+
+            foreach (HotkeyRecorder rec in _recorders)
+            {
+                rec.Reset();
+                rec.SetStatus("已恢复默认快捷键");
+            }
+            _splitWhole.IsChecked = !_settings.DefaultSplitMode;
+            _splitParts.IsChecked = _settings.DefaultSplitMode;
 
             _onHotkeysChanged();
             Log.Info("settings reset to defaults (api key kept)");

@@ -261,6 +261,17 @@ windows/
 - **真机 E2E ✅（2026-10-03，真实 Key）**：测试连接 200 → 保存（`Keychain 写入 len=35` + `settings saved keyLen=35`）→
   划词/截图两条链路均翻译成功并弹出结果窗口。
 
+#### C3b：设置窗口「快捷键」页 ✅（录键/恢复默认机测通过 🟢）
+- Core `HotkeyConflicts`（Windows 冲突表：Ctrl 常用键 / Alt+F4·Tab / Ctrl+Shift+Esc / Win 组合 / Ctrl+Alt+Del）
+  + 7 测试（Core **349 绿**）。
+- 外壳 `HotkeyRecorder`：10s 超时、裸键白名单（关闭面板 Esc / 切换位置 `` ` ``）、需修饰键校验、录制即冲突提示。
+- 「快捷键」页：5 行录制器 + 默认优先弹窗（整段/拆分）；保存前收集冲突统一二次确认；恢复默认同步复位录制器。
+- 踩坑：WPF `PreviewKeyDown` 会把**修饰键本身**也送进来（mac 的 flagsChanged 不会）→ 第一版录成 `Ctrl+0xA2`（LeftCtrl）；
+  已加纯修饰键过滤（`IsModifierKey` 忽略并继续等待主键）。
+- 机测（本机 2026-10-03，`--settings-ui` + UIA/SendKeys 自动化）：录制 Ctrl+Shift+Y → 按钮/状态正确；
+  恢复默认 → 确认框 → 全部复位为默认（日志 `settings reset to defaults (api key kept)`）。
+- 待办（C3c）：模板页（默认/自定义模板编辑）。
+
 ## P0.5 已验证结论（真机）
 
 ### A 机（初次，2026-09）
