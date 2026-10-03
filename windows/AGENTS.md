@@ -50,4 +50,4 @@ dotnet build windows\src\Elta.Windows\Elta.Windows.csproj -c Release
 - ✅ B3：OCR（WinRT；自动 + 真机手测通过）。
 - ✅ P0/P1：剪贴板安全 / 日志兜底 / 取词线程化 / 热键自愈（机测通过）。
 - ✅ B4：配置存储（JSON）/ 密钥库（DPAPI）/ Windows 默认值 / 热键服务（机测通过；裸键钩子待 C 接线）。
-- 🟡 子计划 C：C1 翻译链路 MVP 完成（编译 + 单测绿；真实 API 成功路径待配 Key 手测）；C2/C3 待做。
+- 🟢/🟡 子计划 C：C1 翻译链路 MVP + C3a 设置窗口通用页完成，**真机 E2E 通过**（划词/截图均出结果窗口）；C2（结果窗交互）、C3b/C3c（快捷键/模板页）待做。
