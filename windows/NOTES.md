@@ -239,12 +239,26 @@ windows/
   `keybd_event`/`MonitorFromPoint`/`GetDpiForMonitor`）。
 
 ## P0.5 已验证结论（真机）
+
+### A 机（初次，2026-09）
 - 🟢 截图：GDI `CopyFromScreen` + 物理像素换算，100%/150% 均正确；**多屏热切换会错位** → 正式实现要截「鼠标所在屏」。
 - 🟢 热键：`RegisterHotKey` 可用；`WH_KEYBOARD_LL` 双向可收（他程序 + 本窗口），无杀软拦截。
 - 🟡 取词：UIA 在记事本/Edge/控制台可用；Chrome、WPS 文字、WPS PDF **读不到** → Ctrl+C 兜底必须为主路径。
 - ⚠️ OCR：装了英文包识别质量极好；没装则很差 → A+B 方案。
 - 目标机：**A 机**（1366×768 + 1280×800 双屏，已装英文 OCR）。
 - Demo 与结果：`windows/spike/`（源码）；结果 txt 另见 U 盘 / `~/relay-handoff/`。
+
+### 复测（2026-10-03，Win10 22H2 build 19045 / .NET 8.0.425；1366×768@100% + 1920×1200@150% 双屏）
+- 🟢 U 盘 7 项版全部通过：OCR 语言 `en-US` + `zh-Hans-CN`、行/词级框可用（表格图按列聚合，需按词框坐标重建行列）；
+  坐标换算在 100% / 125% / 150% 均「命中红色=True」；记事本 / Chrome / Edge UIA 取词成功（142 / 136 / 136 字符）；
+  Ctrl+C 取词 + 剪贴板图片完整恢复；Ctrl+T 注册成功并收到 `WM_HOTKEY`；LL 钩子双向可收（3/3），Defender 无报警。
+- 🟡 修正：A 机「Chrome 读不到 UIA」属**版本相关**——新版 Chrome/Edge 已暴露 UIA TextPattern；取词主路径仍保留
+  Ctrl+C（旧版 / WPS / 中文场景更稳），原决策不变。
+- ⚠️ 本机主屏（LGD044C / Intel HD）标准缩放档位仅 100%/125%（无 150%，驱动/面板限制）→ 150% 复测在副屏
+  （RTK1601 / AMD，原生 150%）临时切为主屏完成，测毕两组设置均已还原。
+- 🟢 编译：U 盘快照缺 `using System.Windows.Automation.Text`（CS0246）；本仓库 `windows/spike/SpikeWindow.cs`
+  已修复并真机编译通过（0 error；仓库 8 项版的第 8 项仅语言包引导页，未单独跑）。
+- 结果文件：U 盘 `ELTA-Windows-P0.5\results\`（`spike.log` / `capture.png` / `changes.diff`）。
 
 ## 待办 / 风险
 - Windows 仓库策略：**方案 B**——移植期先留 `windows/` 于主仓库，B/C 完成后用 `git subtree split -P windows`
@@ -253,3 +267,6 @@ windows/
 - **回传**（2026-10-02）：本地全部未推送 commit 已打包到 U 盘
   `F:\ELTA-Windows-B3\elta-main-incremental-2026-10-02.bundle`（`git bundle verify` 通过；清单见同目录 `commits.txt`）；
   Mac 侧 `git pull <bundle> main && git push origin main`。数量以 `commits.txt` / `git rev-list --count origin/main..main` 为准。
+- **回传**（2026-10-03）：P0.5 真机复测修复 + 结论归档（本 commit）已打包到 U 盘
+  `E:\elta-main-incremental-2026-10-03.bundle`（`git bundle verify` 通过；清单见 `E:\elta-commits-2026-10-03.txt`）；
+  Mac 侧 `git pull <bundle> main && git push origin main`。数量以清单 / `git rev-list --count origin/main..main` 为准。

@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Text;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -218,6 +219,7 @@ namespace EltaSpike
                 Filter = "图片|*.png;*.jpg;*.jpeg;*.bmp|所有文件|*.*"
             };
             if (dlg.ShowDialog() != WinForms.DialogResult.OK) { Log("已取消"); return; }
+            Log($"[诊断] 对话框返回路径：{dlg.FileName}");
 
             try
             {
