@@ -87,6 +87,11 @@ namespace Elta.Windows
                         Partial = true;
                         continue;
                     }
+                    if (IsOversized(value))
+                    {
+                        Partial = true;   // 单格式超限：跳过，防内存翻倍（与 Stream 路径一致）
+                        continue;
+                    }
                     _items.Add((format, value));
                 }
                 catch
@@ -95,6 +100,14 @@ namespace Elta.Windows
                 }
             }
         }
+
+        /// <summary>非流值（字符串/数组）的单格式超限判断，与流路径的 50MB 上限一致。</summary>
+        private static bool IsOversized(object value) => value switch
+        {
+            string s => (long)s.Length * 2 > MaxFormatBytes,   // UTF-16 每字符约 2 字节
+            Array a => (long)a.Length > MaxFormatBytes,
+            _ => false,
+        };
 
         private static bool TryCopyStream(Stream stream, out MemoryStream? copy)
         {

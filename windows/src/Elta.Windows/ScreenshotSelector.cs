@@ -72,13 +72,17 @@ namespace Elta.Windows
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
+            if (e.Button != MouseButtons.Left) return;   // 只吃「发起拖拽的左键」抬起
             if (!_dragging) return;
             _dragging = false;
             _current = ScreenshotGeometry.NormalizeSelection(_start.X, _start.Y, e.X, e.Y);
 
             if (!ScreenshotGeometry.IsSelectionUsable(_current))
             {
-                Cancel();
+                // 单击/微拖：不判为取消（取消=ESC/右键），重置拖拽态，保持覆盖层可重画
+                _dragging = false;
+                _current = new RectF(0, 0, 0, 0);
+                Invalidate();
                 return;
             }
 
@@ -130,7 +134,7 @@ namespace Elta.Windows
                 string text = $"{r.Width} × {r.Height}";
                 using var font = new Font("Consolas", 11f, FontStyle.Bold);
                 SizeF sz = g.MeasureString(text, font);
-                float labelX = r.Right - sz.Width - 8;
+                float labelX = Math.Max(r.Right - sz.Width - 8, 4);
                 float labelY = Math.Max(r.Top - sz.Height - 6, 4);
                 using var labelBg = new SolidBrush(Color.FromArgb(217, 0, 120, 215));
                 g.FillRectangle(labelBg, labelX - 6, labelY - 3, sz.Width + 12, sz.Height + 6);
