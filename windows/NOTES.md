@@ -343,7 +343,7 @@ windows/
   拆成独立仓库 `elta-windows`（保留历史）。
 - 运行期验证需 A 机手测（CI 只做编译级）。
 - **回传**（2026-10-02）：本地全部未推送 commit 已打包到 U 盘
-  `F:\ELTA-Windows-B3\elta-main-incremental-2026-10-02.bundle`（`git bundle verify` 通过；清单见同目录 `commits.txt`）；
+  U 盘 `ELTA-Windows-B3\elta-main-incremental-2026-10-02.bundle`（`git bundle verify` 通过；清单见同目录 `commits.txt`）；
   Mac 侧 `git pull <bundle> main && git push origin main`。数量以 `commits.txt` / `git rev-list --count origin/main..main` 为准。
 - **回传**（2026-10-03）：本地全部未推送 commit（P0.5 复测归档 + C1 翻译链路 + C3 设置三页 + C2 结果窗）已打包到 U 盘
   U 盘根目录 `elta-main-incremental-2026-10-03.bundle`（`git bundle verify` 通过；清单见同目录 `elta-commits-2026-10-03.txt`）；
