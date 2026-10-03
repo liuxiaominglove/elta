@@ -310,6 +310,12 @@ windows/
   - `windows/test-c3.ps1`：14 用例（设置三页离线流程）。
 - 最终验证：Core **360 绿**；`test-c3.ps1` 14/14；`test-c2.ps1` 22/22（副屏现为 1280×800，F 段按实时屏幕校验）。
 
+### audit-shell 快照真机验证（2026-10-03，Mac 侧分支产物）
+- U 盘 `ELTA-windows-真机测试\`（fix/audit-shell 快照，含 `Elta.Windows.Tests`）：自动测试 **Core 341 / 外壳 3 全绿**；
+  真机 3 项**全部通过**（①中键拖拽中不提前提交 ②单击不取消覆盖层 ③最左边缘窄选区尺寸标签「36 × 220」可见）
+  + 可选项（56,700 字符取词不崩）。
+- 反馈文件：U 盘 `回传-audit-shell-2026-10-03.txt` + `audit-label.png`（满足合并 PR #4 条件）。
+
 ## P0.5 已验证结论（真机）
 
 ### A 机（初次，2026-09）
@@ -340,6 +346,7 @@ windows/
   `F:\ELTA-Windows-B3\elta-main-incremental-2026-10-02.bundle`（`git bundle verify` 通过；清单见同目录 `commits.txt`）；
   Mac 侧 `git pull <bundle> main && git push origin main`。数量以 `commits.txt` / `git rev-list --count origin/main..main` 为准。
 - **回传**（2026-10-03）：本地全部未推送 commit（P0.5 复测归档 + C1 翻译链路 + C3 设置三页 + C2 结果窗）已打包到 U 盘
-  `E:\elta-main-incremental-2026-10-03.bundle`（`git bundle verify` 通过；清单见 `E:\elta-commits-2026-10-03.txt`）；
+  `F:\elta-main-incremental-2026-10-03.bundle`（`git bundle verify` 通过；清单见 `F:\elta-commits-2026-10-03.txt`）；
   Mac 侧 `git pull <bundle> main && git push origin main`。数量以清单 / `git rev-list --count origin/main..main` 为准。
-- 同日另附**全量 bundle**（`--all`，自包含、可独立 clone，灾备用）：`E:\elta-full-2026-10-03.bundle`。
+  （注：本机 E: 为内置盘分区，U 盘 = F:（Kingston）；此前记到 E: 的路径已全部更正。）
+- 同日另附**全量 bundle**（`--all`，自包含、可独立 clone，灾备用）：`F:\elta-full-2026-10-03.bundle`。
