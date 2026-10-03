@@ -342,3 +342,4 @@ windows/
 - **回传**（2026-10-03）：本地全部未推送 commit（P0.5 复测归档 + C1 翻译链路 + C3 设置三页 + C2 结果窗）已打包到 U 盘
   `E:\elta-main-incremental-2026-10-03.bundle`（`git bundle verify` 通过；清单见 `E:\elta-commits-2026-10-03.txt`）；
   Mac 侧 `git pull <bundle> main && git push origin main`。数量以清单 / `git rev-list --count origin/main..main` 为准。
+- 同日另附**全量 bundle**（`--all`，自包含、可独立 clone，灾备用）：`E:\elta-full-2026-10-03.bundle`。
