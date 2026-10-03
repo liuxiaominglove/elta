@@ -118,9 +118,13 @@ namespace Elta.Core
             var seps = headerCells.Select(_ => "---");
             md.Add("|" + string.Join("|", seps) + "|");
 
+            int colCount = headerCells.Count;
             foreach (string line in lines.Skip(1))
             {
-                List<string> cells = line.Split('\t').Select(EscapeMarkdownTableCell).ToList();
+                List<string> raw = line.Split('\t').ToList();
+                List<string> cells = Enumerable.Range(0, colCount)
+                    .Select(c => c < raw.Count ? EscapeMarkdownTableCell(raw[c]) : "")
+                    .ToList();
                 md.Add("| " + string.Join(" | ", cells) + " |");
             }
 
@@ -301,13 +305,10 @@ namespace Elta.Core
 
         private static string FlatText(IReadOnlyList<OcrBlock> blocks)
         {
-            var sorted = blocks.ToList();
-            sorted.Sort((a, b) =>
-            {
-                if (Math.Abs(a.BoundingBox.MinY - b.BoundingBox.MinY) > 0.5)
-                    return a.BoundingBox.MinY.CompareTo(b.BoundingBox.MinY);
-                return a.BoundingBox.MinX.CompareTo(b.BoundingBox.MinX);
-            });
+            var sorted = blocks
+                .OrderBy(b => b.BoundingBox.MinY)
+                .ThenBy(b => b.BoundingBox.MinX)
+                .ToList();
             if (sorted.Count == 0) return "";
 
             List<List<OcrBlock>> lines = ClusterIntoLines(sorted);

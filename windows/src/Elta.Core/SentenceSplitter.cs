@@ -47,7 +47,7 @@ namespace Elta.Core
         {
             ArgumentNullException.ThrowIfNull(text);
 
-            string cleaned = CitationRegex.Replace(text, "");
+            string cleaned = CitationRegex.Replace(text, "").Replace("\r\n", "\n").Replace("\r", "\n");
 
             var result = new List<string>();
             foreach (string paragraph in cleaned.Split(new[] { "\n\n" }, StringSplitOptions.None))
