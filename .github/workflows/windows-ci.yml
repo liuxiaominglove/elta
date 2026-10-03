@@ -44,3 +44,14 @@ jobs:
           dotnet-version: '8.0.x'
       - name: Build Elta.Windows
         run: dotnet build windows/src/Elta.Windows/Elta.Windows.csproj -c Release
+
+  windows-shell-tests:
+    name: Elta.Windows tests (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Test Elta.Windows
+        run: dotnet test windows/tests/Elta.Windows.Tests/Elta.Windows.Tests.csproj -c Release --logger "console;verbosity=normal"
