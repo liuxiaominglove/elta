@@ -101,11 +101,11 @@ namespace Elta.Windows
             }
         }
 
-        /// <summary>非流值（字符串/数组）的单格式超限判断，与流路径的 50MB 上限一致。</summary>
+        /// <summary>非流值（字符串/字节数组）的单格式超限判断，与流路径的 50MB 上限一致。</summary>
         private static bool IsOversized(object value) => value switch
         {
             string s => (long)s.Length * 2 > MaxFormatBytes,   // UTF-16 每字符约 2 字节
-            Array a => (long)a.Length > MaxFormatBytes,
+            byte[] b => b.LongLength > MaxFormatBytes,
             _ => false,
         };
 

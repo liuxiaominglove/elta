@@ -80,7 +80,6 @@ namespace Elta.Windows
             if (!ScreenshotGeometry.IsSelectionUsable(_current))
             {
                 // 单击/微拖：不判为取消（取消=ESC/右键），重置拖拽态，保持覆盖层可重画
-                _dragging = false;
                 _current = new RectF(0, 0, 0, 0);
                 Invalidate();
                 return;
