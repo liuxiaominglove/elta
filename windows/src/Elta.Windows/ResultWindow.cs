@@ -44,7 +44,6 @@ namespace Elta.Windows
         private readonly string _markdown;
         private readonly string _originalText;
         private readonly Rectangle _avoidRect;   // 物理像素
-        private readonly bool _isDark;
         private readonly bool _canSplit;
 
         private readonly WebView2 _view = new();
@@ -63,13 +62,13 @@ namespace Elta.Windows
             _markdown = markdown;
             _originalText = originalText;
             _avoidRect = avoidRect;
-            _isDark = ThemeHelper.IsDark();
             _canSplit = HtmlRenderer.CanSplit(markdown, originalText);
             _isSplit = HtmlRenderer.ShouldStartSplit(settings.DefaultSplitMode, _canSplit);
 
             Title = "翻译结果 — ELTA";
-            MinWidth = 420;
-            MinHeight = ResultPanelGeometry.MinPanelHeight;
+            // 定位时按目标屏 DPI 换算实际 Min（见 ApplyPhysicalFrame）；这里只给保守下限
+            MinWidth = 200;
+            MinHeight = 150;
             Width = 620;
             Height = 700;
             WindowStartupLocation = WindowStartupLocation.Manual;
@@ -82,7 +81,17 @@ namespace Elta.Windows
                 PositionPanel();
                 _positioned = true;
             };
-            Loaded += async (_, _) => await InitWebViewAsync();
+            // 窗口被拖到不同 DPI 的显示器时，WPF 会按 DIP 重算尺寸并覆盖 SetWindowPos 的物理矩形；
+            // 这里在 DpiChanged 后重新套用几何（目标屏物理像素），保证跨屏定位/尺寸正确。
+            DpiChanged += (_, _) =>
+            {
+                if (_positioned) PositionPanel();
+            };
+            Loaded += async (_, _) =>
+            {
+                await InitWebViewAsync();
+                if (_positioned) PositionPanel();   // 收尾再套一次，覆盖首帧 DPI 协商
+            };
             // 在 Closing（销毁前）保存：Closed 时 HWND 已销毁，GetWindowRect 会失败
             Closing += (_, _) => SaveFrame();
         }
@@ -157,11 +166,13 @@ namespace Elta.Windows
 
         private string CurrentHtml()
         {
+            // W3：每次渲染现读系统主题（窗口存活期间切换主题也能生效，对齐 mac 每 render 读取）
+            bool isDark = ThemeHelper.IsDark();
             string provider = AIProviders.ShortName(_settings.ApiProvider);
             int size = _settings.PopupFontSize;
             return _isSplit
-                ? HtmlRenderer.RenderSplit(_markdown, _originalText, _isDark, size, provider)
-                : HtmlRenderer.Render(_markdown, _originalText, _isDark, size, provider);
+                ? HtmlRenderer.RenderSplit(_markdown, _originalText, isDark, size, provider)
+                : HtmlRenderer.Render(_markdown, _originalText, isDark, size, provider);
         }
 
         private void Rerender()
@@ -184,7 +195,7 @@ namespace Elta.Windows
                 _webViewReady = true;
                 _view.NavigateToString(CurrentHtml());
                 Log.Info($"result window shown split={_isSplit} canSplit={_canSplit} " +
-                         $"fontSize={_settings.PopupFontSize} dark={_isDark}");
+                         $"fontSize={_settings.PopupFontSize} dark={ThemeHelper.IsDark()}");
             }
             catch (Exception ex)
             {
@@ -273,6 +284,12 @@ namespace Elta.Windows
         {
             IntPtr hwnd = new WindowInteropHelper(this).Handle;
             if (hwnd == IntPtr.Zero) return;
+
+            // W2：几何常量是物理像素，WPF Min 是 DIP——按目标屏 DPI 换算，避免 150% 屏被撑大
+            DpiScale dpi = VisualTreeHelper.GetDpi(this);
+            MinWidth = Math.Max(200, 420 / dpi.DpiScaleX);
+            MinHeight = Math.Max(150, ResultPanelGeometry.MinPanelHeight / dpi.DpiScaleY);
+
             SetWindowPos(hwnd, HWND_TOPMOST,
                 (int)Math.Round(rect.X), (int)Math.Round(rect.Y),
                 (int)Math.Round(rect.Width), (int)Math.Round(rect.Height),

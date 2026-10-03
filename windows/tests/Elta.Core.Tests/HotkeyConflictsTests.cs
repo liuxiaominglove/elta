@@ -50,6 +50,23 @@ namespace Elta.Core.Tests
                 WindowsHotkeys.ModControl | WindowsHotkeys.ModShift, 0x51)); // Ctrl+Shift+Q
         }
 
+        [Fact]
+        public void CheckUnlessDefault_SkipsOwnDefaultCombo()
+        {
+            // 划词默认 Ctrl+Shift+T 在冲突表里（浏览器恢复标签），但重录成同一默认值不应告警
+            Assert.Null(HotkeyConflicts.CheckUnlessDefault(
+                0x54, WindowsHotkeys.ModControl | WindowsHotkeys.ModShift,
+                0x54, WindowsHotkeys.ModControl | WindowsHotkeys.ModShift));
+        }
+
+        [Fact]
+        public void CheckUnlessDefault_StillReportsOtherCombos()
+        {
+            Assert.NotNull(HotkeyConflicts.CheckUnlessDefault(
+                0x43, WindowsHotkeys.ModControl,          // Ctrl+C
+                0x54, WindowsHotkeys.ModControl | WindowsHotkeys.ModShift));
+        }
+
         // MARK: - 批量收集（保存前二次确认用）
 
         [Fact]

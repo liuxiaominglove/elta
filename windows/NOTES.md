@@ -294,6 +294,22 @@ windows/
   - 截图链（合成拖拽 460×150 框选）：captured → OCR Ok → translate Success → 面板对侧 ✓ → Esc ✓。
 - 深色主题：代码路径就绪（读 `AppsUseLightTheme`），本机浅色实测；深色未切换系统主题验证 🟡。
 
+#### C2 自查加固（grill 后修复，2026-10-03）✅
+- **任务代数守卫（对齐 mac `currentTaskGeneration`）**：新增 `_pipelineGeneration`，流水线起点递增、所有异步边界校验。
+  修两个真 bug：① 连按两次划词时旧任务回调会误关新任务的加载窗/弹陈旧结果；② OCR 阶段 ESC 无效（现 ESC 取消整个流水线）。
+- **裸键路由与 mac 对齐**：结果窗与加载窗短暂并存（旧结果 + 新任务加载）时，Esc 现在**两个动作都执行**
+  （此前 loading 分支提前 return，会吞掉"关旧面板"）。回归：`test-c2.ps1` B/C/D/E 全过。
+- **跨屏 DPI 修复**：窗口移到不同 DPI 显示器时 WPF 会按 DIP 覆盖 `SetWindowPos` 的物理矩形（实测副屏上被改成 960×813）；
+  现监听 `DpiChanged` 并在 Loaded 收尾重套几何，实测副屏窗口 = 右半屏 640×760 精确值。回归：`test-c2.ps1` F1。
+- **A± 单位修正**：`ResultWindow` 的 Min 尺寸按目标屏 DPI 换算（几何常量是物理像素）。
+- **冲突降噪**：新增 `HotkeyConflicts.CheckUnlessDefault`——重录成该动作自身默认键不再弹冲突提示（+2 测试）。
+- **isDark 每渲染现读**：运行中切系统主题可生效（实测 `dark=True` 🟢，测毕已还原主题）。
+- **退出清理**：`app.Exit` 停低级钩子；`--settings-ui` 检测到托盘实例时日志提示共用配置。
+- **机测脚本入库**（UTF-8+BOM，仓库惯例）：
+  - `windows/test-c2.ps1`：22 用例（交互/竞态/取消/记忆/截图链/副屏/A− 边界），需 Key，无 Key 退出码 3；
+  - `windows/test-c3.ps1`：14 用例（设置三页离线流程）。
+- 最终验证：Core **360 绿**；`test-c3.ps1` 14/14；`test-c2.ps1` 22/22（副屏现为 1280×800，F 段按实时屏幕校验）。
+
 ## P0.5 已验证结论（真机）
 
 ### A 机（初次，2026-09）

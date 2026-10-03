@@ -539,11 +539,30 @@ namespace Elta.Windows
         private void SaveAll()
         {
             // 保存前：新录制的热键若命中常见系统/应用快捷键，先二次确认（对齐 mac）
-            var recorded = new List<(int?, int)>();
-            foreach (HotkeyRecorder rec in _recorders)
-                if (rec.HasRecorded) recorded.Add((rec.RecordedVk, rec.RecordedModifiers));
+            // W2：重录成该项自身默认值时降噪（不告警）
+            SettingsDefaults def = _settings.Defaults;
+            var defaults = new (int Vk, int Mods)[]
+            {
+                (def.HotkeyKeyCode, def.HotkeyModifiers),
+                (def.SelectionHotkeyKeyCode, def.SelectionHotkeyModifiers),
+                (def.ClosePanelHotkeyKeyCode, def.ClosePanelHotkeyModifiers),
+                (def.TogglePanelHotkeyKeyCode, def.TogglePanelHotkeyModifiers),
+                (def.SplitHotkeyKeyCode, def.SplitHotkeyModifiers),
+            };
 
-            IReadOnlyList<(string Display, string Reason)> conflicts = HotkeyConflicts.Collect(recorded);
+            var conflicts = new List<(string Display, string Reason)>();
+            int recordedCount = 0;
+            for (int i = 0; i < _recorders.Count; i++)
+            {
+                HotkeyRecorder rec = _recorders[i];
+                if (!rec.HasRecorded) continue;
+                recordedCount++;
+                int vk = rec.RecordedVk!.Value;
+                string? reason = HotkeyConflicts.CheckUnlessDefault(
+                    vk, rec.RecordedModifiers, defaults[i].Vk, defaults[i].Mods);
+                if (reason is not null)
+                    conflicts.Add((WindowsHotkeys.Display(vk, rec.RecordedModifiers), reason));
+            }
             if (conflicts.Count > 0)
             {
                 string details = string.Join("\n", conflicts.Select(c => $"「{c.Display}」：{c.Reason}"));
@@ -592,7 +611,7 @@ namespace Elta.Windows
 
             Log.Info($"settings saved provider={AIProviders.RawValue(provider)} " +
                      $"keyLen={KeyValue.Trim().Length} model={_modelBox.SelectedItem} " +
-                     $"hotkeyChanges={recorded.Count} defaultSplit={_settings.DefaultSplitMode} " +
+                     $"hotkeyChanges={recordedCount} defaultSplit={_settings.DefaultSplitMode} " +
                      $"template={templateAction.Kind}");
             _saveStatus.Text = "已保存";
         }

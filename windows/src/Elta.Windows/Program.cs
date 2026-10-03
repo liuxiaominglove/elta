@@ -44,6 +44,27 @@ namespace Elta.Windows
         private static LoadingWindow? _loadingWindow;
         private static readonly PanelKeyRouter PanelKeys = new();
 
+        // W1：流水线代数守卫（对齐 mac currentTaskGeneration）——新任务/取消都会递增，
+        // 陈旧任务的异步回调静默丢弃，避免误清新任务的加载窗或弹出陈旧结果。
+        private static int _pipelineGeneration;
+
+        private static int BeginPipeline() => ++_pipelineGeneration;
+
+        private static bool IsStale(int gen, string site)
+        {
+            if (gen == _pipelineGeneration) return false;
+            Log.Info($"pipeline stale at {site} gen={gen} current={_pipelineGeneration}");
+            return true;
+        }
+
+        /// <summary>用户按 ESC 取消整个流水线（含 OCR 阶段）：代数失效 + 取消网络 + 关闭加载窗。</summary>
+        private static void CancelPipeline()
+        {
+            _pipelineGeneration++;
+            Translation.CancelCurrent();
+            HideLoading();
+        }
+
         [STAThread]
         public static void Main(string[] args)
         {
@@ -192,6 +213,7 @@ namespace Elta.Windows
             app.Exit += (_, _) =>
             {
                 Log.Info("exit");
+                PanelKeys.Stop();
                 _hotkeys.Dispose();
                 tray.Visible = false;
                 tray.Dispose();
@@ -254,6 +276,17 @@ namespace Elta.Windows
         /// <summary>调试入口：`--settings-ui` 只打开设置窗口（无托盘），供自动化冒烟。</summary>
         private static void RunSettingsUiCli()
         {
+            // W3：调试实例与托盘实例共用同一份配置；并发保存有互相覆盖风险，仅提示不拦截
+            bool trayRunning = false;
+            try
+            {
+                using Mutex probe = Mutex.OpenExisting(@"Local\Elta.Windows.SingleInstance");
+                trayRunning = true;
+            }
+            catch (WaitHandleCannotBeOpenedException) { }
+            if (trayRunning)
+                Log.Warn("settings-ui: tray instance is running; shared config, avoid concurrent saves");
+
             var app = new System.Windows.Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
             var settings = new SettingsManager(
                 new JsonSettingsStore(), new DpapiSecretStore(), SettingsDefaults.Windows, msg => Log.Info(msg));
@@ -585,6 +618,7 @@ namespace Elta.Windows
                 return;
             }
 
+            int gen = BeginPipeline();
             Bitmap? captured = null;
             string? text = null;
             Rectangle selectionRect = Rectangle.Empty;
@@ -603,6 +637,10 @@ namespace Elta.Windows
                 OcrOutcome outcome = await Task.Run(() => OcrService.RecognizeAsync(shot));
                 sw.Stop();
                 Log.Info($"ocr status={outcome.Status} blocks={outcome.Blocks.Count} elapsed={sw.ElapsedMilliseconds}ms");
+
+                // W1：OCR 期间被 ESC 取消 → 静默中止（不弹框、不发起翻译）
+                if (IsStale(gen, "post-ocr")) return;
+
                 switch (outcome.Status)
                 {
                     case OcrStatus.NoLanguagePack:
@@ -639,6 +677,7 @@ namespace Elta.Windows
             {
                 // async void 内异常若逃逸会导致进程崩溃，这里兜底
                 Log.Error("RunScreenshot failed", ex);
+                if (IsStale(gen, "catch")) return;
                 HideLoading();
                 Forms.MessageBox.Show(
                     $"截图翻译失败：\n{ex.Message}",
@@ -653,7 +692,8 @@ namespace Elta.Windows
             }
 
             // C1/C2：识别成功 → 翻译 → 结果窗口（翻译自带「取消旧请求」，不进 busy 守卫）
-            if (text != null) await TranslateAndShowAsync(text, selectionRect);
+            if (text != null && !IsStale(gen, "pre-translate"))
+                await TranslateAndShowAsync(text, selectionRect, gen);
         }
 
         private static async void RunSelection()
@@ -664,6 +704,7 @@ namespace Elta.Windows
                 return;
             }
 
+            int gen = BeginPipeline();
             string? text = null;
             try
             {
@@ -677,6 +718,7 @@ namespace Elta.Windows
                 sw.Stop();
                 Log.Info($"selection len={text?.Length ?? 0} elapsed={sw.ElapsedMilliseconds}ms");
 
+                if (IsStale(gen, "selection")) return;
                 if (string.IsNullOrEmpty(text))
                 {
                     Forms.MessageBox.Show(
@@ -689,6 +731,7 @@ namespace Elta.Windows
             catch (Exception ex)
             {
                 Log.Error("RunSelection failed", ex);
+                if (IsStale(gen, "catch")) return;
                 Forms.MessageBox.Show(
                     $"取词失败：\n{ex.Message}",
                     "ELTA",
@@ -701,19 +744,20 @@ namespace Elta.Windows
             }
 
             // C1/C2：取词成功 → 翻译 → 结果窗口
-            if (!string.IsNullOrEmpty(text))
+            if (!string.IsNullOrEmpty(text) && !IsStale(gen, "pre-translate"))
             {
                 ShowLoading("正在翻译...", "划词翻译 → AI 翻译分析");
-                await TranslateAndShowAsync(text!, MouseAnchor());
+                await TranslateAndShowAsync(text!, MouseAnchor(), gen);
             }
         }
 
         /// <summary>C1/C2：翻译并展示结果窗口；调用方已显示加载窗，本方法负责在所有终止路径隐藏它。</summary>
-        private static async Task TranslateAndShowAsync(string originalText, Rectangle avoidRect)
+        private static async Task TranslateAndShowAsync(string originalText, Rectangle avoidRect, int gen)
         {
             SettingsManager settings = _settings!;
             AIProvider provider = settings.ApiProvider;
 
+            if (IsStale(gen, "missing-key")) return;
             if (string.IsNullOrEmpty(settings.ActiveApiKey))
             {
                 HideLoading();
@@ -731,6 +775,10 @@ namespace Elta.Windows
             var sw = Stopwatch.StartNew();
             TranslationOutcome outcome = await Translation.TranslateAsync(originalText, settings);
             sw.Stop();
+
+            // W1：陈旧任务（被取消或被新任务顶掉）静默丢弃：不碰加载窗、不弹结果/错误
+            if (IsStale(gen, "translate-done")) return;
+
             HideLoading();
             Log.Info($"translate kind={outcome.Kind} elapsed={sw.ElapsedMilliseconds}ms");
 
@@ -750,7 +798,8 @@ namespace Elta.Windows
                     UpdatePanelHook();
                     break;
                 case TranslationOutcomeKind.Cancelled:
-                    Log.Info("translate cancelled by user (ESC)");
+                    // 用户 ESC 的路径已被代数守卫拦在前面；此处仅剩防御性场景
+                    Log.Info("translate outcome=Cancelled (current task)");
                     break;
                 case TranslationOutcomeKind.MissingKey:
                     break;
@@ -795,42 +844,43 @@ namespace Elta.Windows
             else PanelKeys.Stop();
         }
 
-        /// <summary>面板键路由：加载期间 Esc=取消；结果窗期间 Esc=关闭、`=翻面、Ctrl+D=拆分（键位取自设置）。</summary>
+        /// <summary>
+        /// 面板键路由：结果窗期间 Esc=关闭、`=翻面、Ctrl+D=拆分；加载期间 Esc=取消。
+        /// 两者可能短暂并存（旧结果 + 新任务加载）——对齐 mac 的独立 tap：两类动作都处理，不互斥。
+        /// </summary>
         private static bool HandlePanelKey(int vk, int modifiers)
         {
             SettingsManager s = _settings!;
-
-            if (_loadingWindow is not null)
-            {
-                if (vk == s.ClosePanelHotkeyKeyCode && modifiers == s.ClosePanelHotkeyModifiers)
-                {
-                    Log.Info("panel key: cancel translation");
-                    Translation.CancelCurrent();
-                    return true;
-                }
-                return false;
-            }
+            bool handled = false;
 
             if (_resultWindow is not null)
             {
                 if (vk == s.ClosePanelHotkeyKeyCode && modifiers == s.ClosePanelHotkeyModifiers)
                 {
                     _resultWindow.ClosePanel();
-                    return true;
+                    handled = true;
                 }
-                if (vk == s.TogglePanelHotkeyKeyCode && modifiers == s.TogglePanelHotkeyModifiers)
+                else if (vk == s.TogglePanelHotkeyKeyCode && modifiers == s.TogglePanelHotkeyModifiers)
                 {
                     _resultWindow.TogglePosition();
-                    return true;
+                    handled = true;
                 }
-                if (vk == s.SplitHotkeyKeyCode && modifiers == s.SplitHotkeyModifiers)
+                else if (vk == s.SplitHotkeyKeyCode && modifiers == s.SplitHotkeyModifiers)
                 {
                     _resultWindow.ToggleSplit();
-                    return true;
+                    handled = true;
                 }
             }
 
-            return false;
+            if (_loadingWindow is not null &&
+                vk == s.ClosePanelHotkeyKeyCode && modifiers == s.ClosePanelHotkeyModifiers)
+            {
+                Log.Info("panel key: cancel pipeline (ESC)");
+                CancelPipeline();
+                handled = true;
+            }
+
+            return handled;
         }
 
         /// <summary>划词路径的定位锚点：触发时的鼠标位置（10×10，物理像素）。</summary>

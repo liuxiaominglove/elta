@@ -62,6 +62,15 @@ namespace Elta.Core
             return null;
         }
 
+        /// <summary>
+        /// 与该项默认值相同的组合不告警：用户把某动作"重录"成它自身的默认键时不该弹噪音。
+        /// </summary>
+        public static string? CheckUnlessDefault(int virtualKey, int modifiers, int defaultVirtualKey, int defaultModifiers)
+        {
+            if (virtualKey == defaultVirtualKey && modifiers == defaultModifiers) return null;
+            return Check(modifiers, virtualKey);
+        }
+
         /// <summary>从「本次新录制的热键」收集冲突项；键码为 null 表示未录制，跳过。</summary>
         public static IReadOnlyList<(string Display, string Reason)> Collect(
             IEnumerable<(int? VirtualKey, int Modifiers)> recorded)
