@@ -323,5 +323,14 @@ namespace Elta.Core.Tests
         [Fact]
         public void Pair_Null_Throws()
             => Assert.Throws<ArgumentNullException>(() => SentenceSplitter.Pair(null!, "x"));
+
+        // ---------- 审计修复：CRLF 段落分隔 ----------
+
+        [Fact]
+        public void SplitEnglish_SplitsParagraphsOnCrlfBlankLine()
+        {
+            var result = SentenceSplitter.SplitEnglish("Chapter 3\r\n\r\nIt began.");
+            Assert.Equal(new[] { "Chapter 3", "It began." }, result);
+        }
     }
 }

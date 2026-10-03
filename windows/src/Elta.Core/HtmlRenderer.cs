@@ -96,7 +96,7 @@ namespace Elta.Core
             splitHtml.Append("</div>");
 
             List<MarkdownSection> otherSections = sections
-                .Where(s => s.Heading != null && !s.Heading.Contains("中文翻译"))
+                .Where(s => s.Heading != null && !ReferenceEquals(s, transSection))
                 .ToList();
             string otherMarkdown = string.Join("\n\n",
                 otherSections.Select(s => $"## {s.Heading}\n{s.Body}"));
@@ -247,7 +247,7 @@ namespace Elta.Core
             {{originalBoxHtml}}
             <div class="content">
             {{body}}
-            <div class="footer">Powered by {{providerShortName}} AI · ELTA — 截图即译，精读利器</div>
+            <div class="footer">Powered by {{EscapeHTML(providerShortName)}} AI · ELTA — 截图即译，精读利器</div>
             </div>
             </body></html>
             """;
@@ -266,7 +266,7 @@ namespace Elta.Core
             void Flush()
             {
                 string body = string.Join("\n", currentBody).Trim();
-                if (body.Length > 0)
+                if (body.Length > 0 || currentHeading != null)
                 {
                     sections.Add(new MarkdownSection(currentHeading, body));
                 }
