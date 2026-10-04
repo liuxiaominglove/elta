@@ -30,14 +30,49 @@ try {
   git bundle create $full '--all' | Out-Null
   cmd /c ('git log origin/main..main --oneline > "' + $list + '"')
 
+  # 给 Mac 端 opencode 的机器可读任务文件（Mac 端由 opencode 代用户操作）
+  $task = Join-Path $tmp 'MAC-OPENCODE-TASK.md'
+  $head = (git rev-parse --short HEAD).Trim()
+  $baseHead = (git rev-parse --short origin/main).Trim()
+  $commitList = (git log origin/main..main --oneline) -join "`r`n"
+  $taskText = @"
+# 任务（给 Mac 端 opencode）：合并 Windows 增量包并推送到 origin
+
+用户已授权本次 push。请代用户执行并逐步核验；遇到冲突/非快进/任何不确定，停下并向用户报告，禁止强推。
+
+## 背景
+- 本包 = origin/main（$baseHead）之上的 $count 个 commit，由 Windows 端 opencode 生成。
+- bundle：本目录 elta-main-incremental-$Date.bundle（生成时经 SHA256 校验写入）。
+- 人类可读版：同目录 HANDOFF.txt；仓库正式交接记录：windows/NOTES.md。
+
+## 操作
+1. 进入 Mac 上的 elta 仓库（没有则先 git clone https://github.com/liuxiaominglove/elta.git）
+2. git fetch origin && git checkout main && git pull origin main      # 有脏状态/未推送提交先停下问用户
+3. git pull "/Volumes/<U盘名>/elta-main-incremental-$Date.bundle" main   # 盘名用 ls /Volumes 探测
+4. push 前核验：git log --oneline -5 头部应为 $head ; git rev-list --count origin/main..main 应为 $count
+5. git push origin main        # 禁止 force
+6. 推后核验：git rev-list --count origin/main..main 应为 0
+7. 可选：sh windows/test-core.sh  （期望全部通过；当前基线 Core=406，需 .NET 8 SDK）
+8. 读取 U 盘上的验收/回传文件（回传-*.txt、验收*-证据）；有跟进意见写 回传-给Windows-<日期>.txt 放回 U 盘或向用户口述
+
+## 本次 commit 清单（$count 个）
+$commitList
+
+## 汇报格式（给用户）
+- push 结果：成功/受阻（附第 4/6 步实际输出）
+- 是否跑过 Core 测试及结果
+- 任何异常原文
+"@
+  [IO.File]::WriteAllText($task, $taskText, (New-Object Text.UTF8Encoding($false)))
+
   if ($DryRun) {
-    & $copyScript -Source $inc, $full, $list -WhatIfOnly
+    & $copyScript -Source $inc, $full, $list, $task -WhatIfOnly
     exit $LASTEXITCODE
   }
-  & $copyScript -Source $inc, $full, $list
+  & $copyScript -Source $inc, $full, $list, $task
   $code = $LASTEXITCODE
   if ($code -ne 0) { "写入 U 盘失败（exit $code），临时文件保留在: $tmp"; exit $code }
-  "交接完成：3 个文件已写入 U 盘根目录（incremental / full / elta-commits-{0}.txt）" -f $Date
+  "交接完成：4 个文件已写入 U 盘根目录（incremental / full / elta-commits-{0}.txt / MAC-OPENCODE-TASK.md）" -f $Date
   exit 0
 } finally {
   if (-not $DryRun -and (Test-Path $tmp)) { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }

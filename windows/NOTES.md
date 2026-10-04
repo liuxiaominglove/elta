@@ -416,6 +416,8 @@ windows/
 
 - 方法论（2026-10-04）：验收/交互验证**默认自动化**（先做能力对照 → 逐项裁决）；清单里的"人点"不构成约束。
   本机能力清单见 windows/AGENTS.md「验证默认自动化」；事故与全自动复验见 U 盘 `回传-验收-6080e55`。
+- 交接约定（2026-10-04）：**Mac 端操作者是 opencode**（用户转达、opencode 执行）；交接物须同时提供机器可读
+  任务文件——`make-handoff.ps1` 自本日起自动生成 `MAC-OPENCODE-TASK.md`（动态 head/清单/核验步骤），供 Mac opencode 直接执行与核验。
 - Windows 仓库策略：**方案 B**——移植期先留 `windows/` 于主仓库，B/C 完成后用 `git subtree split -P windows`
   拆成独立仓库 `elta-windows`（保留历史）。
 - 运行期验证需 A 机手测（CI 只做编译级）。
