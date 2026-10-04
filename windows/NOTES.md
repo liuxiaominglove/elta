@@ -469,6 +469,22 @@ windows/
   后续热键被 `selection ignored: busy` 静默忽略，关框即恢复（复现 19:04–19:05）。与已修 OCR 空选同类，
   建议同款非模态化（候选修复，触发条件：修复时补"空选不阻塞"回归用例）。
 
+### 发布后修复：Windows 更新检查误报 mac 版本线（win-v1.0.1 准备）✅（2026-10-04 晚）
+- 现象：v1.0.0 用户收到"有更新"提示，点击下载得到 **mac 的 `ELTA.v5.5.5.dmg`**（Windows 打不开）。
+- 根因：版本线解耦遗漏了**更新链路**——`/api/update` 只维护 mac 线（`latest.json`）；Windows 客户端用同一端点、
+  无平台参数 → `5.5.5 > 1.0.0` 判为更新，"前往下载"直接打开响应 url（= DMG 直链）。
+- 证据：接口实测 `{"version":"5.5.5","url":"...dmg"}`；日志 `update check remote=5.5.5` → `update found`。
+- 修复（本批，TDD）：
+  - 客户端：`BuildUpdateUrl` 恒带 `platform=windows`（遥测时附 `id`）；`UpdateInfo.Platform` 可选字段 +
+    `IsApplicablePlatform` 守卫（缺省=旧服务器兼容放行；显式非 windows 一律忽略）；日志新增 `platform=`；
+    Core **410/410**；版本 bump 1.0.0→**1.0.1**；打包冒烟通过（selftest/launch/translate）。
+  - 服务器（`server/`）：`/api/update` 按 `platform` 分流（windows→`latest-win.json`；无参/未知→mac，向后兼容）；
+    响应新增 `"platform"` 字段；`test_server.py` +4 用例（本机无 Python，**测试由 Mac 运行**）。
+- Family 扫描：更新链路其余点（mac 客户端/官网/ReleaseGate/pack 脚本）无需改动；遥测混平台计数记为观察项。
+- 待 Mac（详见 U 盘 REPORT.md）：部署 `server.py`；`sync-elta-release.sh` 增写 `latest-win.json`；跑 server 测试；
+  合并本包后打 tag `win-v1.0.1`；官网 bump；部署后核验（Windows 日志 `platform=windows` 且不再误报）。
+- 过渡：老客户端 v1.0.0 仍会误报（点「跳过此版本」可忍）；修复上线后自然消失。
+
 ## 待办 / 风险
 
 - 方法论（2026-10-04）：验收/交互验证**默认自动化**（先做能力对照 → 逐项裁决）；清单里的"人点"不构成约束。
