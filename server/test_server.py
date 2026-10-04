@@ -36,6 +36,10 @@ class ServerTests(unittest.TestCase):
         with open(os.path.join(self.tmp, "latest.json"), "w", encoding="utf-8") as f:
             json.dump({"version": version, "url": url}, f)
 
+    def _write_latest_win(self, version, url):
+        with open(os.path.join(self.tmp, "latest-win.json"), "w", encoding="utf-8") as f:
+            json.dump({"version": version, "url": url}, f)
+
     def _url(self, path):
         return f"http://127.0.0.1:{self.port}{path}"
 
@@ -95,6 +99,35 @@ class ServerTests(unittest.TestCase):
         code, data = self.get("/api/update?id=a")
         self.assertEqual(code, 200)
         self.assertIsNone(data["version"])
+
+    # --- 平台分流（2026-10-04 发布后修复：Windows 曾收到 mac 版本线提示） ---
+
+    def test_update_windows_platform_returns_win_latest(self):
+        self._write_latest_win("1.0.1", "https://autoelta.com/download/latest-win.zip")
+        code, data = self.get("/api/update?platform=windows&id=a")
+        self.assertEqual(code, 200)
+        self.assertEqual(data["version"], "1.0.1")
+        self.assertEqual(data["url"], "https://autoelta.com/download/latest-win.zip")
+        self.assertEqual(data["platform"], "windows")
+
+    def test_update_default_returns_mac_and_platform_field(self):
+        code, data = self.get("/api/update?id=a")
+        self.assertEqual(code, 200)
+        self.assertEqual(data["version"], "5.6.0")
+        self.assertEqual(data["platform"], "macos")
+
+    def test_update_windows_missing_win_file_returns_nulls(self):
+        code, data = self.get("/api/update?platform=windows")
+        self.assertEqual(code, 200)
+        self.assertIsNone(data["version"])
+        self.assertIsNone(data["url"])
+        self.assertEqual(data["platform"], "windows")
+
+    def test_update_unknown_platform_falls_back_to_mac(self):
+        code, data = self.get("/api/update?platform=linux")
+        self.assertEqual(code, 200)
+        self.assertEqual(data["version"], "5.6.0")
+        self.assertEqual(data["platform"], "macos")
 
     def test_stats_requires_auth(self):
         code, _ = self.get("/api/stats")

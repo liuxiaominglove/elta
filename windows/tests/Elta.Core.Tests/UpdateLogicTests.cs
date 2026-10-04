@@ -103,19 +103,65 @@ namespace Elta.Core.Tests
             Assert.False(UpdateLogic.ShouldShowUpdate("5.5.4", "5.5.5", skipVersion: "5.5.4"));
         }
 
-        // MARK: - 更新检查 URL（遥测 = 带 id 的同一请求）
+        // MARK: - 更新检查 URL（平台参数 + 遥测 id）
 
         [Fact]
-        public void BuildUpdateUrl_TelemetryOn_IncludesInstallId()
+        public void BuildUpdateUrl_TelemetryOn_IncludesIdAndPlatform()
         {
             string url = UpdateLogic.BuildUpdateUrl(telemetryEnabled: true, installId: "abc-123");
-            Assert.Equal(UpdateLogic.UpdateUrl + "?id=abc-123", url);
+            Assert.Equal(UpdateLogic.UpdateUrl + "?platform=windows&id=abc-123", url);
         }
 
         [Fact]
-        public void BuildUpdateUrl_TelemetryOff_NoId()
+        public void BuildUpdateUrl_TelemetryOff_PlatformOnly()
         {
-            Assert.Equal(UpdateLogic.UpdateUrl, UpdateLogic.BuildUpdateUrl(telemetryEnabled: false, installId: "abc-123"));
+            Assert.Equal(UpdateLogic.UpdateUrl + "?platform=windows", UpdateLogic.BuildUpdateUrl(telemetryEnabled: false, installId: "abc-123"));
+        }
+
+        // MARK: - 平台字段（服务端按 platform 分流；缺省=旧服务器，兼容放行）
+
+        [Fact]
+        public void Parse_WithPlatformField_ReadsIt()
+        {
+            UpdateInfo? info = UpdateLogic.ParseUpdateResponse("{\"version\":\"1.0.1\",\"url\":\"https://autoelta.com/download/x.zip\",\"platform\":\"windows\"}");
+            Assert.NotNull(info);
+            Assert.Equal("windows", info!.Platform);
+        }
+
+        [Fact]
+        public void Parse_WithoutPlatformField_PlatformNull()
+        {
+            UpdateInfo? info = UpdateLogic.ParseUpdateResponse("{\"version\":\"5.6.0\",\"url\":\"https://autoelta.com/\"}");
+            Assert.NotNull(info);
+            Assert.Null(info!.Platform);
+        }
+
+        [Fact]
+        public void Parse_PlatformWrongType_PlatformNull()
+        {
+            UpdateInfo? info = UpdateLogic.ParseUpdateResponse("{\"version\":\"5.6.0\",\"url\":\"https://autoelta.com/\",\"platform\":123}");
+            Assert.NotNull(info);
+            Assert.Null(info!.Platform);
+        }
+
+        [Fact]
+        public void IsApplicablePlatform_LegacyNull_True()
+        {
+            Assert.True(UpdateLogic.IsApplicablePlatform(null));
+            Assert.True(UpdateLogic.IsApplicablePlatform(""));
+        }
+
+        [Fact]
+        public void IsApplicablePlatform_Windows_True()
+        {
+            Assert.True(UpdateLogic.IsApplicablePlatform("windows"));
+            Assert.True(UpdateLogic.IsApplicablePlatform("Windows"));
+        }
+
+        [Fact]
+        public void IsApplicablePlatform_Macos_False()
+        {
+            Assert.False(UpdateLogic.IsApplicablePlatform("macos"));
         }
 
         // MARK: - 协议白名单（打开链接前二次校验复用）

@@ -29,9 +29,15 @@ namespace Elta.Windows
                 }
                 string body = await resp.Content.ReadAsStringAsync();
                 UpdateInfo? info = UpdateLogic.ParseUpdateResponse(body);
-                Log.Info(info is null
-                    ? "update check parse=null"
-                    : $"update check remote={info.Version} withId={settings.TelemetryEnabled}");
+                if (info is null)
+                {
+                    Log.Info("update check parse=null");
+                }
+                else
+                {
+                    string platformLabel = info.Platform ?? "none";
+                    Log.Info($"update check remote={info.Version} platform={platformLabel} withId={settings.TelemetryEnabled}");
+                }
                 return info;
             }
             catch (Exception ex)

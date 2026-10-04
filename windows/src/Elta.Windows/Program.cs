@@ -992,6 +992,13 @@ namespace Elta.Windows
                     Log.Info($"update ignored remote={info.Version} (same or skipped)");
                     return;
                 }
+                // 平台守卫（2026-10-04 发布后修复）：服务端按 platform 分流；显式非 windows 的条目一律忽略，
+                // 防止再次出现"Windows 收到 mac 版本线提示"（旧服务器无 platform 字段时兼容放行）。
+                if (!UpdateLogic.IsApplicablePlatform(info.Platform))
+                {
+                    Log.Info($"update ignored remote={info.Version} platform={info.Platform} (not windows)");
+                    return;
+                }
                 ShowUpdateDialog(settings, currentVersion, info);
             };
             timer.Start();

@@ -31,11 +31,13 @@ class App:
             os.path.dirname(os.path.abspath(__file__)), "admin.html")
         self.store = core.UsageStore(os.path.join(data_dir, "usage.json"))
         self.latest_json = os.path.join(data_dir, "latest.json")
+        self.latest_win_json = os.path.join(data_dir, "latest-win.json")
         self.downloads_json = os.path.join(data_dir, "downloads.json")
 
-    def read_latest(self):
+    def read_latest(self, filename="latest.json"):
+        """读取单条版本线文件（默认 mac 的 latest.json；Windows 分支传 latest-win.json）。"""
         try:
-            with open(self.latest_json, "r", encoding="utf-8") as f:
+            with open(os.path.join(self.data_dir, filename), "r", encoding="utf-8") as f:
                 data = json.load(f)
             if not isinstance(data, dict):
                 return {"version": None, "url": None}
@@ -136,8 +138,15 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/update":
             uid = query.get("id", [None])[0]
+            platform = (query.get("platform", [None])[0] or "").strip().lower()
             self.app.store.record(uid, core.today_key(), self._client_ip())
-            _send_json(self, 200, self.app.read_latest())
+            if platform == "windows":
+                payload = self.app.read_latest("latest-win.json")
+                payload["platform"] = "windows"
+            else:
+                payload = self.app.read_latest()
+                payload["platform"] = "macos"
+            _send_json(self, 200, payload)
             return
 
         if path == "/api/stats":

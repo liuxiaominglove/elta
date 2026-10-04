@@ -4,8 +4,8 @@ using System.Text.Json;
 
 namespace Elta.Core
 {
-    /// <summary>更新信息（对齐 mac parseUpdateResponse 的返回语义）。</summary>
-    public sealed record UpdateInfo(string Version, string Url);
+    /// <summary>更新信息（对齐 mac parseUpdateResponse 的返回语义；Platform 为服务端可选字段，缺省=旧服务器）。</summary>
+    public sealed record UpdateInfo(string Version, string Url, string? Platform = null);
 
     /// <summary>
     /// 更新检查纯逻辑（移植自 macOS 版 UpdateChecker）：响应解析 / 版本比较 / 跳过判断 / URL 构造。
@@ -32,7 +32,10 @@ namespace Elta.Core
                 if (version.StartsWith("v")) version = version.Substring(1);
                 if (version.Length == 0 || url.Length == 0) return null;
                 if (!IsHttpUrl(url)) return null;
-                return new UpdateInfo(version, url);
+                string? platform = null;
+                if (doc.RootElement.TryGetProperty("platform", out JsonElement pEl) && pEl.ValueKind == JsonValueKind.String)
+                    platform = pEl.GetString();
+                return new UpdateInfo(version, url, platform);
             }
             catch (JsonException)
             {
@@ -60,9 +63,15 @@ namespace Elta.Core
         public static bool ShouldShowUpdate(string remoteVersion, string localVersion, string? skipVersion)
             => IsNewer(remoteVersion, localVersion) && skipVersion != remoteVersion;
 
-        /// <summary>更新检查 URL：开启匿名统计时附带 installID（该请求即遥测计数），否则不带。</summary>
+        /// <summary>更新检查 URL：恒带平台参数（服务端按 platform 分流版本线）；遥测开启时附 installID。</summary>
         public static string BuildUpdateUrl(bool telemetryEnabled, string installId)
-            => telemetryEnabled ? UpdateUrl + "?id=" + installId : UpdateUrl;
+            => telemetryEnabled
+                ? UpdateUrl + "?platform=windows&id=" + installId
+                : UpdateUrl + "?platform=windows";
+
+        /// <summary>平台适用性：缺省（旧服务器无该字段）视作适用；仅显式非 windows 时拒绝。</summary>
+        public static bool IsApplicablePlatform(string? platform)
+            => string.IsNullOrEmpty(platform) || string.Equals(platform, "windows", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>协议白名单：只接受 http/https 且 host 非空（打开链接前二次校验复用）。</summary>
         public static bool IsHttpUrl(string? url)
