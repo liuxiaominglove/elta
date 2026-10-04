@@ -2,6 +2,19 @@
 
 > 新会话开头 `@windows/NOTES.md` 即可续上。本文件是进度与决策的唯一交接记录。
 
+## ★ 续接指引（新会话先读这里）
+- **代码基线**：`origin/main = cca6626`（Windows 端增量已全部并入；工作区应干净）。
+- **已发布**：Windows **v1.0.0** 独立 Release（tag `win-v1.0.0`；zip+sha256）；国内直链
+  `https://autoelta.com/download/ELTA-Windows-v1.0.0-win-x64-single.zip`（+ `latest-win.zip`）；
+  官网（autoelta.com）已上架双平台。详情见本文件「发布上线」节。
+- **进行中 / 下一步**：等 Windows A 机对**已发布的 v1.0.0 做真机全量冒烟**
+  （`windows/pack-release-windows.ps1 -Flavor single`，**不带 `-SkipSmoke`**，含 `--selftest` + 一次真实翻译）。
+  → 通过：v1.0.0 收尾；不通过：Mac 侧发补丁 `win-v1.0.1`。
+- **下轮**：打包基准 = `origin/main`（当前 `cca6626`）；发版流程 = 先本机全量冒烟 → 打 tag `win-vX.Y.Z` →
+  发版后 bump 官网 Windows 版本号（`website/install.html`、`website/index.html`）。可选：仓库拆分（`git subtree split -P windows`）。
+- **跨端协作协议**（两端均 opencode；U 盘单槽 `TASK.md`/`REPLY.md`）：见 root `AGENTS.md`「跨端协作」节 +
+  本机全局规则 `~/.config/opencode/rules/cross-machine-opencode-collab.md`（已持久化，跨会话生效）。
+
 ## 目标
 把 macOS 版 ELTA（Swift/AppKit，仓库根 `Sources/`）移植为 **Windows 版**，技术栈
 **C# / .NET 8 WPF + WebView2**。地址：`windows/`，架构：三段式
