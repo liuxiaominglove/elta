@@ -484,6 +484,10 @@ windows/
 - 待 Mac（详见 U 盘 REPORT.md）：部署 `server.py`；`sync-elta-release.sh` 增写 `latest-win.json`；跑 server 测试；
   合并本包后打 tag `win-v1.0.1`；官网 bump；部署后核验（Windows 日志 `platform=windows` 且不再误报）。
 - 过渡：老客户端 v1.0.0 仍会误报（点「跳过此版本」可忍）；修复上线后自然消失。
+- 另修（同日发布后 bug#2）：`pack-release-windows.ps1` 的 zip 由 bsdtar（`tar -a`）生成 →
+  **Windows 资源管理器"提取"报"压缩文件夹无效"**（PowerShell 可解、文件 SHA 与官方一致——非下载损坏；
+  本机 Shell CopyHere 对官方包与本地包均实测复现）；改 `[IO.Compression.ZipFile]::CreateFromDirectory`
+  （标准 zip），CopyHere 提取实测通过；v1.0.1 起生效（CI 用仓库脚本，tag 即带走）。
 
 ## 待办 / 风险
 

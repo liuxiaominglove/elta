@@ -95,12 +95,10 @@ ELTA Windows v$version (x64)
 
 function New-Zip([string]$stage, [string]$zipPath) {
     Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
-    $tar = Get-Command tar -ErrorAction SilentlyContinue
-    if ($tar) {
-        & tar -a -c -f $zipPath -C $stage . | Out-Null
-    } else {
-        Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zipPath -Force
-    }
+    # 2026-10-04 发布后修复：改用 .NET ZipFile（标准 zip）。此前用 bsdtar（tar -a）产物 Windows
+    # 资源管理器"提取"会报"压缩文件夹无效"（PowerShell 可解但普通用户全卡；本机 CopyHere 实测复现）。
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($stage, $zipPath)
     return $zipPath
 }
 
