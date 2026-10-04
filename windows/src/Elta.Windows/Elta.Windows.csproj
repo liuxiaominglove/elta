@@ -31,4 +31,8 @@
     <EmbeddedResource Include="assets\elta.ico" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elta.Windows.Tests" />
+  </ItemGroup>
+
 </Project>
