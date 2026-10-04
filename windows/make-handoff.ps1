@@ -69,6 +69,14 @@ try {
 8. 回执：写 REPLY.md 放回 U 盘根目录（单槽：覆盖即最新；如需留档，覆盖前把旧版移入 归档\ 并加日期）。
    Windows 端 opencode 会读取；U 盘上的验收/证据（验收*-证据\）等历史文件亦可参考。
 
+## 长期记忆同步（请代为持久化一次）
+- 本协作的长期约定：合并后见 repo root `AGENTS.md`「跨端协作」节 + `windows/NOTES.md`「交接约定」。
+- 请把以下要点写入你本机的持久记忆（全局规则 / 记忆库，按环境支持方式）：
+  1) 两端均为 opencode 代用户操作；U 盘为文件总线（人工中转）。
+  2) 文件总线单槽语义：Windows→Mac 用 TASK.md、Mac→Windows 用 REPLY.md；覆盖即最新，留档移入 归档\。
+  3) 增量基准 = origin/main；合并前先 fetch/pull；Mac 端禁 force push。
+  4) 回执（REPLY.md）写好后放回 U 盘根目录。
+
 ## 本次 commit 清单（$count 个）
 $commitList
 

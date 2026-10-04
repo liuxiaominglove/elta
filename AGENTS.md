@@ -45,6 +45,8 @@ Key modules: `AppDelegate` (lifecycle + hotkey registration), `StatusBarControll
   命名从简（用户手打友好）：旧名 `MAC-OPENCODE-TASK.md` / `回传-给Windows-*.txt` 已弃用。
 - 命名语义 = 单槽：`TASK.md` / `REPLY.md` 每次覆盖即最新快照；历史留档靠 `归档\`（覆盖前移入、加日期），
   正式档案以本仓库文档为准（`windows/NOTES.md`），U 盘只是文件总线而非档案馆。
+- 每次 `TASK.md` 附「长期记忆同步」段：Mac opencode 据此把协议持久化到**它本机**（全局规则/记忆库），
+  实现两端各自"记得住"（跨机器无法直接写对方本机记忆，故用指令代传）。
 - 增量基准 = `origin/main`；交接前先 `git fetch`（make-handoff 已内置）；Mac 端禁 force push。
 - 人类可读版：U 盘 `HANDOFF.txt`；正式记录：`windows/NOTES.md`。
 
