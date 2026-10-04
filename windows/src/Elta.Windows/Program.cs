@@ -41,6 +41,30 @@ namespace Elta.Windows
             return SystemIcons.Application;
         }
 
+        /// <summary>无头诊断：--version-check 发布版本闸机（csproj vs Info.plist），供打包脚本调用；不一致 exit 1。</summary>
+        private static void RunVersionCheckCli(string csprojPath, string plistPath, string outPath)
+        {
+            string report;
+            bool ok = false;
+            try
+            {
+                string csproj = File.ReadAllText(csprojPath);
+                string plist = File.ReadAllText(plistPath);
+                VersionCheckResult r = ReleaseGate.Check(csproj, plist);
+                ok = r.Ok;
+                report = r.Ok
+                    ? $"ok=true version={r.CsprojVersion}"
+                    : $"ok=false error={r.Error}";
+            }
+            catch (Exception ex)
+            {
+                report = "ok=false error=" + ex.Message;
+            }
+            Log.Info($"version-check {report}");
+            try { File.WriteAllText(outPath, report, new UTF8Encoding(false)); } catch { }
+            Environment.ExitCode = ok ? 0 : 1;
+        }
+
         // C1：翻译服务 + 结果窗口（设置实例在 Main 装配后赋给静态字段）
         private static SettingsManager? _settings;
         private static readonly TranslationService Translation = new();
@@ -107,6 +131,13 @@ namespace Elta.Windows
             if (args.Length >= 1 && args[0] == "--selftest")
             {
                 RunSelfTest();
+                return;
+            }
+
+            // 无头诊断：--version-check <csproj> <plist> <输出文件> 发布版本一致性闸机
+            if (args.Length >= 4 && args[0] == "--version-check")
+            {
+                RunVersionCheckCli(args[1], args[2], args[3]);
                 return;
             }
 
