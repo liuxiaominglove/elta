@@ -419,6 +419,7 @@ windows/
 - 交接约定（2026-10-04）：**两端操作者均为 opencode**（各自机器上代用户执行，用户转达）；交接物须同时提供
   机器可读任务文件——`make-handoff.ps1` 自本日起自动生成 `MAC-OPENCODE-TASK.md`（动态 head/清单/核验步骤），
   供 Mac opencode 直接执行与核验；回传同样以文件形式供 Windows opencode 读取。
+  宏观协议（流程/基准/禁 force/命名）见 root `AGENTS.md`「跨端协作」节——全仓记忆、两端同读；与本节互指。
 - Windows 仓库策略：**方案 B**——移植期先留 `windows/` 于主仓库，B/C 完成后用 `git subtree split -P windows`
   拆成独立仓库 `elta-windows`（保留历史）。
 - 运行期验证需 A 机手测（CI 只做编译级）。
