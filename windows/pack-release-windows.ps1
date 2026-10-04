@@ -1,12 +1,15 @@
 ﻿param(
     [ValidateSet('both', 'single', 'folder')]
     [string]$Flavor = 'both',
+    [string]$ExpectedVersion = '',   # 发布 tag 版本（如 win-v1.0.0 -> 1.0.0）；提供则做版本闸机，为空则只读取 csproj
     [switch]$SkipSmoke
 )
 
 # ELTA Windows release packaging (3B)
-# Usage: powershell -NoProfile -ExecutionPolicy Bypass -File windows\pack-release-windows.ps1 [-Flavor both|single|folder] [-SkipSmoke]
-# - Version gate: Elta.Windows.csproj <Version> must equal Resources/Info.plist (via --version-check CLI, Core-tested).
+# Usage: powershell -NoProfile -ExecutionPolicy Bypass -File windows\pack-release-windows.ps1 [-Flavor both|single|folder] [-ExpectedVersion X.Y.Z] [-SkipSmoke]
+# - Version gate (per-platform): Elta.Windows.csproj <Version> is the Windows version source.
+#   If -ExpectedVersion provided (from the release tag), assert equality via --version-check CLI (Core-tested);
+#   else just read it. No longer compares to macOS Resources/Info.plist (mac/win are independent version lines).
 # - Flavors: single = self-contained single-file exe; folder = self-contained folder layout.
 # - Smoke: --selftest (6 cases) + one real translation via hotkey, from the staged package.
 $ErrorActionPreference = 'Stop'
@@ -18,27 +21,34 @@ public static class PackFg { [DllImport("user32.dll")] public static extern bool
 "@
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path          # windows/
-$repo = Split-Path -Parent $root                                 # repo root
 $exe = Join-Path $root 'src\Elta.Windows\bin\Release\net8.0-windows10.0.19041.0\Elta.Windows.exe'
 $csproj = Join-Path $root 'src\Elta.Windows\Elta.Windows.csproj'
-$plist = Join-Path $repo 'Resources\Info.plist'
 $dist = Join-Path $root 'dist'
 $tmp = Join-Path $env:TEMP 'opencode'
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 
-# --- 1) version gate ---
+# --- 1) version gate（每平台自有版本线；不再比 macOS Info.plist）---
 Write-Host '== version gate ==' -ForegroundColor Cyan
-dotnet build (Join-Path $root 'src\Elta.Windows\Elta.Windows.csproj') -c Release | Out-Null
-$vcOut = Join-Path $tmp 'elta-version-check.txt'
-Remove-Item $vcOut -ErrorAction SilentlyContinue
-$p = Start-Process -FilePath $exe -ArgumentList '--version-check', "`"$csproj`"", "`"$plist`"", "`"$vcOut`"" -Wait -PassThru
-$vc = if (Test-Path $vcOut) { Get-Content $vcOut -Raw } else { '' }
-Write-Host "  $vc"
-if ($p.ExitCode -ne 0 -or $vc -notmatch 'ok=true version=(\S+)') {
-    Write-Host '[FAIL] version gate: csproj 与 Info.plist 版本不一致（或读取失败），已中止打包。' -ForegroundColor Red
-    exit 1
+if ($ExpectedVersion) {
+    dotnet build (Join-Path $root 'src\Elta.Windows\Elta.Windows.csproj') -c Release | Out-Null
+    $vcOut = Join-Path $tmp 'elta-version-check.txt'
+    Remove-Item $vcOut -ErrorAction SilentlyContinue
+    $p = Start-Process -FilePath $exe -ArgumentList '--version-check', "`"$csproj`"", "`"$ExpectedVersion`"", "`"$vcOut`"" -Wait -PassThru
+    $vc = if (Test-Path $vcOut) { Get-Content $vcOut -Raw } else { '' }
+    Write-Host "  $vc"
+    if ($p.ExitCode -ne 0 -or $vc -notmatch 'ok=true version=(\S+)') {
+        Write-Host "[FAIL] version gate: csproj <Version> != 期望版本 '$ExpectedVersion'，已中止打包。" -ForegroundColor Red
+        exit 1
+    }
+    $version = $matches[1]
+} else {
+    [xml]$csprojXml = Get-Content $csproj
+    $version = ($csprojXml.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1)
+    if (-not $version) {
+        Write-Host '[FAIL] csproj 缺少 <Version>，已中止打包。' -ForegroundColor Red
+        exit 1
+    }
 }
-$version = $matches[1]
 Write-Host "  version = $version" -ForegroundColor Green
 
 # --- 2) publish ---

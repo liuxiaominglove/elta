@@ -41,16 +41,15 @@ namespace Elta.Windows
             return SystemIcons.Application;
         }
 
-        /// <summary>无头诊断：--version-check 发布版本闸机（csproj vs Info.plist），供打包脚本调用；不一致 exit 1。</summary>
-        private static void RunVersionCheckCli(string csprojPath, string plistPath, string outPath)
+        /// <summary>无头诊断：--version-check 发布版本闸机（csproj &lt;Version&gt; vs 期望版本，来自 tag），供打包脚本调用；不一致 exit 1。</summary>
+        private static void RunVersionCheckCli(string csprojPath, string expectedVersion, string outPath)
         {
             string report;
             bool ok = false;
             try
             {
                 string csproj = File.ReadAllText(csprojPath);
-                string plist = File.ReadAllText(plistPath);
-                VersionCheckResult r = ReleaseGate.Check(csproj, plist);
+                VersionCheckResult r = ReleaseGate.Check(csproj, expectedVersion);
                 ok = r.Ok;
                 report = r.Ok
                     ? $"ok=true version={r.CsprojVersion}"
@@ -134,7 +133,7 @@ namespace Elta.Windows
                 return;
             }
 
-            // 无头诊断：--version-check <csproj> <plist> <输出文件> 发布版本一致性闸机
+            // 无头诊断：--version-check <csproj> <期望版本> <输出文件> 发布版本闸机（每平台自有版本线）
             if (args.Length >= 4 && args[0] == "--version-check")
             {
                 RunVersionCheckCli(args[1], args[2], args[3]);
