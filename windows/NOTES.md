@@ -4,13 +4,15 @@
 
 ## ★ 续接指引（新会话先读这里）
 - **代码基线**：以 `origin/main` 为准（v1.0.0 冒烟于 `7015e43` 合入；其后为 Mac 侧 docs/脚本提交；工作区应干净）。
-- **已发布**：Windows **v1.0.0** 独立 Release（tag `win-v1.0.0`；zip+sha256）；国内直链
-  `https://autoelta.com/download/ELTA-Windows-v1.0.0-win-x64-single.zip`（+ `latest-win.zip`）；
-  官网（autoelta.com）已上架双平台。**真机全量冒烟已通过 → v1.0.0 已收尾**（详见本文件「v1.0.0 真机全量冒烟」节）。
-- **进行中 / 下一步**：官网 Windows 版本号 **自动 bump**（`scripts/bump-website-version.sh`，接发版检查单）。
+- **已发布**：Windows **v1.0.1** 独立 Release（tag `win-v1.0.1`；zip+sha256）；国内直链
+  `https://autoelta.com/download/ELTA-Windows-v1.0.1-win-x64-single.zip`（+ `latest-win.zip`）；官网已 bump **v1.0.1**。
+  含两个发布后修复：更新检查误报 mac 版本线（平台分流）+ zip 无法用资源管理器提取（改 .NET ZipFile）。
+  详见本文件「发布后修复…（win-v1.0.1）」节。
+- **进行中 / 下一步**：下一轮任务草案见 `windows/NEXT-TASK.md`（F1 空选 busy 修复 / V1 设置窗深色决策 /
+  v1.0.1 真机回归）。可选：官网版本号 CI 全自动 bump（暂缓）。
   仓库拆分：**已决策条件化暂缓**（`docs/adr/0004-windows-repo-split.md`；满足触发条件再拆）。
-- **待 A 机收口**：A 类真机验证清单见 `windows/VERIFY-BACKLOG.md`（8 项：深色主题 / WebView2 缺失弹窗 /
-  气泡点击 / Word 取词 / 真实热键入口 / Chrome·Edge 兜底 / 图片剪贴板 / 表格）。
+- **真机验证（V1–V8）已收口**（2026-10-04 晚）：V3/V5/V6/V7/V8 🟢；V1 ⚠（结果窗✅/**设置窗未实现深色**）；
+  V2/V4 ⏭（环境受限）。逐项见 `windows/VERIFY-BACKLOG.md`。
 - **下轮**：打包基准 = 实时 `origin/main`；发版流程 = 先本机全量冒烟 → 打 tag `win-vX.Y.Z` →
   官网 Windows 版本号 bump（脚本，见 `windows/RELEASE-WINDOWS-PLAN.md` 发版检查单第 5 步）。
 - **跨端协作协议**（两端均 opencode；U 盘单槽 `TASK.md`/`REPLY.md`/`REPORT.md`）：见 root `AGENTS.md`「跨端协作」节 +
@@ -469,7 +471,7 @@ windows/
   后续热键被 `selection ignored: busy` 静默忽略，关框即恢复（复现 19:04–19:05）。与已修 OCR 空选同类，
   建议同款非模态化（候选修复，触发条件：修复时补"空选不阻塞"回归用例）。
 
-### 发布后修复：Windows 更新检查误报 mac 版本线（win-v1.0.1 准备）✅（2026-10-04 晚）
+### 发布后修复：Windows 更新检查误报 mac 版本线 + zip 提取兼容（win-v1.0.1 已发布）✅（2026-10-04 晚）
 - 现象：v1.0.0 用户收到"有更新"提示，点击下载得到 **mac 的 `ELTA.v5.5.5.dmg`**（Windows 打不开）。
 - 根因：版本线解耦遗漏了**更新链路**——`/api/update` 只维护 mac 线（`latest.json`）；Windows 客户端用同一端点、
   无平台参数 → `5.5.5 > 1.0.0` 判为更新，"前往下载"直接打开响应 url（= DMG 直链）。
@@ -488,6 +490,12 @@ windows/
   **Windows 资源管理器"提取"报"压缩文件夹无效"**（PowerShell 可解、文件 SHA 与官方一致——非下载损坏；
   本机 Shell CopyHere 对官方包与本地包均实测复现）；改 `[IO.Compression.ZipFile]::CreateFromDirectory`
   （标准 zip），CopyHere 提取实测通过；v1.0.1 起生效（CI 用仓库脚本，tag 即带走）。
+- **发布落地（2026-10-04 晚，Mac 执行）**：合并 `2456871..ff9b4f5`；Core 410/410、server 55/55；
+  部署 `server.py` + `sync-elta-release.sh` 增写 `latest-win.json`（备份 `.bak-20261004-1954`）；
+  打 tag `win-v1.0.1` → CI `windows-release.yml` success（run 37200322457）→ 独立 Release；
+  服务器同步 zip（sha `5aee39dd…1037f` 校验通过）；官网 bump 1.0.1；现网
+  `?platform=windows` → `{"version":"1.0.1",...,"platform":"windows"}`。详见 U 盘 `REPLY.md`。
+  ⚠ 待 Windows 真机确认回归点：① 右键「提取」v1.0.1 zip 正常；② 日志不再误报 mac 线。
 
 ## 待办 / 风险
 
