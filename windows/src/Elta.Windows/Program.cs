@@ -395,6 +395,7 @@ namespace Elta.Windows
             void Check(string name, bool ok)
             {
                 sb.AppendLine($"[{(ok ? "PASS" : "FAIL")}] {name}");
+                Log.Info($"selftest {name}={(ok ? "PASS" : "FAIL")}");
                 if (ok) pass++; else fail++;
             }
 
@@ -443,6 +444,25 @@ namespace Elta.Windows
                 ClipboardRestoreAction a5 = ClipboardRestorePolicy.Decide(s5.CaptureSucceeded, s5.Count, true, changedByThirdParty: true);
                 s5.Apply(a5);
                 Check("third-party untouched", a5 == ClipboardRestoreAction.LeaveAsIs && ClipboardService.GetText() == "THIRD-PARTY");
+
+                // 6) 富格式还原（RTF + HTML；非白名单自定义格式按安全策略跳过并标 Partial；
+                //    2026-10-04 剪贴板 AV 事故后的回归——WPS 的 OLE 结构化格式写回会原生崩溃）
+                var rich = new Forms.DataObject();
+                rich.SetData(Forms.DataFormats.UnicodeText, "RICH-ORIGINAL");
+                rich.SetData(Forms.DataFormats.Rtf, @"{\rtf1 RICH-ORIGINAL}");
+                rich.SetData(Forms.DataFormats.Html, "<html><body>RICH-ORIGINAL</body></html>");
+                rich.SetData("EltaTestBytes", new byte[] { 1, 2, 3 });
+                Forms.Clipboard.SetDataObject(rich, copy: true);
+                ClipboardState s6 = ClipboardState.Capture();
+                Forms.Clipboard.SetDataObject("CTRL-C-RESULT", copy: true);
+                ClipboardRestoreAction a6 = ClipboardRestorePolicy.Decide(s6.CaptureSucceeded, s6.Count, true, false);
+                s6.Apply(a6);
+                var back = Forms.Clipboard.GetDataObject();
+                bool text6Ok = (back?.GetData(Forms.DataFormats.UnicodeText) as string) == "RICH-ORIGINAL";
+                bool rtfOk = (back?.GetData(Forms.DataFormats.Rtf) as string)?.Contains("RICH-ORIGINAL") == true;
+                bool htmlOk = (back?.GetData(Forms.DataFormats.Html) as string)?.Contains("RICH-ORIGINAL") == true;
+                bool customDropped = back?.GetData("EltaTestBytes") == null;
+                Check("rich formats restore", a6 == ClipboardRestoreAction.Restore && text6Ok && rtfOk && htmlOk && s6.Partial && customDropped);
             }
             catch (Exception ex)
             {

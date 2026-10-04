@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -62,6 +63,32 @@ namespace Elta.Windows
             return state;
         }
 
+        /// <summary>
+        /// 写回格式白名单（2026-10-04 事故定案）：OLE 结构化格式（Embed Source / Object Descriptor /
+        /// Link Source / CF_ENHMETAFILE / CF_METAFILEPICT / 厂商私有格式如 Kingsoft *）经
+        /// WriteBack → Clipboard.SetDataObject → OleFlushClipboard 会触发原生 AV，.NET 无法 catch。
+        /// 只写回用户可见内容（文本/RTF/HTML/图片），其余跳过并标 Partial——保守但绝不崩。
+        /// </summary>
+        private static readonly HashSet<string> SafeFormats = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "System.String",
+            "UnicodeText",
+            "Text",
+            "Rich Text Format",
+            "HTML Format",
+            "Bitmap",
+            "System.Drawing.Bitmap",
+            "DeviceIndependentBitmap",
+        };
+
+        /// <summary>值类型白名单：仅这些类型可安全序列化到 COM 剪贴板。配合 SafeFormats 双重过滤。</summary>
+        private static bool IsSafeValue(object? value) =>
+            value is string
+            || value is string[]
+            || value is byte[]
+            || value is MemoryStream
+            || value is Bitmap;
+
         private void Collect(IDataObject data)
         {
             string[] formats;
@@ -85,6 +112,18 @@ namespace Elta.Windows
                     if (value == null)
                     {
                         Partial = true;
+                        continue;
+                    }
+                    if (!IsSafeValue(value))
+                    {
+                        Partial = true;
+                        Log.Info($"clipboard skip format={format} valueType={value.GetType().Name}");
+                        continue;
+                    }
+                    if (!SafeFormats.Contains(format))
+                    {
+                        Partial = true;
+                        Log.Info($"clipboard skip format={format} (format not in safe list)");
                         continue;
                     }
                     _items.Add((format, value));
@@ -153,9 +192,11 @@ namespace Elta.Windows
                     var data = new DataObject();
                     foreach ((string format, object? value) in _items)
                     {
-                        if (value == null) continue;
+                        if (value == null || !IsSafeValue(value) || !SafeFormats.Contains(format)) continue;
+                        Log.Info($"clipboard writeback format={format} valueType={value.GetType().Name}");
                         try { data.SetData(format, value); } catch { }
                     }
+                    Log.Info($"clipboard writeback flush items={_items.Count}");
                     Clipboard.SetDataObject(data, copy: true);
                     return true;
                 }

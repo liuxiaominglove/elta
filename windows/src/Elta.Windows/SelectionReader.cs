@@ -32,8 +32,14 @@ namespace Elta.Windows
         public static string? ReadSelectedText()
         {
             string? viaUia = TryUiaWithTimeout();
-            if (SelectionText.IsUsable(viaUia)) return viaUia;
-            return TryCopyFallback();
+            if (SelectionText.IsUsable(viaUia))
+            {
+                Log.Info("selection via uia");
+                return viaUia;
+            }
+            string? viaCopy = TryCopyFallback();
+            if (SelectionText.IsUsable(viaCopy)) Log.Info("selection via copy");
+            return viaCopy;
         }
 
         /// <summary>
