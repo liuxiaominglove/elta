@@ -9,9 +9,9 @@
 
 | ID | 事项 | 类型 | 前置 | 状态 |
 |----|------|------|------|------|
-| T1 | v1.0.1 真机回归（两个修复的回归点） | 验证 | 需已发布 v1.0.1 | ⬜ 待做 |
-| T2 | F1：划词空选弹模态框并持有 busy | 修复(bug) | 无 | ⬜ 待做 |
-| T3 | V1：设置窗深色（实现 vs 改期望） | 决策 | 需拍板 | ⬜ 待做 |
+| T1 | v1.0.1 真机回归（两个修复的回归点） | 验证 | 需已发布 v1.0.1 | ✅ 通过（test-release 6/6） |
+| T2 | F1：划词空选弹模态框并持有 busy | 修复(bug) | 无 | ✅ 已修复（家族 3 处；test-selection-empty 4/4） |
+| T3 | V1：设置窗深色（实现 vs 改期望） | 决策 | 需拍板 | ✅ 决策(b)：深色=结果窗专属 |
 | T4 | V2/V4：WebView2 缺失弹窗 / Word 取词 | 验证(阻塞) | 特殊环境 | ⏭ 待条件 |
 
 ---
@@ -54,3 +54,19 @@
 - 每项完成后更新「状态总览」列，并在 U 盘 `REPORT.md` 记录：环境、结果、异常原文。
 - 若 T2 修复涉及代码：按仓库纪律先 TDD（补回归用例）→ 冒烟 → 回传；Mac 侧合并发版（预计 `win-v1.0.2`）。
 - 正式进度以 `windows/NOTES.md` 为准；本文件为派生草案。
+
+---
+
+## 执行结果（Windows，2026-10-04 晚）
+
+- **T1 ✅ 通过（6/6）**：直链下载（断点续传）→ SHA256 与发布 `.sha256` 一致（`5aee39dd…`）→
+  **资源管理器机制解压（CopyHere）✅**（bug#2 回归点）→ 解压 exe `--selftest` 6/6 →
+  日志 `update check remote=1.0.1 platform=windows` + `update ignored … (same or skipped)`、无 `update found`（bug#1 回归点）→ 真实翻译 ✅。
+  门禁已固化：`windows/test-release.ps1 -Version X.Y.Z`（含断点续传/缓存跳过）。
+- **T2 ✅ 已修复**（家族修复 3 处：划词空选/取词异常/OCR 失败 → 托盘气球 + busy 即时释放；`NoLanguagePack` 问句框保留）：
+  TDD RED 3 fail → GREEN `test-selection-empty.ps1` **4/4**；回归 `test-c2` 22/22、`test-selector-interactions` 4/4；
+  AGENTS 新增「busy 纪律：持有 busy 的路径禁止弹模态（需应答除外）」。
+- **T3 ✅ 决策 (b)**：深色主题=**结果窗专属（阅读场景）设计**，设置窗不做；需求出现时按
+  「全控件样式 + test-c3 回归 + 双主题截图验收」清单实施（NOTES/BACKLOG 已同步）。
+- T4：维持 ⏭ 待条件（WebView2 故障注入 / Word 授权环境）。
+- 备注：GitHub 直连当晚多次间歇失败（fetch 重试后成功）；本批已 rebase 到 `f36abc0` 之上。
