@@ -48,4 +48,6 @@
 2. [ ] **tag 前**本机全量冒烟：`windows/pack-release-windows.ps1 -Flavor single -ExpectedVersion X.Y.Z`（含真机翻译）→ 通过才可打 tag
 3. [ ] 打 tag `win-vX.Y.Z` 并推送（`windows-release.yml` 出独立 Release）
 4. [ ] 发布后：对**已发布物**冒烟（直链下载 → SHA256 校验 → 解压 → selftest + 真实翻译）
-5. [ ] 官网 bump（`website/index.html`、`website/install.html` 的版本号与直链）——现为 Mac 侧手动；⏳ 建议后续自动化
+5. [ ] 官网 bump：`bash scripts/bump-website-version.sh win X.Y.Z`（单命令，改 `website/index.html`、`website/install.html` 的版本号与直链）→ 提交。
+       发版门禁自检：`bash scripts/bump-website-version.sh win X.Y.Z --check`（返回 0 才算官网已对齐）。
+       ⏳ 后续可选：CI 在 tag 后自动跑该脚本并写回 main（全自动）。
