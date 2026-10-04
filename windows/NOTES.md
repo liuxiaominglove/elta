@@ -9,6 +9,8 @@
   官网（autoelta.com）已上架双平台。**真机全量冒烟已通过 → v1.0.0 已收尾**（详见本文件「v1.0.0 真机全量冒烟」节）。
 - **进行中 / 下一步**：官网 Windows 版本号 **自动 bump**（`scripts/bump-website-version.sh`，接发版检查单）。
   仓库拆分：**已决策条件化暂缓**（`docs/adr/0004-windows-repo-split.md`；满足触发条件再拆）。
+- **待 A 机收口**：A 类真机验证清单见 `windows/VERIFY-BACKLOG.md`（8 项：深色主题 / WebView2 缺失弹窗 /
+  气泡点击 / Word 取词 / 真实热键入口 / Chrome·Edge 兜底 / 图片剪贴板 / 表格）。
 - **下轮**：打包基准 = 实时 `origin/main`；发版流程 = 先本机全量冒烟 → 打 tag `win-vX.Y.Z` →
   官网 Windows 版本号 bump（脚本，见 `windows/RELEASE-WINDOWS-PLAN.md` 发版检查单第 5 步）。
 - **跨端协作协议**（两端均 opencode；U 盘单槽 `TASK.md`/`REPLY.md`/`REPORT.md`）：见 root `AGENTS.md`「跨端协作」节 +
