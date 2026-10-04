@@ -38,6 +38,14 @@ namespace Elta.Windows
             return true;
         }
 
+        /// <summary>注销单个热键（设置窗口改键/恢复默认后重注册用）。</summary>
+        public void Unregister(int id)
+        {
+            if (!_handlers.Remove(id)) return;
+            UnregisterHotKey(Handle, id);
+            _registered.Remove(id);
+        }
+
         protected override void WndProc(ref Message m)
         {
             if (m.Msg == WM_HOTKEY && _handlers.TryGetValue(m.WParam.ToInt32(), out Action? handler))

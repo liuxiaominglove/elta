@@ -17,7 +17,7 @@ $failed = 0
 # --- 1) --selftest（剪贴板策略集成）---
 Start-Process -FilePath $exe -ArgumentList '--selftest' -Wait
 $report = Join-Path $env:TEMP 'elta-selftest.txt'
-if ((Test-Path $report) -and ((Get-Content -LiteralPath $report -Raw) -match 'selftest pass=5 fail=0')) {
+if ((Test-Path $report) -and ((Get-Content -LiteralPath $report -Raw) -match 'selftest pass=6 fail=0')) {
     Write-Host '[PASS] selftest 5/5' -ForegroundColor Green
 } else {
     Write-Host '[FAIL] selftest' -ForegroundColor Red

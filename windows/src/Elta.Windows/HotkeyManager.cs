@@ -47,6 +47,14 @@ namespace Elta.Windows
             StatusChanged?.Invoke();
         }
 
+        /// <summary>注销并清空全部热键（设置窗口保存/恢复默认后，由调用方重新 Add + RegisterAll）。</summary>
+        public void Reset()
+        {
+            foreach (Spec spec in _specs) _host.Unregister(spec.Id);
+            _specs.Clear();
+            UpdateTimer();
+        }
+
         public bool AllRegistered
         {
             get

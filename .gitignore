@@ -18,6 +18,9 @@ Tests/e2e/shots/
 # DMG 安装包由 GitHub Actions 自动构建，不提交到仓库
 website/download/
 
+# Windows 发布产物（打包脚本输出）
+windows/dist/
+
 # macOS
 .DS_Store
 *.app

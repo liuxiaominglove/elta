@@ -3,7 +3,8 @@
 **目的**：在投入正式开发前，在 Windows 真机上验证 4 个高风险平台能力，把它们打成「已验证」或暴露问题。
 
 > ⚠️ 只在 Windows 上编译运行（WPF + WinRT），macOS 无法构建。
-> ⚠️ 代码尚未在真机编译过（🔴），首次 `dotnet build` 可能需修个别编译错误。
+> 🟢 已在真机编译通过（2026-10-03，修复 `CS0246` 缺 `using System.Windows.Automation.Text` 后，0 error；WFAC010 警告为 manifest 高 DPI 刻意配置）。
+> 实测结论见 `windows/NOTES.md`「P0.5 已验证结论」。
 
 ## 1. 前置条件
 
