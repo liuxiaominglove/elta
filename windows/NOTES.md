@@ -307,7 +307,8 @@ windows/
     `` ` ``翻面✓、Ctrl+D 拆分✓、Esc 关闭✓；加载期 Esc 取消（`panel key: cancel translation` → `translate cancelled`）✓；
     窗口记忆（移/缩到 y=120/h=450 → 关闭 → 重开复用）✓。
   - 截图链（合成拖拽 460×150 框选）：captured → OCR Ok → translate Success → 面板对侧 ✓ → Esc ✓。
-- 深色主题：代码路径就绪（读 `AppsUseLightTheme`），本机浅色实测；深色未切换系统主题验证 🟡。
+- 深色主题：**结果窗**已实现（读 `AppsUseLightTheme`）并完成深色真机验证（V1✅：日志 `dark=True` + 截图）；
+  **设置窗未实现深色**（`SettingsWindow.cs` 零主题逻辑——V1 实测为浅色；建议后续补实现或修正文档期望）。
 
 #### C2 自查加固（grill 后修复，2026-10-03）✅
 - **任务代数守卫（对齐 mac `currentTaskGeneration`）**：新增 `_pipelineGeneration`，流水线起点递增、所有异步边界校验。
@@ -452,6 +453,21 @@ windows/
   selftest=True、launch=1129ms、translate=True、exit 0。
 - 结论：**v1.0.0 收尾（无需 win-v1.0.1）**；结果报告见 U 盘 `REPORT.md`（新槽位，见交接约定）。
 - 流程补强：`RELEASE-WINDOWS-PLAN.md` 增「发版检查单」（tag 前本机全量冒烟为强制项；本次为演练）。
+
+### 真机待验证清单收口（V1–V8）✅（2026-10-04 晚）
+- 依据 U 盘 `VERIFY-BACKLOG.md` 逐项真机执行；证据与逐项详情见 U 盘 `REPORT.md`：
+  - 🟢 V3 气泡点击（人工点击成功，日志 `notification clicked`；**Win10 toast 无法自动注入**——三路 UIA 尝试均未命中，已记录）
+  - 🟢 V5 真实热键（`keybd_event` → `selection via uia` → Success；剪贴板哨兵还原）
+  - 🟢 V6 取词兜底（Edge/Chrome 现走 UIA；**WPS 真热键实走 `uia timeout → selection via copy`**✅；剪贴板保留）
+    ——修正 P0.5 旧结论"浏览器读不到 UIA"（至少此类页面现已可用）
+  - 🟢 V7 图片剪贴板（64×32 像素级还原、零 Partial）
+  - 🟢 V8 表格识别（OCR 10 块 → 结果窗表格渲染，截图存证）
+  - ⚠ V1 深色主题：结果窗✅ / **设置窗未实现**（见上条更正）
+  - ⏭ V2 WebView2 缺失（本机已装 Runtime，无干净环境；建议后续加故障注入钩子）
+  - ⏭ V4 Word（Office 未授权）
+- 新发现（待评估，未改代码）：**划词空选（len=0）弹模态框并持有 busy**——Chrome 焦点未中导致空选后，
+  后续热键被 `selection ignored: busy` 静默忽略，关框即恢复（复现 19:04–19:05）。与已修 OCR 空选同类，
+  建议同款非模态化（候选修复，触发条件：修复时补"空选不阻塞"回归用例）。
 
 ## 待办 / 风险
 
