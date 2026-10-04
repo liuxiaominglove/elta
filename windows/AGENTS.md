@@ -70,7 +70,7 @@ dotnet build windows\src\Elta.Windows\Elta.Windows.csproj -c Release
 - ✅ P0/P1：剪贴板安全 / 日志兜底 / 取词线程化 / 热键自愈（机测通过）。
 - ✅ B4：配置存储（JSON）/ 密钥库（DPAPI）/ Windows 默认值 / 热键服务（机测通过；裸键钩子待 C 接线）。
 - ✅ 子计划 C 全部完成：C1 翻译链路 + C2 结果窗交互（加载/裸键/窗口记忆，含任务代数守卫与跨屏 DPI 加固）+ C3 设置三页，真机 E2E / 机测通过。
-  回归门禁：`windows/test-c2.ps1`（22 用例，需 Key）/ `test-c3.ps1`（14 用例，离线）/ `test-selector-interactions.ps1`（选择器三交互 3 用例，离线，2026-10-04 起）。
+  回归门禁：`windows/test-c2.ps1`（22 用例，需 Key）/ `test-c3.ps1`（14 用例，离线）/ `test-selector-interactions.ps1`（选择器交互 4 用例：中键/单击/窄选区/空选区非模态，离线，2026-10-04 起）。
 - ✅ C4：完成通知 / 更新检查 / 遥测（真机验证；Core 375 测试）。版本纪律：Info.plist 与 Elta.Windows.csproj 同步 bump。
 - ✅ 3A/3B/3B-2（2026-10-04）：应用图标（elta.ico，exe+托盘）；发布打包 `pack-release-windows.ps1`（版本闸机 Core TDD + single/folder 实测，**single 胜出** 69.4MB）；WebView2 缺失友好提示（Core TDD）。
 - ⏭ 跨端待办：已归一（main=`6080e55` 基线，全量回归绿）；本机新增 {选择器三交互测试, ReleaseGate 导出包容错} 待下一次交接；下轮交接的 HANDOFF.txt 追加「清单标注：自动可验/需人工（+原因）」。
