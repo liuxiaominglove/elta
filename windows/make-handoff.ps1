@@ -15,6 +15,14 @@ if (-not (Test-Path $copyScript)) {
   exit 2
 }
 
+# 交接前先对齐基准（Mac 回执 2026-10-04 第 5 条）：fetch 失败则警告并继续（基准可能过时）
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+git fetch origin | Out-Null
+$fetchOk = ($LASTEXITCODE -eq 0)
+$ErrorActionPreference = $prevEap
+if (-not $fetchOk) { "警告：git fetch 失败（网络？），增量基准 origin/main 可能过时；确认网络后重跑。" }
+
 $count = [int](git rev-list --count 'origin/main..main')
 if ($count -eq 0) { "没有未推送 commit，无需交接。"; exit 0 }
 "未推送 commit 数: $count"
