@@ -37,6 +37,14 @@ Key modules: `AppDelegate` (lifecycle + hotkey registration), `StatusBarControll
 - GitHub Actions on `macos-14`, triggered by `v*` tags or manual dispatch.
 - Builds Universal Binary → packages `.app` → creates DMG via `create-dmg` → uploads to release.
 
+## 跨端协作（Mac ↔ Windows，两端均为 opencode）
+
+- 两台机器各跑 opencode 代用户操作；用户人工中转 U 盘（文件总线）。
+- 流程：Windows 端 `windows/make-handoff.ps1` 生成 bundle + `elta-commits-*.txt` + `MAC-OPENCODE-TASK.md`（机器可读任务）
+  → Mac opencode 按任务执行（pull bundle → push → 核验）→ 写 `回传-给Windows-<日期>.txt` 放回 U 盘 → Windows opencode 读取。
+- 增量基准 = `origin/main`；交接前先 `git fetch`（make-handoff 已内置）；Mac 端禁 force push。
+- 人类可读版：U 盘 `HANDOFF.txt`；正式记录：`windows/NOTES.md`。
+
 ## Security
 
 **API Key / Secret 调试纪律。** 以下命令**禁止**无过滤输出：
