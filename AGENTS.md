@@ -40,8 +40,9 @@ Key modules: `AppDelegate` (lifecycle + hotkey registration), `StatusBarControll
 ## 跨端协作（Mac ↔ Windows，两端均为 opencode）
 
 - 两台机器各跑 opencode 代用户操作；用户人工中转 U 盘（文件总线）。
-- 流程：Windows 端 `windows/make-handoff.ps1` 生成 bundle + `elta-commits-*.txt` + `MAC-OPENCODE-TASK.md`（机器可读任务）
-  → Mac opencode 按任务执行（pull bundle → push → 核验）→ 写 `回传-给Windows-<日期>.txt` 放回 U 盘 → Windows opencode 读取。
+- 流程：Windows 端 `windows/make-handoff.ps1` 生成 bundle + `elta-commits-*.txt` + `TASK.md`（机器可读任务）
+  → Mac opencode 按任务执行（pull bundle → push → 核验）→ 写 `REPLY.md`（回执；单文件覆盖，内容含日期/版本）放回 U 盘 → Windows opencode 读取。
+  命名从简（用户手打友好）：旧名 `MAC-OPENCODE-TASK.md` / `回传-给Windows-*.txt` 已弃用。
 - 增量基准 = `origin/main`；交接前先 `git fetch`（make-handoff 已内置）；Mac 端禁 force push。
 - 人类可读版：U 盘 `HANDOFF.txt`；正式记录：`windows/NOTES.md`。
 

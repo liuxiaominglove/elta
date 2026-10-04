@@ -39,7 +39,7 @@ try {
   cmd /c ('git log origin/main..main --oneline > "' + $list + '"')
 
   # 给 Mac 端 opencode 的机器可读任务文件（Mac 端由 opencode 代用户操作）
-  $task = Join-Path $tmp 'MAC-OPENCODE-TASK.md'
+  $task = Join-Path $tmp 'TASK.md'
   $head = (git rev-parse --short HEAD).Trim()
   $baseHead = (git rev-parse --short origin/main).Trim()
   # 清单从已写好的 UTF-8 文件读取（避免 PowerShell 捕获 git stdout 时按本地码页解码导致中文乱码）
@@ -83,7 +83,7 @@ $commitList
   & $copyScript -Source $inc, $full, $list, $task
   $code = $LASTEXITCODE
   if ($code -ne 0) { "写入 U 盘失败（exit $code），临时文件保留在: $tmp"; exit $code }
-  "交接完成：4 个文件已写入 U 盘根目录（incremental / full / elta-commits-{0}.txt / MAC-OPENCODE-TASK.md）" -f $Date
+  "交接完成：4 个文件已写入 U 盘根目录（incremental / full / elta-commits-{0}.txt / TASK.md）" -f $Date
   exit 0
 } finally {
   if (-not $DryRun -and (Test-Path $tmp)) { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }
