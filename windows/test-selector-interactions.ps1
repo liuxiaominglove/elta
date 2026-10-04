@@ -3,8 +3,9 @@
 #
 # 覆盖（2026-10-04 audit-shell 合并修复后的行为，来源：真机验收 Step 3）：
 #   T1 拖拽中按中键   -> 选区不提前提交、覆盖层保持；松开左键才提交
-#   T2 单击（0 位移） -> 覆盖层保持打开；仅 ESC/右键取消
+#   T2 单击（0 位移） -> 覆盖层保持打开；ESC 关覆盖层且结果窗不动（覆盖层优先）
 #   T3 左缘窄选区     -> 尺寸标签可见（区域差分取证）+ 提交尺寸匹配
+#   T5 空选区         -> 无 OCR 模态框；busy 立即释放（马上可再截图）
 #
 # 产物：证据截图 + result.txt 写入 -EvidenceDir（默认 %TEMP%\opencode\selector-evidence）
 # 注意：会注入鼠标/键盘并移动光标（约 40 秒）；运行期间请勿手动操作鼠标。
@@ -81,6 +82,28 @@ public static class SelWin2 {
             return true;
         }, IntPtr.Zero);
         return n;
+    }
+    public static int CountByClass(uint pid, string prefix) {
+        int n = 0;
+        EnumWindows((h, l) => {
+            uint wp; GetWindowThreadProcessId(h, out wp);
+            if (wp != pid || !IsWindowVisible(h)) return true;
+            var c = new StringBuilder(128); GetClassName(h, c, 128);
+            if (c.ToString().StartsWith(prefix)) n++;
+            return true;
+        }, IntPtr.Zero);
+        return n;
+    }
+    public static bool HasDialog(uint pid) {
+        bool found = false;
+        EnumWindows((h, l) => {
+            uint wp; GetWindowThreadProcessId(h, out wp);
+            if (wp != pid || !IsWindowVisible(h)) return true;
+            var c = new StringBuilder(64); GetClassName(h, c, 64);
+            if (c.ToString() == "#32770") { found = true; return false; }
+            return true;
+        }, IntPtr.Zero);
+        return found;
     }
     public static void CaptureTo(string path, int x, int y, int w, int h) {
         IntPtr screenDc = GetDC(IntPtr.Zero);
@@ -221,12 +244,13 @@ if ($ov2 -eq [IntPtr]::Zero) {
     $ovAfterClick = Wait-Overlay 3
     [SelWin2]::CaptureTo((Join-Path $EvidenceDir 't2-after-click.jpg'), $vs.X, $vs.Y, $vs.Width, $vs.Height)
     $commits2 = Count-Captured $off2
-    # 取消用右键：规范允许 ESC/右键；但"结果窗开启"时面板键盘路由会先截走 ESC（2026-10-04 发现，见 NOTES），
-    # 右键对覆盖层始终有效，作为稳定的自动取消路径。
-    [SelWin2]::mouse_event(0x0008, 0, 0, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 60; [SelWin2]::mouse_event(0x0010, 0, 0, 0, [UIntPtr]::Zero)
+    # ESC 取消（修复目标 2026-10-04：覆盖层打开时面板路由让位——ESC 应关覆盖层，且结果窗不动）
+    $panelBefore = [SelWin2]::CountByClass($appPid, 'HwndWrapper')
+    Send-Esc
     $gone = Wait-OverlayGone 4
-    $t2ok = ($ovAfterClick -ne [IntPtr]::Zero) -and ($commits2 -eq 0) -and $gone
-    $detail2 = "T2 afterClick overlay=$($ovAfterClick -ne [IntPtr]::Zero) commits=$commits2; afterEsc gone=$gone"
+    $panelAfter = [SelWin2]::CountByClass($appPid, 'HwndWrapper')
+    $t2ok = ($ovAfterClick -ne [IntPtr]::Zero) -and ($commits2 -eq 0) -and $gone -and ($panelAfter -eq $panelBefore) -and ($panelAfter -ge 1)
+    $detail2 = "T2 afterClick overlay=$($ovAfterClick -ne [IntPtr]::Zero) commits=$commits2; afterEsc overlayGone=$gone panelBefore=$panelBefore panelAfter=$panelAfter"
     if (-not $t2ok) { $detail2 += "; windows=" + (Windows-Dump) }
     $details += $detail2
     Check 'T2 单击不取消' $t2ok $detail2
@@ -272,8 +296,39 @@ if ($ov3 -eq [IntPtr]::Zero) {
     Check 'T3 窄选区标签' $t3ok ($details[-1])
 }
 
-# 收尾：关 OCR 模态框（空选区路径可能弹）、清理记事本、光标归位
+# ---------- T5: 空选区非模态（无 OCR 模态框 + busy 立即释放） ----------
+$off5 = (Get-Content $log).Count
+[SelWin2]::CloseDialogs($appPid) | Out-Null
+Start-Sleep -Milliseconds 600
+Send-CtrlT; Start-Sleep -Milliseconds 900
+$ov5 = Wait-Overlay 4
+if ($ov5 -eq [IntPtr]::Zero) {
+    Check 'T5 空选区非模态' $false ("overlay not found; windows=" + (Windows-Dump))
+} else {
+    # 在副屏空桌面拖一个可用尺寸选区（无文字 -> OCR 0 块）
+    MoveTo 2300 620; LeftDown; MoveTo 2340 640; MoveTo 2380 660; LeftUp
+    Start-Sleep -Milliseconds 1500
+    $dlg = [SelWin2]::HasDialog($appPid)
+    # busy 应已释放：立刻再开覆盖层应成功
+    Send-CtrlT; Start-Sleep -Milliseconds 600
+    $ov5b = Wait-Overlay 3
+    if ($ov5b -ne [IntPtr]::Zero) { Send-Esc; Start-Sleep -Milliseconds 500 }
+    $t5ok = (-not $dlg) -and ($ov5b -ne [IntPtr]::Zero)
+    $detail5 = "T5 emptySelection dialog=$dlg reopenOverlay=$($ov5b -ne [IntPtr]::Zero)"
+    if (-not $t5ok) { $detail5 += "; windows=" + (Windows-Dump) }
+    $details += $detail5
+    Check 'T5 空选区非模态' $t5ok $detail5
+}
+[SelWin2]::CloseDialogs($appPid) | Out-Null
+
+# 收尾：若覆盖层仍开着（异常/RED 情形），右键关掉；关 OCR 模态框；清理记事本；光标归位
 Start-Sleep -Seconds 2
+$strayEnd = [SelWin2]::FindOverlay($appPid, $minW, $minH)
+if ($strayEnd -ne [IntPtr]::Zero) {
+    MoveTo 700 400
+    [SelWin2]::mouse_event(0x0008, 0, 0, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 60; [SelWin2]::mouse_event(0x0010, 0, 0, 0, [UIntPtr]::Zero)
+    Start-Sleep -Milliseconds 600
+}
 [SelWin2]::CloseDialogs($appPid) | Out-Null
 Get-Process notepad -ErrorAction SilentlyContinue | Stop-Process -Force
 MoveTo 700 400

@@ -738,10 +738,8 @@ namespace Elta.Windows
                 if (outcome.Blocks.Count == 0)
                 {
                     HideLoading();
-                    Forms.MessageBox.Show(
-                        "OCR 未识别到文字。\n请确认框选区域包含清晰文字，且文字不过小/模糊。",
-                        "ELTA",
-                        Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Warning);
+                    Log.Info("ocr no text (non-modal notice)");
+                    _tray?.ShowBalloonTip(3000, "ELTA", "OCR 未识别到文字：请确认框选区域包含清晰文字，且文字不过小/模糊。", Forms.ToolTipIcon.Info);
                     return;
                 }
 
@@ -931,6 +929,11 @@ namespace Elta.Windows
         /// </summary>
         private static bool HandlePanelKey(int vk, int modifiers)
         {
+            // 覆盖层是当前最顶层的模态交互：打开期间按键交给选择器自己处理（ESC/右键=取消），
+            // 面板路由不消费也不动作。修复 2026-10-04 发现：结果窗开启时 ESC 曾被面板截走，
+            // 覆盖层收不到 ESC（反而关了结果窗）。
+            if (ScreenshotService.IsSelectorOpen) return false;
+
             SettingsManager s = _settings!;
             bool handled = false;
 

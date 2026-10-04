@@ -7,6 +7,9 @@ namespace Elta.Windows
     /// <summary>B1 截图服务：截取整个虚拟桌面 → 用户框选 → 裁剪，返回选区位图。</summary>
     internal static class ScreenshotService
     {
+        /// <summary>覆盖层是否正在显示（面板键盘路由据此让位：ESC 交给选择器，见 Program.HandlePanelKey）。</summary>
+        public static bool IsSelectorOpen { get; private set; }
+
         /// <summary>
         /// 进入框选流程；取消或选区无效时返回 (null, Empty)。调用方负责释放返回的位图。
         /// ScreenRect = 选区在虚拟桌面上的物理像素矩形（C2 结果面板定位用）。
@@ -19,6 +22,7 @@ namespace Elta.Windows
             if (bounds.Width <= 0 || bounds.Height <= 0) return (null, Rectangle.Empty);
 
             Bitmap full = ScreenCapture.Capture(bounds);
+            IsSelectorOpen = true;
             try
             {
                 using var selector = new ScreenshotSelector(full, bounds);
@@ -44,6 +48,7 @@ namespace Elta.Windows
             }
             finally
             {
+                IsSelectorOpen = false;
                 full.Dispose();
             }
         }
