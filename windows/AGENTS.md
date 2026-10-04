@@ -42,6 +42,23 @@ dotnet build windows\src\Elta.Windows\Elta.Windows.csproj -c Release
 - **Git**：本机（Windows）**只做 `clone`/`pull`（public 免认证），不 push**；本机改动经 **U 盘 / Syncthing 回传**，或由 Mac 侧代为提交。**不要**在本机配置 GitHub 凭证。
   交接统一走 `windows/make-handoff.ps1`（自动识别可移动盘，禁止手选盘符）；设备/路径核验闸机见全局规则 `verification-discipline.md`「设备/路径指代核验」。
 
+## 验证默认自动化（2026-10-04 验收事故后落地）
+
+验收/交互验证先做能力对照，默认自动化；仅不可自动化项请用户并注明原因。
+
+本项目已验证的自动化手段（优先使用，均有当日实测）：
+
+| 手段 | 工具 | 实测备注 |
+|---|---|---|
+| 热键注入 | `keybd_event`（Ctrl+T / Ctrl+Shift+T） | 可触发 RegisterHotKey 全局热键（SendKeys 不可靠，勿用） |
+| 鼠标注入 | `SetCursorPos` + `mouse_event`（左/中键、拖拽） | 三项交互（中键/单击/窄选区）全自动通过 |
+| UI 自动化 | UIA（AutomationElement / InvokePattern） | 设置窗口按钮 Invoke（测试连接 → probe http=200） |
+| 截图取证 | `CopyFromScreen` 或 `BitBlt + CAPTUREBLT` | 两者均可抓选择器覆盖层（对照实测 delta 一致）；CAPTUREBLT 已用于验收取证 |
+| 日志断言 | `%LOCALAPPDATA%\ELTA\logs\*.log` | 行为断言首选（screenshot captured / translate kind / result window reuse…） |
+| 现成门禁 | `test-c2` / `test-c3` / `test-selection-apps` / `test-clipboard` / `pack-release`（含冒烟） | 直接复用 |
+
+**验收清单约定**：每项标注【自动可验 / 需人工（+原因）】；"需人工"必须给出不可自动化的理由。
+
 ## 已完成 / 待办（摘要，详情见 NOTES）
 
 - ✅ Core：A1–A6（文本/分句/表格/HTML/设置），**375 测试**。
