@@ -117,21 +117,16 @@ namespace Elta.Core.Tests
         [Fact]
         public void RepoFiles_VersionsConsistent()
         {
-            DirectoryInfo? dir = new DirectoryInfo(AppContext.BaseDirectory);
-            string? root = null;
-            while (dir != null)
+            ReleaseLayoutResult layout = ReleaseLayout.Detect(AppContext.BaseDirectory);
+            if (!layout.RepoRootFound)
             {
-                if (File.Exists(Path.Combine(dir.FullName, "Resources", "Info.plist")) &&
-                    File.Exists(Path.Combine(dir.FullName, "windows", "src", "Elta.Core", "Elta.Core.csproj")))
-                {
-                    root = dir.FullName;
-                    break;
-                }
-                dir = dir.Parent;
+                // 独立存档（如仅 windows/ 的验收导出包，无 Resources/Info.plist）：无可校验对象，跳过。
+                // 背景：2026-10-04 验收包唯一红灯即此场景（回传-验收-6080e55 ①，采纳建议 b）。
+                Assert.True(layout.ArchiveLayout, "neither repo root nor windows archive layout found from " + AppContext.BaseDirectory);
+                return;
             }
-            Assert.True(root != null, "repo root (Resources/Info.plist + windows/src) not found from " + AppContext.BaseDirectory);
-            if (root == null) return;
 
+            string root = layout.RepoRoot!;
             string csproj = File.ReadAllText(Path.Combine(root, "windows", "src", "Elta.Windows", "Elta.Windows.csproj"));
             string plist = File.ReadAllText(Path.Combine(root, "Resources", "Info.plist"));
             VersionCheckResult r = ReleaseGate.Check(csproj, plist);
