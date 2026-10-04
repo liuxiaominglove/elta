@@ -43,6 +43,8 @@ Key modules: `AppDelegate` (lifecycle + hotkey registration), `StatusBarControll
 - 流程：Windows 端 `windows/make-handoff.ps1` 生成 bundle + `elta-commits-*.txt` + `TASK.md`（机器可读任务）
   → Mac opencode 按任务执行（pull bundle → push → 核验）→ 写 `REPLY.md`（回执；单文件覆盖，内容含日期/版本）放回 U 盘 → Windows opencode 读取。
   命名从简（用户手打友好）：旧名 `MAC-OPENCODE-TASK.md` / `回传-给Windows-*.txt` 已弃用。
+- 命名语义 = 单槽：`TASK.md` / `REPLY.md` 每次覆盖即最新快照；历史留档靠 `归档\`（覆盖前移入、加日期），
+  正式档案以本仓库文档为准（`windows/NOTES.md`），U 盘只是文件总线而非档案馆。
 - 增量基准 = `origin/main`；交接前先 `git fetch`（make-handoff 已内置）；Mac 端禁 force push。
 - 人类可读版：U 盘 `HANDOFF.txt`；正式记录：`windows/NOTES.md`。
 

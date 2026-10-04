@@ -420,6 +420,7 @@ windows/
   机器可读任务文件——`make-handoff.ps1` 自动生成 `TASK.md`（动态 head/清单/核验步骤），供 Mac opencode 直接执行；
   Mac 回执统一 `REPLY.md`（单文件覆盖，内容含日期/版本），供 Windows opencode 读取。
   命名从简（手打友好）：`MAC-OPENCODE-TASK.md` / `回传-给Windows-*.txt` 旧名弃用。
+  命名语义 = 单槽：`TASK.md`/`REPLY.md` 覆盖即最新；历史留档移入 `归档\`（加日期），正式档案以本文件为准。
   宏观协议（流程/基准/禁 force/命名）见 root `AGENTS.md`「跨端协作」节——全仓记忆、两端同读；与本节互指。
 - Windows 仓库策略：**方案 B**——移植期先留 `windows/` 于主仓库，B/C 完成后用 `git subtree split -P windows`
   拆成独立仓库 `elta-windows`（保留历史）。

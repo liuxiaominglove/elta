@@ -44,10 +44,13 @@ try {
   $baseHead = (git rev-parse --short origin/main).Trim()
   # 清单从已写好的 UTF-8 文件读取（避免 PowerShell 捕获 git stdout 时按本地码页解码导致中文乱码）
   $commitList = [IO.File]::ReadAllText($list, (New-Object Text.UTF8Encoding($false))).TrimEnd()
+  $ts = (Get-Date -Format 'yyyy-MM-dd HH:mm')
   $taskText = @"
 # 任务（给 Mac 端 opencode）：合并 Windows 增量包并推送到 origin
 
 用户已授权本次 push。请代用户执行并逐步核验；遇到冲突/非快进/任何不确定，停下并向用户报告，禁止强推。
+
+生成时间：$ts（单槽任务文件：每次交接覆盖本文件；如需留档，覆盖前移入 归档\ 并加日期）
 
 ## 背景
 - **本协作两端均由 opencode 代用户操作**：Windows 端 opencode 生成此包；你（Mac 端 opencode）负责合入并推送。
@@ -63,8 +66,8 @@ try {
 5. git push origin main        # 禁止 force
 6. 推后核验：git rev-list --count origin/main..main 应为 0
 7. 可选：sh windows/test-core.sh  （期望全部通过；当前基线 Core=406，需 .NET 8 SDK）
-8. 读取 U 盘上的验收/回传文件（回传-*.txt、验收*-证据）；有跟进意见写 回传-给Windows-<日期>.txt 放回 U 盘
-   （Windows 端 opencode 会读取你的回传文件，与你同体系协作）
+8. 回执：写 REPLY.md 放回 U 盘根目录（单槽：覆盖即最新；如需留档，覆盖前把旧版移入 归档\ 并加日期）。
+   Windows 端 opencode 会读取；U 盘上的验收/证据（验收*-证据\）等历史文件亦可参考。
 
 ## 本次 commit 清单（$count 个）
 $commitList
