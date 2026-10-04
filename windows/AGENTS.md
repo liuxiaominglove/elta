@@ -55,9 +55,12 @@ dotnet build windows\src\Elta.Windows\Elta.Windows.csproj -c Release
 | UI 自动化 | UIA（AutomationElement / InvokePattern） | 设置窗口按钮 Invoke（测试连接 → probe http=200） |
 | 截图取证 | `CopyFromScreen` 或 `BitBlt + CAPTUREBLT` | 两者均可抓选择器覆盖层（对照实测 delta 一致）；CAPTUREBLT 已用于验收取证 |
 | 日志断言 | `%LOCALAPPDATA%\ELTA\logs\*.log` | 行为断言首选（screenshot captured / translate kind / result window reuse…） |
-| 现成门禁 | `test-c2` / `test-c3` / `test-selection-apps` / `test-selector-interactions` / `test-clipboard` / `pack-release`（含冒烟） | 直接复用 |
+| 现成门禁 | `test-c2` / `test-c3` / `test-selection-apps` / `test-selector-interactions` / `test-selection-empty` / `test-release`（发布回归，-Version 参数）/ `test-clipboard` / `pack-release`（含冒烟） | 直接复用 |
 
 **验收清单约定**：每项标注【自动可验 / 需人工（+原因）】；"需人工"必须给出不可自动化的理由。
+
+**busy 纪律**：持有 busy 的路径**禁止弹模态框**（模态会卡住 busy → 后续热键被静默忽略，F1 教训）；
+通知类走托盘气球并立即释放；需用户应答的对话框（如 OCR 语言包安装询问）为例外，须在代码注释注明。
 
 ## 已完成 / 待办（摘要，详情见 NOTES）
 
@@ -70,7 +73,7 @@ dotnet build windows\src\Elta.Windows\Elta.Windows.csproj -c Release
 - ✅ P0/P1：剪贴板安全 / 日志兜底 / 取词线程化 / 热键自愈（机测通过）。
 - ✅ B4：配置存储（JSON）/ 密钥库（DPAPI）/ Windows 默认值 / 热键服务（机测通过；裸键钩子待 C 接线）。
 - ✅ 子计划 C 全部完成：C1 翻译链路 + C2 结果窗交互（加载/裸键/窗口记忆，含任务代数守卫与跨屏 DPI 加固）+ C3 设置三页，真机 E2E / 机测通过。
-  回归门禁：`windows/test-c2.ps1`（22 用例，需 Key）/ `test-c3.ps1`（14 用例，离线）/ `test-selector-interactions.ps1`（选择器交互 4 用例：中键/单击/窄选区/空选区非模态，离线，2026-10-04 起）。
+  回归门禁：`windows/test-c2.ps1`（22 用例，需 Key）/ `test-c3.ps1`（14 用例，离线）/ `test-selector-interactions.ps1`（选择器交互 4 用例，离线）/ `test-selection-empty.ps1`（划词空选不阻塞）/ `test-release.ps1`（发布物回归，`-Version X.Y.Z`）。
 - ✅ C4：完成通知 / 更新检查 / 遥测（真机验证；Core 375 测试）。版本纪律：Info.plist 与 Elta.Windows.csproj 同步 bump。
 - ✅ 3A/3B/3B-2（2026-10-04）：应用图标（elta.ico，exe+托盘）；发布打包 `pack-release-windows.ps1`（版本闸机 Core TDD + single/folder 实测，**single 胜出** 69.4MB）；WebView2 缺失友好提示（Core TDD）。
 - ⏭ 跨端待办：增量基准以实时 `origin/main` 为准（`git fetch` 后核对）；协作协议见 root `AGENTS.md`「跨端协作」节与 `windows/NOTES.md` 交接约定（互指）；Windows 发布流水线见 `windows/RELEASE-WINDOWS-PLAN.md`（已落地）；仓库拆分已决策（`docs/adr/0004-windows-repo-split.md`：条件化暂缓）。
