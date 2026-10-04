@@ -100,7 +100,8 @@ windows/
 
 > **0) B2 已通过**（`回传-B2.txt`，Win10，零 Fail）：记事本（单行/多行/中英混合）、Chrome、Edge 取词；
 > 剪贴板恢复（UIA 路径与 Ctrl+C 兜底路径的文本/图片/空/大文本/emoji）全部通过；Ctrl+T 截图回归正常。
-> Word/WPS 文字/WPS PDF 因自动化限制未跑（非失败）→ 建议人工各抽检一次，即可升 🟢。
+> **2026-10-04 抽检补测**（`windows/test-selection-apps.ps1`）：WPS 文字 ✅ / WPS PDF ✅（Ctrl+C 路径）；
+> Word 因本机 Office 试用期届满（reduced functionality）取不到词 → SKIP，待授权 Office 的机器补测（非产品失败）。
 > **B3 已完成 🟢**；**P0/P1 机测通过 🟢**；**B4（配置存储 / DPAPI 密钥库 / Windows 默认值 / 热键服务）机测通过 🟢**
 > （`windows/test-clipboard.ps1`、`windows/test-p1.ps1`、`windows/test-settings.ps1`）。下一步 **子计划 C**（设置/结果窗口/翻译接线）。
 
@@ -130,8 +131,8 @@ windows/
 ### B2：取词（UIA → Ctrl+C 兜底）✅（含 A 机手测）
 - **A 机手测结果（`回传-B2.txt`，Win10，`Fail=0`）**：记事本 单行/多行/中英混合 ✓、空选提示 ✓；
   记事本/Chrome/Edge 取到 ✓；**剪贴板恢复**（UIA 路径 + Ctrl+C 兜底路径）的 文本/图片/空/大文本/emoji ✓；
-  Ctrl+T 截图回归 ✓。**未自动跑**（非失败）：Word、WPS 文字、WPS PDF、托盘目视 → 建议人工抽检。
-  自动化方法：PowerShell + Win32 P/Invoke 注入热键并读 MessageBox 文本、校验剪贴板（合成输入 🟡）。
+   Ctrl+T 截图回归 ✓。**2026-10-04 抽检**（`test-selection-apps.ps1`）：WPS 文字 ✅、WPS PDF ✅（点击进文档区后
+   Ctrl+A → Ctrl+C 路径）；Word SKIP（本机 Office 试用期届满）；托盘目视 ✅（C2/C4 期间）。
 - **Core（Mac 可测，TDD）**：`SelectionText`（`SubstringInRange` UTF-16 区间取子串 + `IsUsable`，移植 mac
   `substringInRange`）、`ClipboardAcceptPolicy`（`AcceptByChangeCount` / `AcceptByFallback`）。测试见
   `SelectionTextTests.cs` / `ClipboardAcceptPolicyTests.cs`。
@@ -230,15 +231,115 @@ windows/
   `--hook-selftest`（钩子安装 + 注入 F13 触发）、托盘启动 + 设置接线日志 + 默认热键注册；P0/P1 回归全过。
 - ⚠️ 未做（归后续）：设置 UI（C）、裸键钩子常驻策略（C）、更新检查 / 遥测上报（mac 有，Windows 后续）。
 
-### 子计划 C：设置 / 结果窗口 / 翻译接线（下一步）
+### 子计划 C：设置 / 结果窗口 / 翻译接线
 - 源：`Sources/HotkeyHelpers.swift`。
-- B4 需同时落地：**Windows 配置存储实现 + 密钥库实现 + Windows 版 `SettingsDefaults`**（A6 只定了接口）；
-  OCR 兜底引擎（B）视 B3 手测结果再定。
-- A6 未移植（归 B4/C）：`HotkeyRecorder`（UI）、`computeProviderCardLayout`（UI 布局）。
+- A6 未移植（归 C3）：`HotkeyRecorder`（UI）、`computeProviderCardLayout`（UI 布局）。
 - 可复用 P0.5 已验证代码：`windows/spike/SpikeWindow.cs` 的 P/Invoke（`RegisterHotKey`/`SetWindowsHookEx`/
   `keybd_event`/`MonitorFromPoint`/`GetDpiForMonitor`）。
 
+#### C1：翻译链路 MVP ✅（编译 + 单测绿；真实 API 成功路径待配 Key 手测 🟡）
+- Core：`TranslationLogic.cs`（user 前缀 / `BuildChatBody` / `Classify`，对齐 mac `TranslationEngine`；
+  +9 测试，Core **341 绿**）。
+- 外壳：`TranslationService.cs`（HttpClient / Bearer / 120s / 取消旧请求）、`ResultWindow.cs`（WPF + WebView2，
+  装载 `HtmlRenderer` 输出）；`Elta.Windows.csproj` 新增 `Microsoft.Web.WebView2 1.0.4258.31`
+  （本机运行时 154.0.4258.53 已装）。
+- 接线：`RunScreenshot` / `RunSelection` 识别/取词成功 → `TranslateAndShowAsync` → 结果窗口；
+  MissingKey / Failure 弹窗；翻译不进 busy 守卫（服务自带取消旧请求）。
+- 冒烟（本机 2026-10-03）：划词 62 字符 → 日志 `translate missing key`（keySet=False）→ 缺 Key 分支正确。
+- **真机 E2E ✅（2026-10-03，配真实 Key 后）**：划词 128 字符 → `translate http=200 chars=280` → `result window shown`；
+  截图 787×118 → OCR 2 块 → `translate http=200 chars=289` → `result window shown`（两条触发路径均通）。
+- 待办（C2）：结果窗口整段/拆分 / A± 字号 / 面板定位 / ESC·`` ` ``·Ctrl+D（裸键钩子接线）+ 字号持久化。
+
+#### C3a：设置窗口「通用」页 ✅（渲染 + 测试连接负路径冒烟 🟢；真实 Key 的保存/翻译 E2E 待手测）
+- 新增 `SettingsWindow.cs`（WPF 代码布局）：通用页 = provider / 模型 / API Key（密文+明文切换）/ 测试连接 /
+  匿名统计；快捷键与模板页为占位（C3b/C3c）。底栏 = 保存并应用 / 恢复默认（API Key 除外，对齐 mac）/ 版本号。
+- 新增 `ConnectionProbe.cs`（10s 超时；HTTP 分类复用 Core `ConnectionResult`）+
+  Core `TranslationLogic.BuildProbeBody`（mac 同款最小请求，+1 测试，Core **342 绿**）。
+- 接线：托盘新增「设置…」；缺 Key 弹窗可跳设置；保存/恢复默认后 `HotkeyManager.Reset()` + 重注册
+  （新增 `HotkeyHost.Unregister` / `HotkeyManager.Reset`）；调试入口 `--settings-ui`（无托盘直开设置）。
+- 冒烟（本机 2026-10-03）：假 Key → 日志 `probe http=401` + UI「API Key 无效 (HTTP 401)」✓；
+  provider 切换即落盘旧 provider 的 key/模型（mac 语义）。
+- **真机 E2E ✅（2026-10-03，真实 Key）**：测试连接 200 → 保存（`Keychain 写入 len=35` + `settings saved keyLen=35`）→
+  划词/截图两条链路均翻译成功并弹出结果窗口。
+
+#### C3b：设置窗口「快捷键」页 ✅（录键/恢复默认机测通过 🟢）
+- Core `HotkeyConflicts`（Windows 冲突表：Ctrl 常用键 / Alt+F4·Tab / Ctrl+Shift+Esc / Win 组合 / Ctrl+Alt+Del）
+  + 7 测试（Core **349 绿**）。
+- 外壳 `HotkeyRecorder`：10s 超时、裸键白名单（关闭面板 Esc / 切换位置 `` ` ``）、需修饰键校验、录制即冲突提示。
+- 「快捷键」页：5 行录制器 + 默认优先弹窗（整段/拆分）；保存前收集冲突统一二次确认；恢复默认同步复位录制器。
+- 踩坑：WPF `PreviewKeyDown` 会把**修饰键本身**也送进来（mac 的 flagsChanged 不会）→ 第一版录成 `Ctrl+0xA2`（LeftCtrl）；
+  已加纯修饰键过滤（`IsModifierKey` 忽略并继续等待主键）。
+- 机测（本机 2026-10-03，`--settings-ui` + UIA/SendKeys 自动化）：录制 Ctrl+Shift+Y → 按钮/状态正确；
+  恢复默认 → 确认框 → 全部复位为默认（日志 `settings reset to defaults (api key kept)`）。
+
+#### C3c：设置窗口「模板」页 ✅（保存/恢复默认机测通过 🟢）
+- UI 对齐 mac：默认模板（只读展示内置提示词）/ 自定义模板（可编辑，等宽字体）双态切换 + 状态文案。
+- 保存走 Core `TemplateLogic.ResolveSave` 三分支（保持默认 / 存自定义 / 清空回退默认）；恢复默认同步复位 UI。
+- 机测（`--settings-ui` 自动化 2026-10-03）：只读/可编辑切换正确；保存 → `settings.json` 写入
+  `prompt.custom` + `usesDefault=false`；恢复默认 → `usesDefault=true` 且 `custom` 清除（净零）。
+- **设置窗口三页（通用 / 快捷键 / 模板）全部落地**。
+
+#### C2：结果窗口交互（完整对齐 mac）✅（自动 E2E 全过 🟢；深色主题路径 🟡 未实测）
+- Core：`ResultPanelGeometry`（对侧半屏 + saved frame 夹紧/回退；+9 测试，Core **358 绿**）。
+- 结果窗重写 `ResultWindow`：工具栏（整段/拆分用 `Checked` 事件，兼容鼠标与 UIA/无障碍；不可拆则禁用）+
+  A−/A＋（12–22 即改即存）+ WebView2（禁 JS）；初始模式 = `ShouldStartSplit(DefaultSplitMode, CanSplit)`；
+  非激活悬浮（ShowActivated=false + Topmost）；定位 = 选区对侧半屏（划词用鼠标锚点）；
+  `Closing` 时写回 `WindowFrame`，下次展示复用高度/纵向位置。
+- `LoadingWindow`（300×140 靠鼠标）+ `PanelKeyRouter`（复用 `LowLevelKeyboardHook`，仅面板/加载期间启停；
+  `GetAsyncKeyState` 判定修饰键）+ `TranslationService.CancelCurrent`；`ScreenshotService` 暴露选区屏幕矩形。
+- 键位取自设置：Esc=关闭/取消、`` ` ``=翻面、Ctrl+D=拆分（与 mac 语义一致；加载期只响应 Esc 取消）。
+- 自动 E2E（本机 2026-10-03，真实 Key）：
+  - 划词链：面板对侧定位✓、默认拆分✓、整段切换✓、A＋ 持久化（14→15）✓、A−（15→14→13；下界 12 由 Core 夹紧）✓、
+    `` ` ``翻面✓、Ctrl+D 拆分✓、Esc 关闭✓；加载期 Esc 取消（`panel key: cancel translation` → `translate cancelled`）✓；
+    窗口记忆（移/缩到 y=120/h=450 → 关闭 → 重开复用）✓。
+  - 截图链（合成拖拽 460×150 框选）：captured → OCR Ok → translate Success → 面板对侧 ✓ → Esc ✓。
+- 深色主题：代码路径就绪（读 `AppsUseLightTheme`），本机浅色实测；深色未切换系统主题验证 🟡。
+
+#### C2 自查加固（grill 后修复，2026-10-03）✅
+- **任务代数守卫（对齐 mac `currentTaskGeneration`）**：新增 `_pipelineGeneration`，流水线起点递增、所有异步边界校验。
+  修两个真 bug：① 连按两次划词时旧任务回调会误关新任务的加载窗/弹陈旧结果；② OCR 阶段 ESC 无效（现 ESC 取消整个流水线）。
+- **裸键路由与 mac 对齐**：结果窗与加载窗短暂并存（旧结果 + 新任务加载）时，Esc 现在**两个动作都执行**
+  （此前 loading 分支提前 return，会吞掉"关旧面板"）。回归：`test-c2.ps1` B/C/D/E 全过。
+- **跨屏 DPI 修复**：窗口移到不同 DPI 显示器时 WPF 会按 DIP 覆盖 `SetWindowPos` 的物理矩形（实测副屏上被改成 960×813）；
+  现监听 `DpiChanged` 并在 Loaded 收尾重套几何，实测副屏窗口 = 右半屏 640×760 精确值。回归：`test-c2.ps1` F1。
+- **A± 单位修正**：`ResultWindow` 的 Min 尺寸按目标屏 DPI 换算（几何常量是物理像素）。
+- **冲突降噪**：新增 `HotkeyConflicts.CheckUnlessDefault`——重录成该动作自身默认键不再弹冲突提示（+2 测试）。
+- **isDark 每渲染现读**：运行中切系统主题可生效（实测 `dark=True` 🟢，测毕已还原主题）。
+- **退出清理**：`app.Exit` 停低级钩子；`--settings-ui` 检测到托盘实例时日志提示共用配置。
+- **机测脚本入库**（UTF-8+BOM，仓库惯例）：
+  - `windows/test-c2.ps1`：22 用例（交互/竞态/取消/记忆/截图链/副屏/A− 边界），需 Key，无 Key 退出码 3；
+  - `windows/test-c3.ps1`：14 用例（设置三页离线流程）。
+- 最终验证：Core **360 绿**；`test-c3.ps1` 14/14；`test-c2.ps1` 22/22（副屏现为 1280×800，F 段按实时屏幕校验）。
+
+### 子计划 C4：通知 / 更新检查 / 遥测 ✅（真机验证，2026-10-03）
+- **C4a 完成通知**：翻译成功路径发托盘气泡「翻译完成，点击查看结果」（实测可见 🟢）；
+  点击气泡 → 激活结果窗（代码路径就绪，点击未自动化实测 🟡，可人工点一次）。
+- **C4b 更新检查**：Core `UpdateLogic`（响应解析 / 协议白名单 / 数字版比较 / 跳过判断 / URL 构造）+15 测试（**375 绿**）；
+  外壳 `UpdateService`（UA=ELTA/<版本>、10s 超时、启动 3 秒后查一次）+ `UpdateDialog` 三按钮（前往下载/跳过此版本/稍后提醒，
+  打开前二次协议校验 + 回退官网）。版本源 = csproj `<Version>`（当前 5.5.5）。
+  **发版纪律：`Resources/Info.plist` 与 `Elta.Windows.csproj` 的版本号必须同步 bump。**
+  真机回放：5.5.5 → 服务器 remote=5.5.5 → 不弹；临时降 5.0.0 → 真实提示 → 点「跳过」→ 重启不弹 → 还原 5.5.5 → 不弹（全过）。
+- **C4c 遥测**：= 带 `?id=installID` 的同一更新请求（`server/server.py` 去重计日活）；启动日志 `telemetry=on/off`（只记布尔，不打印 id）。
+- 待办（跨端）：**Mac 合并 PR #4 后，本机 `git pull origin main` 并跑 Core/外壳测试**（audit-shell 与本机 23+ 提交归一）。
+
+### 结果窗闪烁/挂起修复（2026-10-03 晚，事故驱动）✅
+- 现象：连续翻译时结果窗反复重建（每建一次 WebView2 重新初始化 → 白屏闪 + 气泡），随后 **23:17:30 AppHangTransient**
+  （Elta.Windows 5.5.5.0 无响应、任务栏图标持续闪）。
+- 根因（高置信）：每次翻译 `new ResultWindow` + 每窗口独立 `CoreWebView2Environment.CreateAsync(同一 user-data 目录)`——
+  短时间反复建/销同一环境是已知易卡死/闪烁模式。
+- 修复：① WebView2 环境**全进程共享**（`SemaphoreSlim` 单次创建）；② 结果窗**单实例复用**（`ShowResult()` 只换内容/重定位，
+  不再重建窗口）；③ `CoreWebView2.ProcessFailed` 兜底优雅关窗。
+- 验证：连发 4 次翻译 → 日志 `shown=1 reused=3`、窗口数恒为 1、进程存活、WER 零新增挂起；`test-c2.ps1` 回归 **22/22**。
+
+### audit-shell 快照真机验证（2026-10-03，Mac 侧分支产物）
+- U 盘 `ELTA-windows-真机测试\`（fix/audit-shell 快照，含 `Elta.Windows.Tests`）：自动测试 **Core 341 / 外壳 3 全绿**；
+  真机 3 项**全部通过**（①中键拖拽中不提前提交 ②单击不取消覆盖层 ③最左边缘窄选区尺寸标签「36 × 220」可见）
+  + 可选项（56,700 字符取词不崩）。
+- 反馈文件：U 盘 `回传-audit-shell-2026-10-03.txt` + `audit-label.png`（满足合并 PR #4 条件）。
+
 ## P0.5 已验证结论（真机）
+
+### A 机（初次，2026-09）
 - 🟢 截图：GDI `CopyFromScreen` + 物理像素换算，100%/150% 均正确；**多屏热切换会错位** → 正式实现要截「鼠标所在屏」。
 - 🟢 热键：`RegisterHotKey` 可用；`WH_KEYBOARD_LL` 双向可收（他程序 + 本窗口），无杀软拦截。
 - 🟡 取词：UIA 在记事本/Edge/控制台可用；Chrome、WPS 文字、WPS PDF **读不到** → Ctrl+C 兜底必须为主路径。
@@ -246,10 +347,67 @@ windows/
 - 目标机：**A 机**（1366×768 + 1280×800 双屏，已装英文 OCR）。
 - Demo 与结果：`windows/spike/`（源码）；结果 txt 另见 U 盘 / `~/relay-handoff/`。
 
+### 复测（2026-10-03，Win10 22H2 build 19045 / .NET 8.0.425；1366×768@100% + 1920×1200@150% 双屏）
+- 🟢 U 盘 7 项版全部通过：OCR 语言 `en-US` + `zh-Hans-CN`、行/词级框可用（表格图按列聚合，需按词框坐标重建行列）；
+  坐标换算在 100% / 125% / 150% 均「命中红色=True」；记事本 / Chrome / Edge UIA 取词成功（142 / 136 / 136 字符）；
+  Ctrl+C 取词 + 剪贴板图片完整恢复；Ctrl+T 注册成功并收到 `WM_HOTKEY`；LL 钩子双向可收（3/3），Defender 无报警。
+- 🟡 修正：A 机「Chrome 读不到 UIA」属**版本相关**——新版 Chrome/Edge 已暴露 UIA TextPattern；取词主路径仍保留
+  Ctrl+C（旧版 / WPS / 中文场景更稳），原决策不变。
+- ⚠️ 本机主屏（LGD044C / Intel HD）标准缩放档位仅 100%/125%（无 150%，驱动/面板限制）→ 150% 复测在副屏
+  （RTK1601 / AMD，原生 150%）临时切为主屏完成，测毕两组设置均已还原。
+- 🟢 编译：U 盘快照缺 `using System.Windows.Automation.Text`（CS0246）；本仓库 `windows/spike/SpikeWindow.cs`
+  已修复并真机编译通过（0 error；仓库 8 项版的第 8 项仅语言包引导页，未单独跑）。
+- 结果文件：U 盘 `ELTA-Windows-P0.5\results\`（`spike.log` / `capture.png` / `changes.diff`）。
+
+### 剪贴板恢复原生崩溃修复（2026-10-04，抽检驱动）✅
+- 现象：WPS 富格式剪贴板（在 WPS 文档选中文字后取词）触发 `ClipboardState.WriteBack → Clipboard.SetDataObject
+  → OleFlushClipboard` 原生 AV（c0000005，.NET 无法 catch），进程直接死亡（WER 事件存证 ×3）。
+- 根因：快照把 WPS 的 OLE 结构化格式（Embed Source / Object Descriptor / Link Source* / CF_ENHMETAFILE /
+  CF_METAFILEPICT / Kingsoft * 等 16 种格式）原样写回 COM 剪贴板。
+- 修复：**格式白名单**——只写回用户可见内容（System.String / UnicodeText / Text / Rich Text Format /
+  HTML Format / Bitmap / System.Drawing.Bitmap / DeviceIndependentBitmap），其余跳过并标 Partial；
+  值为 MemoryStream/string/byte[]/string[]/Bitmap 之外的类型也跳过（双保险）。`--selftest` 新增第 6 案
+  "富格式还原"回归（含"非白名单格式应被跳过且 Partial=true"断言）。
+- 验证：selftest **6/6**；`windows/test-selection-apps.ps1` S2 WPS 文字（len=72）/ S3 WPS PDF（len=166）**PASS**；
+  修复后 WER **零新增**；`test-c2.ps1` 回归 **22/22**。
+- ⚠️ 教训：`--selection-cli` 会合成**全局 Ctrl+C**——绝不能在无目标聚焦时裸跑（曾误伤前台终端）。
+  抽检脚本已加安全注释；此后取词一律"先聚焦目标窗口，再调 CLI"。
+
+### 3A：应用图标 ✅（2026-10-04）
+- `make-icon.ps1`：源图 `generated-images/ELTA_icon_rounded_v3_v31.png` → `assets/elta.ico`
+  （16/20/24/32/40/48/64/128/256，PNG 压缩条目，59KB）。
+- csproj `ApplicationIcon`（exe 图标）+ `EmbeddedResource`（托盘）；`Program.LoadTrayIcon()` 读嵌入资源、失败回退默认。
+- 验证：exe 图标提取比对 ✅、DLL 嵌入资源名 ✅；托盘溢出区目视（用户确认）。
+
+### 3B：发布打包（版本闸机 + 双形态实测）✅（2026-10-04）
+- 新 Core `ReleaseGate`（TDD，13 测试）：csproj `<Version>` == `Info.plist CFBundleShortVersionString`；
+  含**仓库实文件一致性集成测试** → CI 每次 push 跑 Core 测试即校验版本单一事实源；Core 总测试 **394**。
+- `--version-check <csproj> <plist> <out>` CLI；`pack-release-windows.ps1`：闸机 → 双形态 publish
+  （single/folder）→ `tar` zip + `.sha256` → 冒烟（`--selftest` 6 案 + 真机热键翻译一次）。
+- 实测数据（v5.5.5，本机）：
+  | 形态 | zip | 首启（到 start 日志） | selftest | 翻译冒烟 |
+  |---|---|---|---|---|
+  | **single** | **69.4 MB** | 1259 ms | ✅ | ✅ |
+  | folder | 73.5 MB | 649 ms | ✅ | ✅ |
+- **结论：发布形态选 single**（体积小、单文件整洁；首启 +0.6s 为一次性解压，可接受）。
+- 产物在 `windows/dist/`（gitignored）。⏭ 后续（跨端）：release.yml 加 Windows 打包 job + 官网 Windows 下载入口。
+
+### 3B-2：WebView2 缺失友好提示 ✅（TDD；弹窗路径 🟡）
+- Core `WebView2FallbackLogic`（7 测试）：按异常类型名/消息特征识别缺 Runtime → 可行动文案 + 官方
+  Evergreen 链接；否则保留通用错误文本。
+- `ResultWindow` catch 接线；日志 `result window fallback missingRuntime=...`。
+- ⚠️ 真实缺失场景本机无法复现（已装 WebView2 v154），弹窗路径标 **🟡**（逻辑已 TDD，弹窗壳未真机验证）。
+
 ## 待办 / 风险
 - Windows 仓库策略：**方案 B**——移植期先留 `windows/` 于主仓库，B/C 完成后用 `git subtree split -P windows`
   拆成独立仓库 `elta-windows`（保留历史）。
 - 运行期验证需 A 机手测（CI 只做编译级）。
 - **回传**（2026-10-02）：本地全部未推送 commit 已打包到 U 盘
-  `F:\ELTA-Windows-B3\elta-main-incremental-2026-10-02.bundle`（`git bundle verify` 通过；清单见同目录 `commits.txt`）；
+  U 盘 `ELTA-Windows-B3\elta-main-incremental-2026-10-02.bundle`（`git bundle verify` 通过；清单见同目录 `commits.txt`）；
   Mac 侧 `git pull <bundle> main && git push origin main`。数量以 `commits.txt` / `git rev-list --count origin/main..main` 为准。
+- **回传**（2026-10-03）：本地全部未推送 commit（P0.5 复测归档 + C1 翻译链路 + C3 设置三页 + C2 结果窗）已打包到 U 盘
+  U 盘根目录 `elta-main-incremental-2026-10-03.bundle`（`git bundle verify` 通过；清单见同目录 `elta-commits-2026-10-03.txt`）；
+  Mac 侧 `git pull <bundle> main && git push origin main`。数量以清单 / `git rev-list --count origin/main..main` 为准。
+  （注：本机 E: 为内置盘分区，U 盘 = F:（Kingston）；此前记到 E: 的路径已全部更正。）
+- 同日另附**全量 bundle**（`--all`，自包含、可独立 clone，灾备用）：U 盘根目录 `elta-full-2026-10-03.bundle`。
+- 交接方式升级（2026-10-03）：统一走 `windows/make-handoff.ps1`（自动识别可移动盘 + SHA 校验，禁止手选盘符）。

@@ -40,14 +40,20 @@ dotnet build windows\src\Elta.Windows\Elta.Windows.csproj -c Release
 - **热键**：组合键用 `RegisterHotKey`，裸键（ESC/`` ` ``）用 `WH_KEYBOARD_LL`。
 - **取词**：主路径是 **Ctrl+C**（UIA 常读不到：Chrome/WPS）。
 - **Git**：本机（Windows）**只做 `clone`/`pull`（public 免认证），不 push**；本机改动经 **U 盘 / Syncthing 回传**，或由 Mac 侧代为提交。**不要**在本机配置 GitHub 凭证。
+  交接统一走 `windows/make-handoff.ps1`（自动识别可移动盘，禁止手选盘符）；设备/路径核验闸机见全局规则 `verification-discipline.md`「设备/路径指代核验」。
 
 ## 已完成 / 待办（摘要，详情见 NOTES）
 
-- ✅ Core：A1–A6（文本/分句/表格/HTML/设置），**332 测试**。
+- ✅ Core：A1–A6（文本/分句/表格/HTML/设置），**375 测试**。
 - ✅ C0：托盘外壳入口点 + CI 构建作业。
 - ✅ B1：截图选区（A 机手测通过）。
-- ✅ B2：取词（A 机手测通过；Chrome/Edge/WPS 走 Ctrl+C 兜底）。
+- ✅ B2：取词（A 机手测通过；Chrome/Edge/WPS 走 Ctrl+C 兜底；2026-10-04 补测 WPS 文字/PDF ✅，Word 因本机 Office 试用期届满 SKIP）。
+- ✅ 剪贴板加固（2026-10-04）：恢复仅写回安全格式（修复 WPS 富格式触发 OleFlushClipboard 原生 AV）；selftest 6/6；抽检脚本 `windows/test-selection-apps.ps1`。
 - ✅ B3：OCR（WinRT；自动 + 真机手测通过）。
 - ✅ P0/P1：剪贴板安全 / 日志兜底 / 取词线程化 / 热键自愈（机测通过）。
 - ✅ B4：配置存储（JSON）/ 密钥库（DPAPI）/ Windows 默认值 / 热键服务（机测通过；裸键钩子待 C 接线）。
-- ⬜ 子计划 C：设置 / 结果窗口 / 翻译接线。
+- ✅ 子计划 C 全部完成：C1 翻译链路 + C2 结果窗交互（加载/裸键/窗口记忆，含任务代数守卫与跨屏 DPI 加固）+ C3 设置三页，真机 E2E / 机测通过。
+  回归门禁：`windows/test-c2.ps1`（22 用例，需 Key）/ `test-c3.ps1`（14 用例，离线）。
+- ✅ C4：完成通知 / 更新检查 / 遥测（真机验证；Core 375 测试）。版本纪律：Info.plist 与 Elta.Windows.csproj 同步 bump。
+- ✅ 3A/3B/3B-2（2026-10-04）：应用图标（elta.ico，exe+托盘）；发布打包 `pack-release-windows.ps1`（版本闸机 Core TDD + single/folder 实测，**single 胜出** 69.4MB）；WebView2 缺失友好提示（Core TDD）。
+- ⏭ 跨端待办：Mac 合并 PR #4 后本机 `git pull origin main` + 跑测试（两端归一）。
