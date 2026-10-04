@@ -3,13 +3,13 @@
 > 新会话开头 `@windows/NOTES.md` 即可续上。本文件是进度与决策的唯一交接记录。
 
 ## ★ 续接指引（新会话先读这里）
-- **代码基线**：`origin/main = 7015e43`（Windows v1.0.0 冒烟记录已合入；工作区应干净）。
+- **代码基线**：以 `origin/main` 为准（v1.0.0 冒烟于 `7015e43` 合入；其后为 Mac 侧 docs/脚本提交；工作区应干净）。
 - **已发布**：Windows **v1.0.0** 独立 Release（tag `win-v1.0.0`；zip+sha256）；国内直链
   `https://autoelta.com/download/ELTA-Windows-v1.0.0-win-x64-single.zip`（+ `latest-win.zip`）；
   官网（autoelta.com）已上架双平台。**真机全量冒烟已通过 → v1.0.0 已收尾**（详见本文件「v1.0.0 真机全量冒烟」节）。
 - **进行中 / 下一步**：官网 Windows 版本号 **自动 bump**（`scripts/bump-website-version.sh`，接发版检查单）；
   可选结构里程碑：仓库拆分（`git subtree split -P windows` → 独立 `elta-windows`）。
-- **下轮**：打包基准 = `origin/main`（当前 `7015e43`）；发版流程 = 先本机全量冒烟 → 打 tag `win-vX.Y.Z` →
+- **下轮**：打包基准 = 实时 `origin/main`；发版流程 = 先本机全量冒烟 → 打 tag `win-vX.Y.Z` →
   官网 Windows 版本号 bump（脚本，见 `windows/RELEASE-WINDOWS-PLAN.md` 发版检查单第 5 步）。
 - **跨端协作协议**（两端均 opencode；U 盘单槽 `TASK.md`/`REPLY.md`/`REPORT.md`）：见 root `AGENTS.md`「跨端协作」节 +
   本机全局规则 `~/.config/opencode/rules/cross-machine-opencode-collab.md`（已持久化，跨会话生效）。
