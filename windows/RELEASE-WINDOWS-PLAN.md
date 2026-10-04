@@ -2,7 +2,8 @@
 
 > 状态：**提案**——动代码（新增 CI workflow）前先与 Mac 侧对齐。日期：2026-10-04。
 > 已有资产：`windows/pack-release-windows.ps1`（自包含 single/folder 双形态；single 实测 69.4MB / 首启 1.26s）；
-> 版本闸机 `ReleaseGate`（csproj == Info.plist，CI 每次 push 校验）；`--version-check` CLI。
+> 版本闸机 `ReleaseGate`（**每平台自有版本线**：Windows `csproj <Version>` == 发布 tag 版本；**不再比 mac `Info.plist`**）；`--version-check` CLI。
+> 版本号：mac 冻结在 5.5.5；**Windows 独立版本线，自 1.0.0 起**（2026-10-04 决策）。
 
 ## 一、发布形态选项（待 Mac 决策）
 
@@ -18,7 +19,7 @@
 已就绪：
 
 - 打包脚本 `windows/pack-release-windows.ps1`：版本闸机 → 双形态 publish → zip + sha256（冒烟含 selftest + 真机翻译）
-- 版本纪律：`Elta.Windows.csproj <Version>` == `Resources/Info.plist`（CI 强制）
+- 版本纪律：Windows 版本单一源 = `Elta.Windows.csproj <Version>`（当前 **1.0.0**）；发布时 tag `win-vX.Y.Z` 必须 == 该版本（`ReleaseGate` 校验）。**与 mac `Resources/Info.plist` 无关**（两条独立版本线）。
 
 决议后新增（约 30 行）：
 

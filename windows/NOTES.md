@@ -412,6 +412,16 @@ windows/
 - 新增 3 个 fixture 测试（仓库根/存档/空目录）；Core 总数 **406**。
 - 背景：验收包唯一红灯即此场景（回传-验收-6080e55 ①，采纳建议 b）；真正的导出包端到端复验将在下一次导出时自动发生。
 
+### 版本线解耦：Windows 独立版本（自 1.0.0）✅（2026-10-04）
+- 决策：mac 冻结在 5.5.5、未来主要迭代 Windows → **两条独立版本线**，Windows 自 **1.0.0** 起。
+- 改造：
+  - `Elta.Windows.csproj <Version>`：`5.5.5` → **`1.0.0`**（Windows 版本单一源）。
+  - `ReleaseGate`：`Check(csprojXml, expectedVersion)`——对比**发布 tag 版本**；**不再比 mac `Resources/Info.plist`**；移除 `ExtractPlistVersion`；CLI 变为 `--version-check <csproj> <期望版本> <out>`。
+  - `pack-release-windows.ps1`：版本闸机改为「csproj vs 期望版本」（`-ExpectedVersion` 可选；为空则只读取 csproj）。
+  - CI `windows-release.yml`：把 tag 版本经 `-ExpectedVersion` 传给打包脚本（闸机单一来源 = `ReleaseGate`）。
+  - `ReleaseGateTests` 相应更新（`RepoFiles_WindowsVersionPresent` 只校验 Windows 版本存在）。
+- mac 版本 `Resources/Info.plist` 保持 **5.5.5** 不动。
+
 ## 待办 / 风险
 
 - 方法论（2026-10-04）：验收/交互验证**默认自动化**（先做能力对照 → 逐项裁决）；清单里的"人点"不构成约束。

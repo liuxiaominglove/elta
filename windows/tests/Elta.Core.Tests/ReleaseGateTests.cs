@@ -12,15 +12,15 @@ namespace Elta.Core.Tests
         [Fact]
         public void ExtractCsprojVersion_Basic()
         {
-            string xml = "<Project><PropertyGroup><Version>5.5.5</Version></PropertyGroup></Project>";
-            Assert.Equal("5.5.5", ReleaseGate.ExtractCsprojVersion(xml));
+            string xml = "<Project><PropertyGroup><Version>1.0.0</Version></PropertyGroup></Project>";
+            Assert.Equal("1.0.0", ReleaseGate.ExtractCsprojVersion(xml));
         }
 
         [Fact]
         public void ExtractCsprojVersion_TrimsWhitespace()
         {
-            string xml = "<Project>\n  <PropertyGroup>\n    <Version> 5.5.5 </Version>\n  </PropertyGroup>\n</Project>";
-            Assert.Equal("5.5.5", ReleaseGate.ExtractCsprojVersion(xml));
+            string xml = "<Project>\n  <PropertyGroup>\n    <Version> 1.0.0 </Version>\n  </PropertyGroup>\n</Project>";
+            Assert.Equal("1.0.0", ReleaseGate.ExtractCsprojVersion(xml));
         }
 
         [Fact]
@@ -35,57 +35,34 @@ namespace Elta.Core.Tests
             Assert.Null(ReleaseGate.ExtractCsprojVersion("not xml at all"));
         }
 
-        // MARK: - plist 提取
-
-        [Fact]
-        public void ExtractPlistVersion_Basic()
-        {
-            string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><plist version=\"1.0\"><dict><key>CFBundleShortVersionString</key><string>5.5.5</string></dict></plist>";
-            Assert.Equal("5.5.5", ReleaseGate.ExtractPlistVersion(xml));
-        }
-
-        [Fact]
-        public void ExtractPlistVersion_WithDoctypeAndOthers_ReturnsValue()
-        {
-            string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
-                         "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n" +
-                         "<plist version=\"1.0\"><dict>" +
-                         "<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>" +
-                         "<key>CFBundleShortVersionString</key><string>5.5.5</string>" +
-                         "</dict></plist>";
-            Assert.Equal("5.5.5", ReleaseGate.ExtractPlistVersion(xml));
-        }
-
-        [Fact]
-        public void ExtractPlistVersion_MissingKey_ReturnsNull()
-        {
-            string xml = "<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>Other</key><string>1.0</string></dict></plist>";
-            Assert.Null(ReleaseGate.ExtractPlistVersion(xml));
-        }
-
-        // MARK: - 一致性判定
+        // MARK: - 版本闸机（每平台自有版本线：csproj <Version> == 期望版本，来自 tag）
 
         [Fact]
         public void Check_Match_Ok()
         {
-            string csproj = "<Project><PropertyGroup><Version>5.5.5</Version></PropertyGroup></Project>";
-            string plist = "<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>CFBundleShortVersionString</key><string>5.5.5</string></dict></plist>";
-            VersionCheckResult r = ReleaseGate.Check(csproj, plist);
+            string csproj = "<Project><PropertyGroup><Version>1.0.0</Version></PropertyGroup></Project>";
+            VersionCheckResult r = ReleaseGate.Check(csproj, "1.0.0");
             Assert.True(r.Ok);
-            Assert.Equal("5.5.5", r.CsprojVersion);
-            Assert.Equal("5.5.5", r.PlistVersion);
+            Assert.Equal("1.0.0", r.CsprojVersion);
+            Assert.Equal("1.0.0", r.ExpectedVersion);
             Assert.Null(r.Error);
+        }
+
+        [Fact]
+        public void Check_TrimsExpected()
+        {
+            string csproj = "<Project><PropertyGroup><Version>1.0.0</Version></PropertyGroup></Project>";
+            Assert.True(ReleaseGate.Check(csproj, " 1.0.0 ").Ok);
         }
 
         [Fact]
         public void Check_Mismatch_NotOk_ReportsBoth()
         {
-            string csproj = "<Project><PropertyGroup><Version>5.5.4</Version></PropertyGroup></Project>";
-            string plist = "<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>CFBundleShortVersionString</key><string>5.5.5</string></dict></plist>";
-            VersionCheckResult r = ReleaseGate.Check(csproj, plist);
+            string csproj = "<Project><PropertyGroup><Version>1.0.0</Version></PropertyGroup></Project>";
+            VersionCheckResult r = ReleaseGate.Check(csproj, "1.0.1");
             Assert.False(r.Ok);
-            Assert.Equal("5.5.4", r.CsprojVersion);
-            Assert.Equal("5.5.5", r.PlistVersion);
+            Assert.Equal("1.0.0", r.CsprojVersion);
+            Assert.Equal("1.0.1", r.ExpectedVersion);
             Assert.NotNull(r.Error);
             Assert.Contains("mismatch", r.Error);
         }
@@ -94,43 +71,41 @@ namespace Elta.Core.Tests
         public void Check_CsprojMissing_NotOk()
         {
             string csproj = "<Project><PropertyGroup></PropertyGroup></Project>";
-            string plist = "<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>CFBundleShortVersionString</key><string>5.5.5</string></dict></plist>";
-            VersionCheckResult r = ReleaseGate.Check(csproj, plist);
+            VersionCheckResult r = ReleaseGate.Check(csproj, "1.0.0");
             Assert.False(r.Ok);
             Assert.Null(r.CsprojVersion);
             Assert.NotNull(r.Error);
         }
 
         [Fact]
-        public void Check_PlistMissing_NotOk()
+        public void Check_ExpectedEmpty_NotOk()
         {
-            string csproj = "<Project><PropertyGroup><Version>5.5.5</Version></PropertyGroup></Project>";
-            string plist = "<?xml version=\"1.0\"?><plist version=\"1.0\"><dict></dict></plist>";
-            VersionCheckResult r = ReleaseGate.Check(csproj, plist);
+            string csproj = "<Project><PropertyGroup><Version>1.0.0</Version></PropertyGroup></Project>";
+            VersionCheckResult r = ReleaseGate.Check(csproj, "");
             Assert.False(r.Ok);
-            Assert.Null(r.PlistVersion);
+            Assert.Equal("1.0.0", r.CsprojVersion);
             Assert.NotNull(r.Error);
         }
 
-        // MARK: - 仓库实文件一致性（CI 门禁：每次 push 跑 Core 测试即校验）
+        // MARK: - 仓库实文件（CI 门禁：Windows csproj 必须有 <Version>）
+        // 注意：Windows 与 macOS 是同一产品的两条独立版本线（mac=Info.plist，win=csproj），
+        // 故此处**不再**校验两者相等；只校验 Windows 版本存在。
 
         [Fact]
-        public void RepoFiles_VersionsConsistent()
+        public void RepoFiles_WindowsVersionPresent()
         {
             ReleaseLayoutResult layout = ReleaseLayout.Detect(AppContext.BaseDirectory);
             if (!layout.RepoRootFound)
             {
                 // 独立存档（如仅 windows/ 的验收导出包，无 Resources/Info.plist）：无可校验对象，跳过。
-                // 背景：2026-10-04 验收包唯一红灯即此场景（回传-验收-6080e55 ①，采纳建议 b）。
                 Assert.True(layout.ArchiveLayout, "neither repo root nor windows archive layout found from " + AppContext.BaseDirectory);
                 return;
             }
 
             string root = layout.RepoRoot!;
             string csproj = File.ReadAllText(Path.Combine(root, "windows", "src", "Elta.Windows", "Elta.Windows.csproj"));
-            string plist = File.ReadAllText(Path.Combine(root, "Resources", "Info.plist"));
-            VersionCheckResult r = ReleaseGate.Check(csproj, plist);
-            Assert.True(r.Ok, r.Error ?? "version check failed");
+            string? version = ReleaseGate.ExtractCsprojVersion(csproj);
+            Assert.False(string.IsNullOrEmpty(version), "Elta.Windows.csproj 缺少 <Version>");
         }
     }
 }
