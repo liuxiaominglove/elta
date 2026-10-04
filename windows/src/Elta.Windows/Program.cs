@@ -727,10 +727,9 @@ namespace Elta.Windows
                         return;
                     case OcrStatus.Failed:
                         HideLoading();
-                        Forms.MessageBox.Show(
-                            $"OCR 失败：\n{outcome.Error}",
-                            "ELTA",
-                            Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Error);
+                        // 同 F1：OCR 失败路径不弹模态（避免 busy 被卡住）
+                        Log.Info("ocr failed (non-modal notice)");
+                        _tray?.ShowBalloonTip(3000, "ELTA", $"OCR 失败：{outcome.Error}", Forms.ToolTipIcon.Error);
                         return;
                 }
 
@@ -793,10 +792,9 @@ namespace Elta.Windows
                 if (IsStale(gen, "selection")) return;
                 if (string.IsNullOrEmpty(text))
                 {
-                    Forms.MessageBox.Show(
-                        "未取到选中文本。\n请先选中一段文字，再按 Ctrl+Shift+T。",
-                        "ELTA",
-                        Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Warning);
+                    // F1 修复（2026-10-04）：模态框在 busy 持有期内会卡住后续热键 → 改非模态气球 + 立即释放 busy
+                    Log.Info("selection no text (non-modal notice)");
+                    _tray?.ShowBalloonTip(3000, "ELTA", "未取到选中文本：请先选中一段文字，再按 Ctrl+Shift+T。", Forms.ToolTipIcon.Info);
                     return;
                 }
             }
@@ -804,10 +802,9 @@ namespace Elta.Windows
             {
                 Log.Error("RunSelection failed", ex);
                 if (IsStale(gen, "catch")) return;
-                Forms.MessageBox.Show(
-                    $"取词失败：\n{ex.Message}",
-                    "ELTA",
-                    Forms.MessageBoxButtons.OK, Forms.MessageBoxIcon.Error);
+                // 同 F1：异常路径同样不弹模态（避免 busy 被卡住）
+                Log.Info("selection failed (non-modal notice)");
+                _tray?.ShowBalloonTip(3000, "ELTA", $"取词失败：{ex.Message}", Forms.ToolTipIcon.Error);
                 return;
             }
             finally
