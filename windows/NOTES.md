@@ -422,6 +422,15 @@ windows/
   - `ReleaseGateTests` 相应更新（`RepoFiles_WindowsVersionPresent` 只校验 Windows 版本存在）。
 - mac 版本 `Resources/Info.plist` 保持 **5.5.5** 不动。
 
+### 发布上线：Windows v1.0.0 + 官网双平台 ✅（2026-10-04）
+- 发布流水线（形态 A）合并（PR #6）；版本线解耦（PR #7，Windows 独立版本自 **1.0.0**）。
+- 打 tag `win-v1.0.0` → **独立 Release**（`ELTA-Windows-v1.0.0-win-x64-single.zip` 69.3MB + `.sha256`）。
+- 服务器 `/root/sync-elta-release.sh` 改**双通道**：mac `.dmg` 直连；Windows zip 走代理 `ghfast.top` + `.sha256` **直连校验** → `latest-win.zip`；nginx 加 `latest-win.zip` no-cache。
+  国内直链：`https://autoelta.com/download/ELTA-Windows-v1.0.0-win-x64-single.zip`（+ `latest-win.zip`）。
+- 官网 `website/` 上架双平台下载（macOS v5.5.5 / Windows v1.0.0）；`autoelta.com` 已更新。
+- Vercel 部署失败已修（`website/vercel.json` 悬空 `api/admin.js`）；但 `elta-seven.vercel.app` 国内 **DNS 污染** → 仅海外备用。
+- ⏭ 后续：Windows 每次发版，需 bump 官网 Windows 版本号（与 mac 现行做法一致）。
+
 ## 待办 / 风险
 
 - 方法论（2026-10-04）：验收/交互验证**默认自动化**（先做能力对照 → 逐项裁决）；清单里的"人点"不构成约束。
