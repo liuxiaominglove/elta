@@ -124,12 +124,14 @@ ELTA 的选择：当 AX API 契约明确承诺返回类型时，用 `as!` 最简
 
 - **DNS**：DNSPod，当前域名指向腾讯云（未切 Vercel）。
 - **策略**：腾讯云为主站，Vercel 备用。备案风险：Vercel 是海外服务商，切过去可能被抽查注销备案，故**保持腾讯云为主站**。
+- **Windows 发布通道（形态 A，独立）**（2026-10-04）：tag `win-vX.Y.Z` → `.github/workflows/windows-release.yml` 建**独立 Release**（zip + sha256）。Windows 版本**独立于 mac**（mac 冻结 5.5.5；Windows 自 **1.0.0** 起），版本闸机 = tag 版本 == `windows/src/Elta.Windows/Elta.Windows.csproj <Version>`（`ReleaseGate` 校验，不再比 mac `Info.plist`）。
+- **Vercel**（2026-10-04）：构建曾因 `website/vercel.json` 引用已删除的 `api/admin.js`（`functions`）**每次部署失败**，已改现代静态配置修复。⚠️ `elta-seven.vercel.app` 在国内被 **DNS 污染**（解析到境外 IP）→ **无 VPN 不可达**，仅供海外/备用；**国内入口一律 `autoelta.com`**（主站，含 Windows 下载）。
 
 ### 主站自动同步（服务器 cron）
 
 服务器上 `crontab` 每 5 分钟跑 `/root/auto-sync.sh`，做两件事：
 
-1. `/root/sync-elta-release.sh` — 拉取 GitHub 最新 release 的 `.dmg` 到 `/var/www/elta-downloads/`，更新 `latest.dmg` 软链（国内直链）
+1. `/root/sync-elta-release.sh` — **双通道**：mac 按 tag `v*` 拉 `.dmg` → `latest.dmg`；Windows 按 tag `win-v*` 拉 `-win-x64-single.zip`（72MB 走 GitHub 代理 `ghfast.top`，`.sha256` 直连校验）→ `latest-win.zip`（国内直链）
 2. 用 GitHub API 查最新 commit SHA，与 `/root/.elta-deployed-sha` 对比，有变化则跑 `/root/update-elta-website.sh` 部署网站
 
 所以 `git push` 后 ≤5 分钟，主站与国内直链自动更新。日志：`/var/log/elta-release-sync.log`、`/var/log/elta-auto-sync.log`。
