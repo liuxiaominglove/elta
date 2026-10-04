@@ -4,13 +4,11 @@
 
 ## ★ 续接指引（新会话先读这里）
 - **代码基线**：以 `origin/main` 为准（v1.0.0 冒烟于 `7015e43` 合入；其后为 Mac 侧 docs/脚本提交；工作区应干净）。
-- **已发布**：Windows **v1.0.1** 独立 Release（tag `win-v1.0.1`；zip+sha256）；国内直链
-  `https://autoelta.com/download/ELTA-Windows-v1.0.1-win-x64-single.zip`（+ `latest-win.zip`）；官网已 bump **v1.0.1**。
-  含两个发布后修复：更新检查误报 mac 版本线（平台分流）+ zip 无法用资源管理器提取（改 .NET ZipFile）。
-  详见本文件「发布后修复…（win-v1.0.1）」节。
-- **进行中 / 下一步**：下一轮任务草案见 `windows/NEXT-TASK.md`（F1 空选 busy 修复 / V1 设置窗深色决策 /
-  v1.0.1 真机回归）。可选：官网版本号 CI 全自动 bump（暂缓）。
-  仓库拆分：**已决策条件化暂缓**（`docs/adr/0004-windows-repo-split.md`；满足触发条件再拆）。
+- **已发布**：Windows **v1.0.2** 独立 Release（tag `win-v1.0.2`；zip+sha256）；国内直链
+  `https://autoelta.com/download/ELTA-Windows-v1.0.2-win-x64-single.zip`（+ `latest-win.zip`）；官网已 bump **v1.0.2**。
+  含 **F1 家族修复**（空选/取词异常/OCR 失败改非模态托盘气球，busy 即时释放）+ v1.0.1 两修复（更新平台分流 / zip 提取兼容）。
+- **进行中 / 下一步**：`windows/NEXT-TASK.md` **T1–T3 已完成**；T4 待条件（WebView2 故障注入 / Word 授权环境）。
+  可选：官网版本号 CI 全自动 bump（暂缓）。仓库拆分：**已决策条件化暂缓**（`docs/adr/0004-windows-repo-split.md`）。
 - **真机验证（V1–V8）已收口**（2026-10-04 晚）：V3/V5/V6/V7/V8 🟢；V1 ⚠（结果窗✅/**设置窗未实现深色**）；
   V2/V4 ⏭（环境受限）。逐项见 `windows/VERIFY-BACKLOG.md`。
 - **下轮**：打包基准 = 实时 `origin/main`；发版流程 = 先本机全量冒烟 → 打 tag `win-vX.Y.Z` →
@@ -472,6 +470,13 @@ windows/
   回归 `test-selection-empty.ps1` **4/4**；AGENTS 新增「busy 纪律：持有 busy 的路径禁止弹模态（需应答的对话框除外）」。
 - T1 v1.0.1 发布物真机回归 ✅（门禁固化 `test-release.ps1`：SHA 校验 / 资源管理器机制解压 / 更新分流日志且不弹 / 翻译；**6/6**；
   下载支持断点续传 + 缓存跳过）。
+
+### 发布上线：Windows v1.0.2 ✅（2026-10-04 晚，Mac 执行）
+- 合并 `f36abc0..81c10f3`（F1 修复 + T1–T3 收口）→ bump `1.0.1→1.0.2`（Mac 补，commit `7d00276`）→
+  tag `win-v1.0.2` → CI success（run `37204910438`）→ 独立 Release。
+- 服务器同步：`latest-win.json`→`1.0.2`；zip sha `9e2a6fd2…cd46cdbb` 校验通过；官网 bump `1.0.2`；现网
+  `?platform=windows`→`{"version":"1.0.2","url":".../latest-win.zip","platform":"windows"}`。
+- ⚠ 待 Windows 真机回归：v1.0.2 右键「提取」正常 / 更新不再误报 / F1 空选不卡 busy。
 
 ### 发布后修复：Windows 更新检查误报 mac 版本线 + zip 提取兼容（win-v1.0.1 已发布）✅（2026-10-04 晚）
 - 现象：v1.0.0 用户收到"有更新"提示，点击下载得到 **mac 的 `ELTA.v5.5.5.dmg`**（Windows 打不开）。

@@ -45,6 +45,7 @@
 > 复盘（v1.0.0）：CI 构建 ✅、对已发布物冒烟 ✅；缺"tag 前本机全量冒烟"一步（当时新版闸机尚未在本机跑过）。
 
 1. [ ] bump `Elta.Windows.csproj <Version>` 并提交（Windows 版本单一源）
+       ⚠ 约定：**修复批次提交时一并 bump**（避免发布方 Mac 越界改 Windows 版本源；v1.0.2 即因未带 bump 由 Mac 补）
 2. [ ] **tag 前**本机全量冒烟：`windows/pack-release-windows.ps1 -Flavor single -ExpectedVersion X.Y.Z`（含真机翻译）→ 通过才可打 tag
 3. [ ] 打 tag `win-vX.Y.Z` 并推送（`windows-release.yml` 出独立 Release）
 4. [ ] 发布后：对**已发布物**冒烟（直链下载 → SHA256 校验 → 解压 → selftest + 真实翻译）
