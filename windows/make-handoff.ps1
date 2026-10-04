@@ -34,7 +34,8 @@ try {
   $task = Join-Path $tmp 'MAC-OPENCODE-TASK.md'
   $head = (git rev-parse --short HEAD).Trim()
   $baseHead = (git rev-parse --short origin/main).Trim()
-  $commitList = (git log origin/main..main --oneline) -join "`r`n"
+  # 清单从已写好的 UTF-8 文件读取（避免 PowerShell 捕获 git stdout 时按本地码页解码导致中文乱码）
+  $commitList = [IO.File]::ReadAllText($list, (New-Object Text.UTF8Encoding($false))).TrimEnd()
   $taskText = @"
 # 任务（给 Mac 端 opencode）：合并 Windows 增量包并推送到 origin
 
