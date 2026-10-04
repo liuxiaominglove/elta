@@ -55,4 +55,5 @@ dotnet build windows\src\Elta.Windows\Elta.Windows.csproj -c Release
 - ✅ 子计划 C 全部完成：C1 翻译链路 + C2 结果窗交互（加载/裸键/窗口记忆，含任务代数守卫与跨屏 DPI 加固）+ C3 设置三页，真机 E2E / 机测通过。
   回归门禁：`windows/test-c2.ps1`（22 用例，需 Key）/ `test-c3.ps1`（14 用例，离线）。
 - ✅ C4：完成通知 / 更新检查 / 遥测（真机验证；Core 375 测试）。版本纪律：Info.plist 与 Elta.Windows.csproj 同步 bump。
+- ✅ 3A/3B/3B-2（2026-10-04）：应用图标（elta.ico，exe+托盘）；发布打包 `pack-release-windows.ps1`（版本闸机 Core TDD + single/folder 实测，**single 胜出** 69.4MB）；WebView2 缺失友好提示（Core TDD）。
 - ⏭ 跨端待办：Mac 合并 PR #4 后本机 `git pull origin main` + 跑测试（两端归一）。

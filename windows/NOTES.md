@@ -373,6 +373,31 @@ windows/
 - ⚠️ 教训：`--selection-cli` 会合成**全局 Ctrl+C**——绝不能在无目标聚焦时裸跑（曾误伤前台终端）。
   抽检脚本已加安全注释；此后取词一律"先聚焦目标窗口，再调 CLI"。
 
+### 3A：应用图标 ✅（2026-10-04）
+- `make-icon.ps1`：源图 `generated-images/ELTA_icon_rounded_v3_v31.png` → `assets/elta.ico`
+  （16/20/24/32/40/48/64/128/256，PNG 压缩条目，59KB）。
+- csproj `ApplicationIcon`（exe 图标）+ `EmbeddedResource`（托盘）；`Program.LoadTrayIcon()` 读嵌入资源、失败回退默认。
+- 验证：exe 图标提取比对 ✅、DLL 嵌入资源名 ✅；托盘溢出区目视（用户确认）。
+
+### 3B：发布打包（版本闸机 + 双形态实测）✅（2026-10-04）
+- 新 Core `ReleaseGate`（TDD，13 测试）：csproj `<Version>` == `Info.plist CFBundleShortVersionString`；
+  含**仓库实文件一致性集成测试** → CI 每次 push 跑 Core 测试即校验版本单一事实源；Core 总测试 **394**。
+- `--version-check <csproj> <plist> <out>` CLI；`pack-release-windows.ps1`：闸机 → 双形态 publish
+  （single/folder）→ `tar` zip + `.sha256` → 冒烟（`--selftest` 6 案 + 真机热键翻译一次）。
+- 实测数据（v5.5.5，本机）：
+  | 形态 | zip | 首启（到 start 日志） | selftest | 翻译冒烟 |
+  |---|---|---|---|---|
+  | **single** | **69.4 MB** | 1259 ms | ✅ | ✅ |
+  | folder | 73.5 MB | 649 ms | ✅ | ✅ |
+- **结论：发布形态选 single**（体积小、单文件整洁；首启 +0.6s 为一次性解压，可接受）。
+- 产物在 `windows/dist/`（gitignored）。⏭ 后续（跨端）：release.yml 加 Windows 打包 job + 官网 Windows 下载入口。
+
+### 3B-2：WebView2 缺失友好提示 ✅（TDD；弹窗路径 🟡）
+- Core `WebView2FallbackLogic`（7 测试）：按异常类型名/消息特征识别缺 Runtime → 可行动文案 + 官方
+  Evergreen 链接；否则保留通用错误文本。
+- `ResultWindow` catch 接线；日志 `result window fallback missingRuntime=...`。
+- ⚠️ 真实缺失场景本机无法复现（已装 WebView2 v154），弹窗路径标 **🟡**（逻辑已 TDD，弹窗壳未真机验证）。
+
 ## 待办 / 风险
 - Windows 仓库策略：**方案 B**——移植期先留 `windows/` 于主仓库，B/C 完成后用 `git subtree split -P windows`
   拆成独立仓库 `elta-windows`（保留历史）。

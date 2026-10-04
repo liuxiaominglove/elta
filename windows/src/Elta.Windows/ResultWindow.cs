@@ -247,9 +247,9 @@ namespace Elta.Windows
             catch (Exception ex)
             {
                 Log.Error("result window init failed", ex);
-                MessageBox.Show(
-                    $"结果窗口初始化失败：\n{ex.Message}",
-                    "ELTA", MessageBoxButton.OK, MessageBoxImage.Error);
+                WebView2FailureInfo info = WebView2FallbackLogic.Describe(ex.GetType().FullName, ex.Message);
+                Log.Info($"result window fallback missingRuntime={info.IsMissingRuntime}");
+                MessageBox.Show(info.UserMessage, "ELTA", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
