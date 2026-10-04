@@ -44,10 +44,11 @@ dotnet build windows\src\Elta.Windows\Elta.Windows.csproj -c Release
 
 ## 已完成 / 待办（摘要，详情见 NOTES）
 
-- ✅ Core：A1–A6（文本/分句/表格/HTML/设置），**332 测试**。
+- ✅ Core：A1–A6（文本/分句/表格/HTML/设置），**375 测试**。
 - ✅ C0：托盘外壳入口点 + CI 构建作业。
 - ✅ B1：截图选区（A 机手测通过）。
-- ✅ B2：取词（A 机手测通过；Chrome/Edge/WPS 走 Ctrl+C 兜底）。
+- ✅ B2：取词（A 机手测通过；Chrome/Edge/WPS 走 Ctrl+C 兜底；2026-10-04 补测 WPS 文字/PDF ✅，Word 因本机 Office 试用期届满 SKIP）。
+- ✅ 剪贴板加固（2026-10-04）：恢复仅写回安全格式（修复 WPS 富格式触发 OleFlushClipboard 原生 AV）；selftest 6/6；抽检脚本 `windows/test-selection-apps.ps1`。
 - ✅ B3：OCR（WinRT；自动 + 真机手测通过）。
 - ✅ P0/P1：剪贴板安全 / 日志兜底 / 取词线程化 / 热键自愈（机测通过）。
 - ✅ B4：配置存储（JSON）/ 密钥库（DPAPI）/ Windows 默认值 / 热键服务（机测通过；裸键钩子待 C 接线）。

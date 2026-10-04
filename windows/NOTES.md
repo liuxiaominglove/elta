@@ -100,7 +100,8 @@ windows/
 
 > **0) B2 已通过**（`回传-B2.txt`，Win10，零 Fail）：记事本（单行/多行/中英混合）、Chrome、Edge 取词；
 > 剪贴板恢复（UIA 路径与 Ctrl+C 兜底路径的文本/图片/空/大文本/emoji）全部通过；Ctrl+T 截图回归正常。
-> Word/WPS 文字/WPS PDF 因自动化限制未跑（非失败）→ 建议人工各抽检一次，即可升 🟢。
+> **2026-10-04 抽检补测**（`windows/test-selection-apps.ps1`）：WPS 文字 ✅ / WPS PDF ✅（Ctrl+C 路径）；
+> Word 因本机 Office 试用期届满（reduced functionality）取不到词 → SKIP，待授权 Office 的机器补测（非产品失败）。
 > **B3 已完成 🟢**；**P0/P1 机测通过 🟢**；**B4（配置存储 / DPAPI 密钥库 / Windows 默认值 / 热键服务）机测通过 🟢**
 > （`windows/test-clipboard.ps1`、`windows/test-p1.ps1`、`windows/test-settings.ps1`）。下一步 **子计划 C**（设置/结果窗口/翻译接线）。
 
@@ -130,8 +131,8 @@ windows/
 ### B2：取词（UIA → Ctrl+C 兜底）✅（含 A 机手测）
 - **A 机手测结果（`回传-B2.txt`，Win10，`Fail=0`）**：记事本 单行/多行/中英混合 ✓、空选提示 ✓；
   记事本/Chrome/Edge 取到 ✓；**剪贴板恢复**（UIA 路径 + Ctrl+C 兜底路径）的 文本/图片/空/大文本/emoji ✓；
-  Ctrl+T 截图回归 ✓。**未自动跑**（非失败）：Word、WPS 文字、WPS PDF、托盘目视 → 建议人工抽检。
-  自动化方法：PowerShell + Win32 P/Invoke 注入热键并读 MessageBox 文本、校验剪贴板（合成输入 🟡）。
+   Ctrl+T 截图回归 ✓。**2026-10-04 抽检**（`test-selection-apps.ps1`）：WPS 文字 ✅、WPS PDF ✅（点击进文档区后
+   Ctrl+A → Ctrl+C 路径）；Word SKIP（本机 Office 试用期届满）；托盘目视 ✅（C2/C4 期间）。
 - **Core（Mac 可测，TDD）**：`SelectionText`（`SubstringInRange` UTF-16 区间取子串 + `IsUsable`，移植 mac
   `substringInRange`）、`ClipboardAcceptPolicy`（`AcceptByChangeCount` / `AcceptByFallback`）。测试见
   `SelectionTextTests.cs` / `ClipboardAcceptPolicyTests.cs`。
@@ -357,6 +358,20 @@ windows/
 - 🟢 编译：U 盘快照缺 `using System.Windows.Automation.Text`（CS0246）；本仓库 `windows/spike/SpikeWindow.cs`
   已修复并真机编译通过（0 error；仓库 8 项版的第 8 项仅语言包引导页，未单独跑）。
 - 结果文件：U 盘 `ELTA-Windows-P0.5\results\`（`spike.log` / `capture.png` / `changes.diff`）。
+
+### 剪贴板恢复原生崩溃修复（2026-10-04，抽检驱动）✅
+- 现象：WPS 富格式剪贴板（在 WPS 文档选中文字后取词）触发 `ClipboardState.WriteBack → Clipboard.SetDataObject
+  → OleFlushClipboard` 原生 AV（c0000005，.NET 无法 catch），进程直接死亡（WER 事件存证 ×3）。
+- 根因：快照把 WPS 的 OLE 结构化格式（Embed Source / Object Descriptor / Link Source* / CF_ENHMETAFILE /
+  CF_METAFILEPICT / Kingsoft * 等 16 种格式）原样写回 COM 剪贴板。
+- 修复：**格式白名单**——只写回用户可见内容（System.String / UnicodeText / Text / Rich Text Format /
+  HTML Format / Bitmap / System.Drawing.Bitmap / DeviceIndependentBitmap），其余跳过并标 Partial；
+  值为 MemoryStream/string/byte[]/string[]/Bitmap 之外的类型也跳过（双保险）。`--selftest` 新增第 6 案
+  "富格式还原"回归（含"非白名单格式应被跳过且 Partial=true"断言）。
+- 验证：selftest **6/6**；`windows/test-selection-apps.ps1` S2 WPS 文字（len=72）/ S3 WPS PDF（len=166）**PASS**；
+  修复后 WER **零新增**；`test-c2.ps1` 回归 **22/22**。
+- ⚠️ 教训：`--selection-cli` 会合成**全局 Ctrl+C**——绝不能在无目标聚焦时裸跑（曾误伤前台终端）。
+  抽检脚本已加安全注释；此后取词一律"先聚焦目标窗口，再调 CLI"。
 
 ## 待办 / 风险
 - Windows 仓库策略：**方案 B**——移植期先留 `windows/` 于主仓库，B/C 完成后用 `git subtree split -P windows`
