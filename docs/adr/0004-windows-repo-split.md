@@ -1,6 +1,6 @@
 # 4. Windows 版拆分独立仓库（subtree split → elta-windows）
 
-- 状态：提议
+- 状态：已接受
 - 日期：2026-10-04
 
 ## 上下文

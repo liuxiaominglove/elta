@@ -7,8 +7,8 @@
 - **已发布**：Windows **v1.0.0** 独立 Release（tag `win-v1.0.0`；zip+sha256）；国内直链
   `https://autoelta.com/download/ELTA-Windows-v1.0.0-win-x64-single.zip`（+ `latest-win.zip`）；
   官网（autoelta.com）已上架双平台。**真机全量冒烟已通过 → v1.0.0 已收尾**（详见本文件「v1.0.0 真机全量冒烟」节）。
-- **进行中 / 下一步**：官网 Windows 版本号 **自动 bump**（`scripts/bump-website-version.sh`，接发版检查单）；
-  可选结构里程碑：仓库拆分（`git subtree split -P windows` → 独立 `elta-windows`）。
+- **进行中 / 下一步**：官网 Windows 版本号 **自动 bump**（`scripts/bump-website-version.sh`，接发版检查单）。
+  仓库拆分：**已决策条件化暂缓**（`docs/adr/0004-windows-repo-split.md`；满足触发条件再拆）。
 - **下轮**：打包基准 = 实时 `origin/main`；发版流程 = 先本机全量冒烟 → 打 tag `win-vX.Y.Z` →
   官网 Windows 版本号 bump（脚本，见 `windows/RELEASE-WINDOWS-PLAN.md` 发版检查单第 5 步）。
 - **跨端协作协议**（两端均 opencode；U 盘单槽 `TASK.md`/`REPLY.md`/`REPORT.md`）：见 root `AGENTS.md`「跨端协作」节 +
@@ -83,7 +83,7 @@ windows/
   spike/                    # P0.5 能力验证 Demo（已跑完，见下文）
 ```
 > `bin/`、`obj/` 已在根 `.gitignore` 中忽略；`windows/**` 已提交到主仓库
-> （方案 B：移植完成后再 `git subtree split -P windows` 拆成独立仓库）。
+> （拆分方式见 `docs/adr/0004-windows-repo-split.md`：**条件化暂缓**，触发条件满足后再 `git subtree split -P windows`）。
 
 ## 关键决策
 - **测试框架**：xUnit + `dotnet test`（不是 node:test）。
@@ -462,8 +462,9 @@ windows/
   命名从简（手打友好）：`MAC-OPENCODE-TASK.md` / `回传-给Windows-*.txt` 旧名弃用。
   命名语义 = 单槽：`TASK.md`/`REPLY.md` 覆盖即最新；历史留档移入 `归档\`（加日期），正式档案以本文件为准。
   宏观协议（流程/基准/禁 force/命名）见 root `AGENTS.md`「跨端协作」节——全仓记忆、两端同读；与本节互指。
-- Windows 仓库策略：**方案 B**——移植期先留 `windows/` 于主仓库，B/C 完成后用 `git subtree split -P windows`
-  拆成独立仓库 `elta-windows`（保留历史）。
+- Windows 仓库策略：**已决策（ADR 0004）：条件化暂缓拆分**——暂留 `windows/` 于主仓库；满足触发条件
+  （独立权限/协作者、CI·发布互扰、历史难维护）后再用 `git subtree split -P windows` 拆成 `elta-windows`。
+  详见 `docs/adr/0004-windows-repo-split.md`。
 - 运行期验证需 A 机手测（CI 只做编译级）。
 - **回传**（2026-10-02）：本地全部未推送 commit 已打包到 U 盘
   U 盘 `ELTA-Windows-B3\elta-main-incremental-2026-10-02.bundle`（`git bundle verify` 通过；清单见同目录 `commits.txt`）；
