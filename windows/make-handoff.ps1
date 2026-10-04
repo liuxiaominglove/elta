@@ -68,6 +68,7 @@ try {
 7. 可选：sh windows/test-core.sh  （期望全部通过；当前基线 Core=406，需 .NET 8 SDK）
 8. 回执：写 REPLY.md 放回 U 盘根目录（单槽：覆盖即最新；如需留档，覆盖前把旧版移入 归档\ 并加日期）。
    Windows 端 opencode 会读取；U 盘上的验收/证据（验收*-证据\）等历史文件亦可参考。
+9. 如 U 盘根目录存在 REPORT.md（Windows→Mac 结果/异常报告，按需生成），请阅读并按其行动项处理。
 
 ## 长期记忆同步（请代为持久化一次）
 - 本协作的长期约定：合并后见 repo root `AGENTS.md`「跨端协作」节 + `windows/NOTES.md`「交接约定」。

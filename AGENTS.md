@@ -42,8 +42,9 @@ Key modules: `AppDelegate` (lifecycle + hotkey registration), `StatusBarControll
 - 两台机器各跑 opencode 代用户操作；用户人工中转 U 盘（文件总线）。
 - 流程：Windows 端 `windows/make-handoff.ps1` 生成 bundle + `elta-commits-*.txt` + `TASK.md`（机器可读任务）
   → Mac opencode 按任务执行（pull bundle → push → 核验）→ 写 `REPLY.md`（回执；单文件覆盖，内容含日期/版本）放回 U 盘 → Windows opencode 读取。
+- 结果/异常报告（Windows→Mac，按需）：`REPORT.md`——仅在需要 Mac 行动（失败补丁/确认收尾）时生成；常规结果入仓库文档。
   命名从简（用户手打友好）：旧名 `MAC-OPENCODE-TASK.md` / `回传-给Windows-*.txt` 已弃用。
-- 命名语义 = 单槽：`TASK.md` / `REPLY.md` 每次覆盖即最新快照；历史留档靠 `归档\`（覆盖前移入、加日期），
+- 命名语义 = 单槽：`TASK.md` / `REPLY.md` / `REPORT.md` 每次覆盖即最新快照；历史留档靠 `归档\`（覆盖前移入、加日期），
   正式档案以本仓库文档为准（`windows/NOTES.md`），U 盘只是文件总线而非档案馆。
 - 每次 `TASK.md` 附「长期记忆同步」段：Mac opencode 据此把协议持久化到**它本机**（全局规则/记忆库），
   实现两端各自"记得住"（跨机器无法直接写对方本机记忆，故用指令代传）。

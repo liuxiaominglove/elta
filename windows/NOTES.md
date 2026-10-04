@@ -444,13 +444,22 @@ windows/
 - Vercel 部署失败已修（`website/vercel.json` 悬空 `api/admin.js`）；但 `elta-seven.vercel.app` 国内 **DNS 污染** → 仅海外备用。
 - ⏭ 后续：Windows 每次发版，需 bump 官网 Windows 版本号（与 mac 现行做法一致）。
 
+#### v1.0.0 真机全量冒烟（回应 Mac 回执行动项①）✅（2026-10-04 晚）
+- **已发布物全链路**：直链下载 72,696,804B → SHA256 与官方 `.sha256` **一致** → 解压（FileVersion=1.0.0.0，
+  ProductVersion=1.0.0+5fe6a98）→ `--selftest` **6/6** → 真实翻译 E2E（UIA len=83 → Success 1729ms → 通知）；WER 零新增。
+- **本地源**（cca6626）：`pack-release-windows.ps1 -Flavor single -ExpectedVersion 1.0.0` → 新闸机通过、
+  selftest=True、launch=1129ms、translate=True、exit 0。
+- 结论：**v1.0.0 收尾（无需 win-v1.0.1）**；结果报告见 U 盘 `REPORT.md`（新槽位，见交接约定）。
+- 流程补强：`RELEASE-WINDOWS-PLAN.md` 增「发版检查单」（tag 前本机全量冒烟为强制项；本次为演练）。
+
 ## 待办 / 风险
 
 - 方法论（2026-10-04）：验收/交互验证**默认自动化**（先做能力对照 → 逐项裁决）；清单里的"人点"不构成约束。
   本机能力清单见 windows/AGENTS.md「验证默认自动化」；事故与全自动复验见 U 盘 `回传-验收-6080e55`。
 - 交接约定（2026-10-04）：**两端操作者均为 opencode**（各自机器上代用户执行，用户转达）；交接物须同时提供
   机器可读任务文件——`make-handoff.ps1` 自动生成 `TASK.md`（动态 head/清单/核验步骤），供 Mac opencode 直接执行；
-  Mac 回执统一 `REPLY.md`（单文件覆盖，内容含日期/版本），供 Windows opencode 读取。
+  Mac 回执统一 `REPLY.md`（单文件覆盖，内容含日期/版本），供 Windows opencode 读取；
+  结果/异常报告（按需）：`REPORT.md`（Windows→Mac；仅在需要 Mac 行动时生成）。
   命名从简（手打友好）：`MAC-OPENCODE-TASK.md` / `回传-给Windows-*.txt` 旧名弃用。
   命名语义 = 单槽：`TASK.md`/`REPLY.md` 覆盖即最新；历史留档移入 `归档\`（加日期），正式档案以本文件为准。
   宏观协议（流程/基准/禁 force/命名）见 root `AGENTS.md`「跨端协作」节——全仓记忆、两端同读；与本节互指。
