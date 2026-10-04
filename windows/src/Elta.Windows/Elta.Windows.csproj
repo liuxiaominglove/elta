@@ -16,6 +16,7 @@
     <RootNamespace>Elta.Windows</RootNamespace>
     <AssemblyName>Elta.Windows</AssemblyName>
     <Version>5.5.5</Version>
+    <ApplicationIcon>assets\elta.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <StartupObject>Elta.Windows.Program</StartupObject>
   </PropertyGroup>
@@ -24,6 +25,10 @@
     <ProjectReference Include="..\Elta.Core\Elta.Core.csproj" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="assets\elta.ico" />
   </ItemGroup>
 
 </Project>

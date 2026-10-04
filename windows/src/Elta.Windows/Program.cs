@@ -28,6 +28,19 @@ namespace Elta.Windows
         private static bool TryEnterBusy() => Interlocked.CompareExchange(ref _busy, 1, 0) == 0;
         private static void ExitBusy() => Interlocked.Exchange(ref _busy, 0);
 
+        /// <summary>托盘图标：嵌入的 assets/elta.ico（application icon 同源）；失败回退系统默认图标。</summary>
+        private static Icon LoadTrayIcon()
+        {
+            try
+            {
+                using Stream? s = typeof(Program).Assembly
+                    .GetManifestResourceStream("Elta.Windows.assets.elta.ico");
+                if (s is not null) return new Icon(s, Forms.SystemInformation.SmallIconSize);
+            }
+            catch { }
+            return SystemIcons.Application;
+        }
+
         // C1：翻译服务 + 结果窗口（设置实例在 Main 装配后赋给静态字段）
         private static SettingsManager? _settings;
         private static readonly TranslationService Translation = new();
@@ -186,7 +199,7 @@ namespace Elta.Windows
 
             var tray = new Forms.NotifyIcon
             {
-                Icon = SystemIcons.Application,
+                Icon = LoadTrayIcon(),
                 Text = "ELTA — 截图即译，精读利器",
                 Visible = true,
                 ContextMenuStrip = menu,
