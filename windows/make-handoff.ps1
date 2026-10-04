@@ -42,7 +42,8 @@ try {
 用户已授权本次 push。请代用户执行并逐步核验；遇到冲突/非快进/任何不确定，停下并向用户报告，禁止强推。
 
 ## 背景
-- 本包 = origin/main（$baseHead）之上的 $count 个 commit，由 Windows 端 opencode 生成。
+- **本协作两端均由 opencode 代用户操作**：Windows 端 opencode 生成此包；你（Mac 端 opencode）负责合入并推送。
+- 本包 = origin/main（$baseHead）之上的 $count 个 commit。
 - bundle：本目录 elta-main-incremental-$Date.bundle（生成时经 SHA256 校验写入）。
 - 人类可读版：同目录 HANDOFF.txt；仓库正式交接记录：windows/NOTES.md。
 
@@ -54,7 +55,8 @@ try {
 5. git push origin main        # 禁止 force
 6. 推后核验：git rev-list --count origin/main..main 应为 0
 7. 可选：sh windows/test-core.sh  （期望全部通过；当前基线 Core=406，需 .NET 8 SDK）
-8. 读取 U 盘上的验收/回传文件（回传-*.txt、验收*-证据）；有跟进意见写 回传-给Windows-<日期>.txt 放回 U 盘或向用户口述
+8. 读取 U 盘上的验收/回传文件（回传-*.txt、验收*-证据）；有跟进意见写 回传-给Windows-<日期>.txt 放回 U 盘
+   （Windows 端 opencode 会读取你的回传文件，与你同体系协作）
 
 ## 本次 commit 清单（$count 个）
 $commitList
