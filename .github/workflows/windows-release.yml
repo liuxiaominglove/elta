@@ -1,0 +1,56 @@
+name: Windows Release
+
+# 形态 A：独立发布通道（与 macOS 的 v* 解耦，避免撞名）
+# - 触发：push tag `win-v*`（如 win-v5.5.5）；或手动 workflow_dispatch 试跑
+# - 版本闸机：tag 版本 == Elta.Windows.csproj <Version>（打包脚本内另校验 csproj == Info.plist）
+# - 产物：windows/dist/ELTA-Windows-vX.Y.Z-win-x64-single.zip + .sha256，挂到对应 GitHub Release
+# - CI 跳过需 GUI/API Key 的翻译冒烟（-SkipSmoke）；"发布前真机门禁"保留在本机
+
+on:
+  push:
+    tags:
+      - 'win-v*'
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Assert tag version == csproj Version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"                 # e.g. win-v5.5.5
+          $ver = $tag -replace '^win-v', ''
+          [xml]$p = Get-Content windows/src/Elta.Windows/Elta.Windows.csproj
+          $cs = ($p.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1)
+          Write-Host "tag=$ver  csproj=$cs"
+          if ($ver -ne $cs) {
+            Write-Error "版本不一致：tag=$ver  csproj=$cs（请先同步版本再打 tag）"
+            exit 1
+          }
+
+      - name: Pack (single, CI=SkipSmoke)
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File windows/pack-release-windows.ps1 -Flavor single -SkipSmoke
+
+      - name: Upload to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            windows/dist/*.zip
+            windows/dist/*.sha256
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
