@@ -11,7 +11,7 @@
 # ============================================
 set -euo pipefail
 
-SERVER="root@106.53.167.38"
+SERVER="root@154.8.214.80"
 DIR="/var/www/elta-api"
 PORT="8787"
 LOCAL_DIR="$(cd "$(dirname "$0")" && pwd)"

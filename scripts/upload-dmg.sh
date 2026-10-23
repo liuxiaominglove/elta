@@ -5,7 +5,7 @@ set -e
 # 用法: ./scripts/upload-dmg.sh build/ELTA.v5.2.1.dmg
 # ============================================
 
-SERVER="root@106.53.167.38"
+SERVER="root@154.8.214.80"
 DIR="/var/www/elta-downloads"
 
 DMG="$1"

@@ -114,19 +114,20 @@ ELTA 的选择：当 AX API 契约明确承诺返回类型时，用 `as!` 最简
 > 3. 两个站随后**自动更新**，无需手动操作：
 >    - Vercel 备用站（`elta-seven.vercel.app`）：GitHub main 自动部署
 >    - 腾讯云主站（`autoelta.com`）：服务器 cron ≤5 分钟自动同步
-> 4. 若 push 后 >5 分钟主站还没更新，手动兜底：`ssh root@106.53.167.38 '/root/update-elta-website.sh'`
+> 4. 若 push 后 >5 分钟主站还没更新，手动兜底：`ssh root@154.8.214.80 '/root/update-elta-website.sh'`
 
 官网是**两套独立部署**，`git push` 触发 Vercel 备用站自动部署，腾讯云主站由**服务器 cron 每 5 分钟自动同步**（见下），**改完 `website/` 后 `git push` 即可，无需手动部署**。
 
 | 项目 | 平台 | 地址 | 更新方式 |
 |------|------|------|---------|
-| **主站** | 腾讯云服务器（nginx） | `autoelta.com`（IP `106.53.167.38`，SSH 用户 `root`，密钥已配置 `~/.ssh/id_ed25519`） | 服务器 cron 自动同步（≤5 分钟延迟） |
+| **主站** | 腾讯云服务器（nginx） | `autoelta.com`（IP `154.8.214.80`，SSH 用户 `root`，密钥已配置 `~/.ssh/id_ed25519`） | 服务器 cron 自动同步（≤5 分钟延迟） |
 | 备用 | Vercel | `elta-seven.vercel.app` | 从 GitHub `main` 自动部署 |
 
 - **DNS**：DNSPod，当前域名指向腾讯云（未切 Vercel）。
 - **策略**：腾讯云为主站，Vercel 备用。备案风险：Vercel 是海外服务商，切过去可能被抽查注销备案，故**保持腾讯云为主站**。
 - **Windows 发布通道（形态 A，独立）**（2026-10-04）：tag `win-vX.Y.Z` → `.github/workflows/windows-release.yml` 建**独立 Release**（zip + sha256）。Windows 版本**独立于 mac**（mac 冻结 5.5.5；Windows 自 **1.0.0** 起），版本闸机 = tag 版本 == `windows/src/Elta.Windows/Elta.Windows.csproj <Version>`（`ReleaseGate` 校验，不再比 mac `Info.plist`）。
 - **Vercel**（2026-10-04）：构建曾因 `website/vercel.json` 引用已删除的 `api/admin.js`（`functions`）**每次部署失败**，已改现代静态配置修复。⚠️ `elta-seven.vercel.app` 在国内被 **DNS 污染**（解析到境外 IP）→ **无 VPN 不可达**，仅供海外/备用；**国内入口一律 `autoelta.com`**（主站，含 Windows 下载）。
+- **主站迁移（2026-10-23）**：老机（广州 `106.53.167.38`，入门型 35 元/月，续费 357 元/年无折扣）→ 新机（北京 `154.8.214.80`，2核2G/4M/50G，同价续费档 99 元/年，到期 2027-10-23）。迁移件（站点/api/nginx/证书/脚本/crontab）打包还原，DNS A 记录（`@`/`www`，TTL 600）已切；老机留作回滚至 10-29 到期。**新环境依赖 `python3-certbot-nginx`**（仅装 `certbot` 本体时续期会报 "nginx plugin not installed"）。顺手修复：老机 `certbot-renew.timer` 一直 disabled（证书 11-05 就要过期），新机已 `enable --now`。迁移包留在本地 `build/migrate-20261022/`（gitignored，含 TLS 私钥，勿外传）。
 
 ### 主站自动同步（服务器 cron）
 
@@ -140,10 +141,10 @@ ELTA 的选择：当 AX API 契约明确承诺返回类型时，用 `as!` 最简
 ### 手动更新主站（兜底，一般用不到）
 
 ```bash
-ssh root@106.53.167.38 '/root/update-elta-website.sh'
+ssh root@154.8.214.80 '/root/update-elta-website.sh'
 ```
 
-回滚：`ssh root@106.53.167.38 '/root/rollback-elta-website.sh'`（交互式选备份）
+回滚：`ssh root@154.8.214.80 '/root/rollback-elta-website.sh'`（交互式选备份）
 
 ### 服务器关键路径
 
