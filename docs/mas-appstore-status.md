@@ -21,20 +21,24 @@
 - Keychain：MAS 使用独立 service `com.elta.snaptranslate.mas`。
 - 安全/商店策略：MAS 版关闭更新检查与匿名统计；代码中无 AX/CGEventTap 依赖。
 - 旧版处理：原 `/Applications/ELTA.app` 已卸载并备份为 zip；当前 `/Applications/ELTA.app` 为 MAS 测试版。
+- 公司域名邮箱：`admin@autoelta.com` / `support@autoelta.com` 已通过 ImprovMX 转发到个人邮箱；DNSPod 的 MX/SPF 已生效，ImprovMX 显示 Forwarding 绿色，权威/公共 DNS 已确认；两个地址分别发信测试均收到。
+- 公司 Apple ID：`admin@autoelta.com` 已创建并开启双重认证；已在 iPhone 登录公司账号。
+- D-U-N-S：2026-10-24 已通过 Apple 页面提交申请，状态“处理中”；等待 D&B 确认邮件/9 位编号，再等 Apple 同步。
+- 网站公司主体/隐私页：已更新 `website/privacy.html` 与各页脚，加入公司法定名称、`support@autoelta.com`、App Store 版本差异说明；移除个人 QQ 邮箱；`sw.js` 缓存版本 bump 到 v4。尚未部署。
 
 ### 当前阻塞
 
 - 公司 Apple Developer Organization 账号尚未申请/批准；无 Team ID。
 - 无公司 Apple Distribution 证书、无 Mac Installer Distribution 证书、无 Mac App Store provisioning profile。
 - 无 App Store Connect App 记录；`com.elta.app.mas` 在公司账号下的可用性未确认。
-- 公司无 D-U-N-S（待确认；公司 2026-10-09 成立，可能尚未被收录，是当前关键路径）。
-- 域名 `autoelta.com` 为个人注册，ICP 备案为个人；无公司域名邮箱；个人到公司的 IP 授权尚未签署。
+- D-U-N-S 申请已提交，正在处理中；尚未拿到 9 位编号，Apple 也尚未同步。公司 2026-10-09 成立，D&B 可能还需要电话/邮件核验，是当前关键路径。
+- 域名 `autoelta.com` 为个人注册，ICP 备案为个人；公司邮箱已配置；网站隐私页/页脚已改为公司主体/公司邮箱，待部署；个人到公司的 IP 授权尚未签署。
 - ELTA 商标正式检索/申请尚未完成；中国区 App Store 暂无同名 App，但海外存在 ELTA TV（ELTA d.o.o.）等使用。
 - App Review 所需的 BYOK 临时测试 Key 尚未准备。
 
 ### 未开始/待确认
 
-- 公司 Apple ID、公司邮箱、公司网站主体信息。
+- 网站主体已改，待部署/核对；D-U-N-S 编号/Apple 同步。
 - Free Apps Agreement；App Store Connect 隐私/支持 URL、截图、分类、版权。
 - `build-mas.sh` 显式指定公司 Team/证书/profile；`.pkg` 打包与上传 TestFlight。
 - 公司签名后 TCC/Keychain 会变化：测试机需重新授权屏幕录制、重新填 API Key。
@@ -52,13 +56,26 @@
 
 ### A. 现在（关键路径，不依赖代码）
 
-1. 查公司是否已有 D-U-N-S；没有就官方免费申请。准备营业执照、公司中英文名、地址、电话、公司邮箱、网站、经营范围。
-2. 准备公司 Apple ID（建议公司邮箱 + 双重认证）。
-3. 申请 Apple Developer Program Organization 账号（$99/年），等 Apple 审核。
+1. D-U-N-S 已于 2026-10-24 提交，等 D&B 确认邮件/电话核验；准备营业执照、公章、联系人信息。5 个工作日无消息查 QQ 垃圾箱/ImprovMX Logs；超过 2 周催 D&B。
+2. 公司 Apple ID 已完成：`admin@autoelta.com`、2FA、iPhone 登录。
+3. D-U-N-S 同步后，在 Apple Developer 提交 Organization 报名（$99/年），等 Apple 审核。
 4. 做 ELTA 商标正式检索（CNIPA + WIPO/USPTO/EUIPO，9/42/41 类）；以公司名义申请。
 5. 签个人到公司的 IP 授权/转让（品牌、域名、网站内容；代码为 ISC 许可，公司可使用/分发）。
-6. 开 `admin@autoelta.com` / `support@autoelta.com` 转发；更新网站隐私页/页脚公司主体。
-7. 接受 Free Apps Agreement（免费模式）。
+6. 公司邮箱已完成；网站隐私页/页脚公司主体已改，待部署。
+7. 拿到 Organization 账号后接受 Free Apps Agreement（免费模式）。
+
+### A2. 等 D-U-N-S 期间可以做的事
+
+1. 更新网站：`website/privacy.html` + 页脚加公司法定名称、`support@autoelta.com`、DeepSeek 处理说明、最后更新日期；保持 ICP 不变（已完成，待部署）。
+2. 签个人到公司的 IP 授权/转让（ELTA 名称/logo、`autoelta.com`、网站内容；代码 ISC 许可）。
+3. ELTA 商标正式检索并尽早以公司名义申请（9/42/41 类）；注册前用 `™`。
+4. 准备 App Store 素材：应用名、副标题、描述、关键词、分类、支持/隐私 URL、版权、截图。
+5. 准备 Review Notes：BYOK、临时测试 Key 计划、截图/Services 说明、无统计/追踪。
+6. 改 `build-mas.sh`：支持显式 `MAS_SIGN_IDENTITY`/`MAS_TEAM_ID`/`MAS_PROVISIONING_PROFILE`；准备 `.pkg` 签名流程。
+7. 把 `Info-MAS.plist` 的 `NSHumanReadableCopyright` 改为公司名。
+8. D&B 跟进：白名单 D&B/Apple 邮件，设置 5 个工作日提醒；准备电话回答（员工 1、主营软件/电商、公司类型有限责任公司）。
+9. 可选：把 ImprovMX 转发升级为真实公司邮箱（Zoho/腾讯企业邮箱）；不影响当前报名。
+10. 域名/ICP 迁移只做方案，不执行；等 MAS 上线后再动。
 
 ### B. 公司账号批准后
 
@@ -95,8 +112,8 @@
 
 ## 公司邮箱/隐私页修改清单
 
-- 开通 `admin@autoelta.com`（Apple/D-U-N-S 用）和 `support@autoelta.com`（用户/App Store 支持用），可先做邮件转发。
-- 当前 `website/privacy.html` 的联系方式是个人 QQ 邮箱，页脚没有公司主体；需要替换。
+- 已完成：`admin@autoelta.com`（Apple/D-U-N-S 用）和 `support@autoelta.com`（用户/App Store 支持用）通过 ImprovMX 转发到个人邮箱；DNSPod MX/SPF 已生效。
+- 当前 `website/privacy.html` 的联系方式仍是个人 QQ 邮箱，页脚没有公司主体；需要替换。
 - 更新 `website/privacy.html`：公司法定名称、公司邮箱、DeepSeek 处理选中文本、本地 OCR、Keychain、无统计/追踪、最后更新日期。
 - 更新网站页脚：公司名称、联系邮箱、版权。
 - App Store Connect：支持 URL `https://autoelta.com`，隐私政策 URL `https://autoelta.com/privacy`。

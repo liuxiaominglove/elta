@@ -31,7 +31,7 @@ Key modules: `AppDelegate` (lifecycle + hotkey registration), `StatusBarControll
 - MAS 走公司 Organization 账号（阜城县笑语电子商务有限公司）；官网直发暂留个人账号；不要用 Enterprise Program。
 - Bundle ID `com.elta.app.mas`；构建 `./build-mas.sh`；`NSServices` 必须含 `NSRequiredContext` 空字典，否则服务菜单不显示。
 - 当前测试版 `/Applications/ELTA.app` 用个人 Apple Development 签名；正式 MAS 必须换公司 Apple Distribution + Mac App Store profile。
-- 当前阻塞：公司账号未批、无 Team ID、无 Apple Distribution/MAS profile；下一步 D-U-N-S + Organization。
+- 当前阻塞：D-U-N-S 已提交（2026-10-24）等编号/Apple 同步；公司 Organization 未批、无 Team ID/Apple Distribution/MAS profile。公司 Apple ID 已建（`admin@autoelta.com`，2FA）。
 - `autoelta.com` 个人持有、ICP 个人；短期书面授权 + 公司邮箱，MAS 上线后再转域名/ICP；ELTA 商标以公司名义正式检索/申请。
 - 不要混用个人/公司证书、Team、profile；换 Team 后 TCC/Keychain 需重新授权。
 
