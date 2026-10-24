@@ -37,12 +37,18 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
     var isPanelVisible: Bool { panel != nil }
 
     private var webView: WKWebView?
+#if MAS
+    private var escLocalMonitor: Any?
+    private var toggleLocalMonitor: Any?
+    private var splitLocalMonitor: Any?
+#else
     private var escEventTap: CFMachPort?
     private var escRunLoopSource: CFRunLoopSource?
     private var togglePanelTap: CFMachPort?
     private var togglePanelRunLoopSource: CFRunLoopSource?
     private var splitTap: CFMachPort?
     private var splitRunLoopSource: CFRunLoopSource?
+#endif
     private var splitControl: NSSegmentedControl?
     private var fontMinusButton: NSButton?
     private var fontPlusButton: NSButton?
@@ -50,6 +56,20 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
     private var currentOriginalText = ""
     private var isSplitMode = false
 
+#if MAS
+    /// App Sandbox：用应用内本地键盘监听替代 CGEventTap
+    private func installLocalKeyMonitor(keyCode: Int,
+                                        modifiers: Int,
+                                        handler: @escaping () -> Void) -> Any? {
+        return NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard Int(event.keyCode) == keyCode else { return event }
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            guard cocoaToCarbonModifiers(flags) == modifiers else { return event }
+            handler()
+            return nil
+        }
+    }
+#else
     /// 共享 CGEventTap 创建与安装逻辑，消除 installEscTap / installToggleTap 的重复代码
     private func createAndInstallTap(
         callback: @escaping CGEventTapCallBack,
@@ -73,8 +93,19 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
         logi("\(tag) tap: 已安装")
         return (tap, runLoopSource)
     }
+#endif
 
     private func installEscTap() {
+#if MAS
+        guard escLocalMonitor == nil else { return }
+        escLocalMonitor = installLocalKeyMonitor(
+            keyCode: Int(SettingsManager.shared.closePanelHotkeyKeyCode),
+            modifiers: SettingsManager.shared.closePanelHotkeyModifiers
+        ) { [weak self] in
+            self?.panel?.close()
+        }
+        logi("ESC local monitor: 已安装")
+#else
         guard escEventTap == nil else { return }
         let callback: CGEventTapCallBack = { (proxy, type, event, info) -> Unmanaged<CGEvent>? in
             guard let info = info else { return Unmanaged.passUnretained(event) }
@@ -100,10 +131,17 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
         let (tap, source) = createAndInstallTap(callback: callback, tag: "ESC")
         escEventTap = tap
         escRunLoopSource = source
+#endif
     }
 
-    /// 移除全局 ESC 事件拦截
+    /// 移除 ESC 事件拦截
     private func removeEscTap() {
+#if MAS
+        guard let monitor = escLocalMonitor else { return }
+        NSEvent.removeMonitor(monitor)
+        escLocalMonitor = nil
+        logi("ESC local monitor: 已移除")
+#else
         guard let tap = escEventTap else { return }
         CGEvent.tapEnable(tap: tap, enable: false)
         if let source = escRunLoopSource {
@@ -112,6 +150,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
         escEventTap = nil
         escRunLoopSource = nil
         logi("ESC tap: 已移除")
+#endif
     }
 
     private func togglePanelPosition() {
@@ -134,6 +173,16 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
     }
 
     private func installToggleTap() {
+#if MAS
+        guard toggleLocalMonitor == nil else { return }
+        toggleLocalMonitor = installLocalKeyMonitor(
+            keyCode: Int(SettingsManager.shared.togglePanelHotkeyKeyCode),
+            modifiers: SettingsManager.shared.togglePanelHotkeyModifiers
+        ) { [weak self] in
+            self?.togglePanelPosition()
+        }
+        logi("TogglePanel local monitor: 已安装")
+#else
         guard togglePanelTap == nil else { return }
         let callback: CGEventTapCallBack = { (proxy, type, event, info) -> Unmanaged<CGEvent>? in
             guard let info = info else { return Unmanaged.passUnretained(event) }
@@ -159,9 +208,16 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
         let (tap, source) = createAndInstallTap(callback: callback, tag: "TogglePanel")
         togglePanelTap = tap
         togglePanelRunLoopSource = source
+#endif
     }
 
     private func removeToggleTap() {
+#if MAS
+        guard let monitor = toggleLocalMonitor else { return }
+        NSEvent.removeMonitor(monitor)
+        toggleLocalMonitor = nil
+        logi("TogglePanel local monitor: 已移除")
+#else
         guard let tap = togglePanelTap else { return }
         CGEvent.tapEnable(tap: tap, enable: false)
         if let source = togglePanelRunLoopSource {
@@ -170,10 +226,21 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
         togglePanelTap = nil
         togglePanelRunLoopSource = nil
         logi("TogglePanel tap: 已移除")
+#endif
     }
 
     /// 拆分翻译快捷键（面板可见时生效，默认 ⌃D）
     private func installSplitTap() {
+#if MAS
+        guard splitLocalMonitor == nil else { return }
+        splitLocalMonitor = installLocalKeyMonitor(
+            keyCode: Int(SettingsManager.shared.splitHotkeyKeyCode),
+            modifiers: SettingsManager.shared.splitHotkeyModifiers
+        ) { [weak self] in
+            self?.toggleSplitMode()
+        }
+        logi("SplitMode local monitor: 已安装")
+#else
         guard splitTap == nil else { return }
         let callback: CGEventTapCallBack = { (proxy, type, event, info) -> Unmanaged<CGEvent>? in
             guard let info = info else { return Unmanaged.passUnretained(event) }
@@ -199,9 +266,16 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
         let (tap, source) = createAndInstallTap(callback: callback, tag: "SplitMode")
         splitTap = tap
         splitRunLoopSource = source
+#endif
     }
 
     private func removeSplitTap() {
+#if MAS
+        guard let monitor = splitLocalMonitor else { return }
+        NSEvent.removeMonitor(monitor)
+        splitLocalMonitor = nil
+        logi("SplitMode local monitor: 已移除")
+#else
         guard let tap = splitTap else { return }
         CGEvent.tapEnable(tap: tap, enable: false)
         if let source = splitRunLoopSource {
@@ -210,6 +284,7 @@ final class ResultWindowController: NSObject, NSWindowDelegate {
         splitTap = nil
         splitRunLoopSource = nil
         logi("SplitMode tap: 已移除")
+#endif
     }
 
     /// 切换「整段 / 拆分」显示（供按钮与快捷键共用）

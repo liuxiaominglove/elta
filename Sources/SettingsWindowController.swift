@@ -229,7 +229,8 @@ final class SettingsWindowController: NSObject {
         card.frame.size.height = max(card.frame.height, scrollView.contentSize.height)
         scrollView.documentView = card
 
-        // 匿名使用统计开关
+#if !MAS
+        // 匿名使用统计开关（App Store 版不收集任何统计）
         let telemetryCheck = NSButton(checkboxWithTitle: "参与匿名使用统计", target: self, action: #selector(telemetryToggled(_:)))
         telemetryCheck.state = SettingsManager.shared.telemetryEnabled ? .on : .off
         telemetryCheck.frame = NSRect(x: 4, y: 22, width: 220, height: 20)
@@ -241,13 +242,16 @@ final class SettingsWindowController: NSObject {
         telemetryHint.font = .systemFont(ofSize: 10)
         telemetryHint.textColor = .secondaryLabelColor
         v.addSubview(telemetryHint)
+#endif
 
         return v
     }
 
+#if !MAS
     @objc private func telemetryToggled(_ sender: NSButton) {
         SettingsManager.shared.telemetryEnabled = (sender.state == .on)
     }
+#endif
 
     /// 计算通用标签页卡片内各控件的 y 坐标（非翻转坐标系，y 向上）。
     /// 模型下拉框与 API Key 输入框按给定的底边 y 摆放，标题自动跟随、测试按钮随 API Key 移动。

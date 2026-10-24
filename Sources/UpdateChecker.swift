@@ -1,6 +1,7 @@
 import Cocoa
 import Foundation
 
+#if !MAS
 final class UpdateChecker {
     static let shared = UpdateChecker()
 
@@ -142,3 +143,4 @@ final class UpdateChecker {
         }
     }
 }
+#endif

@@ -4,7 +4,9 @@ import WebKit
 import Vision
 import UserNotifications
 import Security
+#if !MAS
 import ApplicationServices
+#endif
 
 // ============================================
 // ELTA — 英语精读截图翻译助手

@@ -463,14 +463,20 @@ final class SettingsManager {
     /// 是否参与匿名使用统计（默认开启；关闭时更新检查不再附带 installID）。
     var telemetryEnabled: Bool {
         get {
+#if MAS
+            return false
+#else
             lock.lock(); defer { lock.unlock() }
             if defaults.object(forKey: Keys.telemetryEnabled) == nil { return true }
             return defaults.bool(forKey: Keys.telemetryEnabled)
+#endif
         }
         set {
+#if !MAS
             lock.lock()
             defaults.set(newValue, forKey: Keys.telemetryEnabled)
             lock.unlock()
+#endif
         }
     }
 }

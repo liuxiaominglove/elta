@@ -1,7 +1,24 @@
 import Cocoa
 import Carbon
 import Security
+#if !MAS
 import ApplicationServices
+#endif
+
+/// 读取剪贴板文本：兼容现代 public.utf8-plain-text 与旧式 NSStringPboardType / public.plain-text
+func readPasteboardText(_ pboard: NSPasteboard) -> String? {
+    let types: [NSPasteboard.PasteboardType] = [
+        .string,
+        NSPasteboard.PasteboardType("public.plain-text"),
+        NSPasteboard.PasteboardType("NSStringPboardType")
+    ]
+    for type in types {
+        if let text = pboard.string(forType: type), !text.isEmpty {
+            return text
+        }
+    }
+    return nil
+}
 
 // MARK: - 可粘贴输入框（修复 .accessory 应用缺少 Edit 菜单导致 Cmd+V 无效）
 
@@ -146,7 +163,12 @@ enum TextNormalizer {
 
 struct KeychainHelper {
     // 供测试覆盖的接缝：run_tests.sh 会改成 .test 服务以隔离真实 Keychain；生产代码从不重新赋值
+#if MAS
+    // MAS 渠道独立 Keychain 空间：避免命中官网版条目触发授权弹窗，也符合渠道不互通
+    static var service = "com.elta.snaptranslate.mas"
+#else
     static var service = "com.elta.snaptranslate"
+#endif
 
     static func save(key: String, account: String) -> Bool {
         let valueData = key.data(using: .utf8) ?? Data()

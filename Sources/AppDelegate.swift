@@ -10,10 +10,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var eventHandlerRef: EventHandlerRef?
     private let settings = SettingsManager.shared
 
+#if MAS
+    /// Services provider 必须在应用完成启动前注册，否则服务菜单可能不出现
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSApp.servicesProvider = self
+    }
+#endif
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+#if MAS
+        // App Store 版：无 Dock 图标，常驻菜单栏 + Services
+        if terminateIfAlreadyRunning() { return }
+        NSApp.setActivationPolicy(.accessory)
+        NSUpdateDynamicServices()
+#else
         // 常规应用模式：有 Dock 图标 + 顶部菜单栏（退出通道可靠）
         NSApp.setActivationPolicy(.regular)
         buildMainMenu()
+#endif
 
         // 注册通知
         _ = NotificationManager.shared
@@ -28,16 +42,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if settings.activeApiKey?.isEmpty ?? true {
             logi("首次运行，API Key 未配置")
         }
+#if MAS
+        // 仅在未配置 Key 时展示设置；已配置则静默驻留菜单栏
+        if settings.activeApiKey?.isEmpty ?? true {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                NSApp.activate(ignoringOtherApps: true)
+                SettingsWindowController.shared.show()
+            }
+        }
+#else
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             NSApp.activate(ignoringOtherApps: true)
             SettingsWindowController.shared.show()
         }
+#endif
 
         logi("\(APP_DISPLAY_NAME) 就绪 — Cmd+T 截图翻译 | Shift+Cmd+T 划词翻译 | 点击菜单栏 📖 操作")
 
-        // 后台检查更新
+#if !MAS
+        // 后台检查更新（App Store 版由商店负责更新）
         UpdateChecker.shared.check()
+#endif
     }
+
+#if MAS
+    /// 禁止重复实例：Services 调用若误启动第二个实例，直接回到已有实例
+    private func terminateIfAlreadyRunning() -> Bool {
+        guard let bundleID = Bundle.main.bundleIdentifier else { return false }
+        let myPID = ProcessInfo.processInfo.processIdentifier
+        guard let other = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+            .first(where: { $0.processIdentifier != myPID }) else {
+            return false
+        }
+        logi("检测到已有实例（pid=\(other.processIdentifier)），退出新实例")
+        other.activate(options: [.activateIgnoringOtherApps])
+        NSApp.terminate(nil)
+        return true
+    }
+#endif
 
     /// 构建顶部菜单栏 App 菜单（含「退出」），确保常规退出通道可用
     private func buildMainMenu() {
@@ -185,6 +227,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func openSettings() {
         SettingsWindowController.shared.show()
     }
+
+#if MAS
+    /// macOS Services 入口：右键 → 服务 → 用 ELTA 翻译
+    /// 方法签名固定为 translateSelection:userData:error:
+    @objc func translateSelection(_ pboard: NSPasteboard,
+                                  userData: String,
+                                  error: AutoreleasingUnsafeMutablePointer<NSString?>) {
+        guard let text = readPasteboardText(pboard),
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            error.pointee = "未获取到可翻译文本" as NSString
+            return
+        }
+        logi("Services 收到文本: len=\(text.count)")
+        DispatchQueue.main.async {
+            TranslationPipeline.shared.translateIncomingText(text)
+        }
+    }
+#endif
 
     func applicationWillTerminate(_ notification: Notification) {
         ScreenshotEngine.shared.cleanup()

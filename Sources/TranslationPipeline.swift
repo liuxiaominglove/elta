@@ -11,8 +11,12 @@ final class TranslationPipeline {
 
     /// 翻译任务代号：每次新任务 +1，用于 ESC 取消后丢弃旧任务结果
     private var currentTaskGeneration = 0
+#if MAS
+    private var loadingEscMonitor: Any?
+#else
     private var loadingEscTap: CFMachPort?
     private var loadingEscRunLoopSource: CFRunLoopSource?
+#endif
 
     /// 划词翻译触发时，记录前台应用的 PID，用于通过 Accessibility API 读取该应用的选中文本
     var selectionSourcePID: pid_t?
@@ -109,6 +113,7 @@ final class TranslationPipeline {
         }
     }
 
+#if !MAS
     /// 通过 macOS Accessibility API 读取指定应用（或系统全局）当前聚焦元素中的选中文本
     /// - Parameter pid: 目标应用的进程 PID；传 nil 则回退为系统全局聚焦元素（兼容旧逻辑）
     /// 不依赖剪贴板，也不需要模拟 Cmd+C，兼容性更好
@@ -215,6 +220,8 @@ final class TranslationPipeline {
         return "?"
     }
 
+#endif
+
     /// 从 fullText 按 CFRange 截取子串，范围无效时返回 nil
     /// 注意：Accessibility API 的 CFRange 用 UTF-16 代码单元（NSString 语义），
     /// 不能直接用 Swift 的 String.count（grapheme cluster），否则含 emoji/生僻字时偏移错。
@@ -229,6 +236,7 @@ final class TranslationPipeline {
         return selected.isEmpty ? nil : selected
     }
 
+#if !MAS
     /// 引导用户前往系统设置开启辅助功能权限（每次未授权都提示）
     /// 用自定义 NSPanel（非模态）而非 NSAlert.runModal：模态会话无法可靠跨全屏 Space 置前，
     /// 且层级/collectionBehavior 不受 NSAlert 内部行为干扰。
@@ -274,10 +282,15 @@ final class TranslationPipeline {
         accessibilityPromptPanel?.close()
         accessibilityPromptPanel = nil
     }
+#endif
 
     /// 划词翻译：读取选中文本 → 直接翻译（跳过截图+OCR）
     func startTextTranslation() {
         logi("===== 划词翻译流水线开始 =====")
+#if MAS
+        // App Sandbox：不允许 AX / 合成 Cmd+C，走剪贴板（Services 入口直接传文本）
+        startTextTranslationFromPasteboard()
+#else
         // 已有结果弹窗：提示先关闭（结果面板有关闭按钮，提示成立）
         guard !ResultWindowController.shared.isPanelVisible else {
             showAlert("请先关闭上一个翻译弹窗", "关闭后即可开始新翻译。\n按 ESC 或点击弹窗左上角关闭按钮即可。")
@@ -325,19 +338,58 @@ final class TranslationPipeline {
             return
         }
 
+        performTranslation(rawText: rawText, generation: generation, mouseLocation: mouseLocation)
+#endif
+    }
+
+#if MAS
+    /// App Store 版划词入口：从剪贴板读取（用户需先 ⌘C）
+    private func startTextTranslationFromPasteboard() {
+        guard let rawText = readPasteboardText(.general),
+              !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            showError("未能获取选中文本。\n请先选中文字并按 ⌘C 复制，再按快捷键；也可以右键 → 服务 → 用 ELTA 翻译。")
+            return
+        }
+        logi("MAS 从剪贴板读取文本: len=\(rawText.count)")
+        translateIncomingText(rawText)
+    }
+#endif
+
+    /// Services / 剪贴板共用的文本翻译入口（不依赖 AX / 模拟按键）
+    func translateIncomingText(_ rawText: String) {
+        guard !ResultWindowController.shared.isPanelVisible else {
+            showAlert("请先关闭上一个翻译弹窗", "关闭后即可开始新翻译。\n按 ESC 或点击弹窗左上角关闭按钮即可。")
+            return
+        }
+        guard loadingPanel == nil else {
+            logi("翻译任务加载中，忽略本次文本翻译请求")
+            return
+        }
+        guard !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            showError("未能获取选中文本。\n请先选中文字并按 ⌘C 复制，再按快捷键。")
+            return
+        }
+        currentTaskGeneration += 1
+        let generation = currentTaskGeneration
+        performTranslation(rawText: rawText,
+                           generation: generation,
+                           mouseLocation: NSEvent.mouseLocation)
+    }
+
+    /// 文本翻译公共流程：预处理 → 表格检测 → loading → AI 翻译 → 结果弹窗
+    private func performTranslation(rawText: String, generation: Int, mouseLocation: NSPoint) {
         // 预处理：压缩 Apple Books 多行引用块为单行
         let text = TextPreprocessor.condenseCitation(rawText)
 
         logi("划词获取文本: len=\(text.count)")
         showTextLoading()
 
-        // 4. 表格检测：Tab 分隔符（Excel/Sheets）→ Markdown 表格
+        // 表格检测：Tab 分隔符（Excel/Sheets）→ Markdown 表格
         let processedText = TableExtractor.detectAndConvertTabSeparated(text)
         if processedText != text {
             logi("划词翻译: 检测到 Tab 分隔，已转为 Markdown 表格")
         }
 
-        // 5. 直接翻译
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             TranslationEngine.shared.translate(text: processedText) { [weak self] outcome in
                 guard let self = self, generation == self.currentTaskGeneration else { return }
@@ -358,6 +410,7 @@ final class TranslationPipeline {
         }
     }
 
+#if !MAS
     /// Cmd+C + 剪贴板兜底方案
     private func getSelectedTextViaCopyPasteboard() -> String? {
         let pasteboard = NSPasteboard.general
@@ -431,6 +484,7 @@ final class TranslationPipeline {
 
         return selectedText
     }
+#endif
 
     private func showTextLoading() {
         DispatchQueue.main.async { [weak self] in
@@ -494,6 +548,19 @@ final class TranslationPipeline {
 
     /// 安装 loading 期间的 ESC 拦截（裸 ESC，无修饰键）
     private func installLoadingEscTap() {
+#if MAS
+        // App Sandbox：不能创建 CGEventTap，改用应用内本地监听
+        guard loadingEscMonitor == nil else { return }
+        loadingEscMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, self.loadingPanel != nil else { return event }
+            guard event.keyCode == 0x35 else { return event }
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            guard flags.intersection([.command, .control, .option, .shift]).isEmpty else { return event }
+            self.cancelCurrentTranslation()
+            return nil
+        }
+        logi("Loading ESC local monitor: 已安装")
+#else
         guard loadingEscTap == nil else { return }
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
         let callback: CGEventTapCallBack = { (proxy, type, event, info) -> Unmanaged<CGEvent>? in
@@ -530,9 +597,16 @@ final class TranslationPipeline {
         loadingEscTap = tap
         loadingEscRunLoopSource = runLoopSource
         logi("Loading ESC tap: 已安装")
+#endif
     }
 
     private func removeLoadingEscTap() {
+#if MAS
+        guard let monitor = loadingEscMonitor else { return }
+        NSEvent.removeMonitor(monitor)
+        loadingEscMonitor = nil
+        logi("Loading ESC local monitor: 已移除")
+#else
         guard let tap = loadingEscTap else { return }
         CGEvent.tapEnable(tap: tap, enable: false)
         if let source = loadingEscRunLoopSource {
@@ -541,6 +615,7 @@ final class TranslationPipeline {
         loadingEscTap = nil
         loadingEscRunLoopSource = nil
         logi("Loading ESC tap: 已移除")
+#endif
     }
 
     private func loadingPanelOrigin(size: NSSize) -> NSPoint {
