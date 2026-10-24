@@ -1,4 +1,4 @@
-const CACHE = "elta-v3";
+const CACHE = "elta-v4";
 const ASSETS = [
   "/",
   "/docs",
